@@ -185,6 +185,11 @@ impl BackupFolder {
         Self { root: root.into() }
     }
 
+    /// The folder of the stored files the backups refer to.
+    pub(crate) fn blobs_dir(&self) -> PathBuf {
+        self.root.join(BLOBS)
+    }
+
     /// The folder.
     #[must_use]
     pub fn root(&self) -> &Path {
@@ -441,7 +446,7 @@ impl BackupFolder {
                 let Some(file) = self.blob_path(&sha) else {
                     continue;
                 };
-                match gk_store::sha256_file(&file) {
+                match gk_store::sha256_stored(&file) {
                     Ok(found) if found.sha256 == sha && found.size == size => {}
                     Ok(_) => problems.push(BackupProblem {
                         kind: BackupProblemKind::DamagedFile,
@@ -474,8 +479,8 @@ impl BackupFolder {
             .filter(|(sha, size)| {
                 !self
                     .blob_path(sha)
-                    .and_then(|p| fs::metadata(p).ok())
-                    .is_some_and(|m| m.len() == *size)
+                    .and_then(|p| gk_store::content_len(&p).ok().flatten())
+                    .is_some_and(|n| n == *size)
             })
             .map(|(sha, _)| sha)
             .collect())

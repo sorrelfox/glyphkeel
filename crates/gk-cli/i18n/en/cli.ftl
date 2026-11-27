@@ -121,6 +121,7 @@ cli-workspace-encrypted = Encrypted the workspace "{ $name }". The backup made b
 cli-workspace-decrypted = The workspace "{ $name }" is no longer encrypted. The backup made before is { $backup }.
 cli-passphrase-prompt = Passphrase for "{ $name }":
 cli-passphrase-wrong = That passphrase does not open the workspace.
+cli-passphrase-export = Passphrase of the encrypted export:
 cli-passphrase-new = New passphrase:
 cli-passphrase-repeat = The same passphrase again:
 cli-passphrase-mismatch = The two passphrases differ.

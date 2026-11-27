@@ -126,7 +126,7 @@ pub(crate) fn get(layout: &WorkspaceLayout, sha256: &str, mime: &str) -> Result<
         return Err(unsupported(mime));
     }
     if let Some(path) = gk_store::thumb_path(layout, sha256)
-        && let Ok(bytes) = std::fs::read(&path)
+        && let Ok(Some(bytes)) = gk_store::read_thumb(layout, sha256, u64::MAX)
         && let Some((width, height)) = gk_core::image_size(&bytes)
     {
         return Ok(Thumb {

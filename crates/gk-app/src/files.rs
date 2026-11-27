@@ -14,6 +14,12 @@
 //! - **Opening and saving** go through the system: a file opens in the
 //!   desktop's default app from a copy, and an executable or a script is
 //!   never opened, only saved.
+//! - **Encrypted workspaces**: the protocol opens sealed images and
+//!   thumbnails in memory, never through a plain file on disk. Opening a
+//!   file in another app needs a plain copy: it goes to a private folder
+//!   (only this user may enter it; on Linux in the per-user runtime folder,
+//!   which lives in memory) that is removed when the app locks or quits,
+//!   and folders a crashed run left behind are removed at the next start.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -205,7 +211,13 @@ fn thumbnail(workspace: &Workspace, info: &FileInfo) -> Response<Vec<u8>> {
         );
         return status(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    let bytes = match read_limited(Path::new(&thumb.path), MAX_THUMB_BYTES) {
+    // Read through the store: in an encrypted workspace the cached
+    // thumbnail is sealed and opened here, in memory.
+    let read = workspace.layout().map_or_else(
+        || Ok(None),
+        |layout| gk_store::read_thumb(&layout, &info.sha256, MAX_THUMB_BYTES),
+    );
+    let bytes = match read.and_then(|b| b.ok_or_else(|| std::io::ErrorKind::NotFound.into())) {
         Ok(bytes) => bytes,
         Err(err) => {
             eprintln!("glyphkeel-app: {SCHEME}: {}: {err}", info.name);
@@ -220,15 +232,6 @@ fn thumbnail(workspace: &Workspace, info: &FileInfo) -> Response<Vec<u8>> {
 struct ThumbInfo {
     path: String,
     mime: String,
-}
-
-fn read_limited(path: &Path, limit: u64) -> std::io::Result<Vec<u8>> {
-    use std::io::Read as _;
-    let mut out = Vec::new();
-    std::fs::File::open(path)?
-        .take(limit)
-        .read_to_end(&mut out)?;
-    Ok(out)
 }
 
 /// An image for `<img>`, of the type the engine named.
@@ -611,21 +614,34 @@ pub(crate) async fn open_file(
             )
             .with_detail("kind", info.kind));
         }
-        let source = stored_path(&workspace, &info)?;
+        stored_path(&workspace, &info)?;
         let layout = workspace
             .layout()
             .ok_or_else(|| crate::messages::error("workspace-closed", &[], OpError::storage))?;
-        let folder = layout.cache_dir().join("open").join(&info.id);
+        let copy_failed = |e: std::io::Error| {
+            crate::messages::error(
+                "file-copy-failed",
+                &[("name", info.name.clone()), ("error", e.to_string())],
+                OpError::storage,
+            )
+        };
+        let folder = if gk_store::workspace_seals(&layout).is_some()
+            || gk_store::file_path(&layout, &info.sha256)
+                .is_some_and(|p| gk_store::looks_sealed(&p).unwrap_or(false))
+        {
+            private_copies::folder()
+                .map_err(copy_failed)?
+                .join(&info.id)
+        } else {
+            layout.cache_dir().join("open").join(&info.id)
+        };
         let target = folder.join(safe_name(&info.name));
         std::fs::create_dir_all(&folder)
-            .and_then(|()| std::fs::copy(&source, &target))
-            .map_err(|e| {
-                crate::messages::error(
-                    "file-copy-failed",
-                    &[("name", info.name.clone()), ("error", e.to_string())],
-                    OpError::storage,
-                )
-            })?;
+            .and_then(|()| {
+                let _ = std::fs::remove_file(&target);
+                gk_store::copy_out(&layout, &info.sha256, &target)
+            })
+            .map_err(copy_failed)?;
         Ok(target)
     })
     .await?;
@@ -649,16 +665,135 @@ pub(crate) async fn save_file(
         return Ok(false);
     };
     blocking(move || {
-        let source = stored_path(&workspace, &info)?;
-        std::fs::copy(&source, &target).map(|_| true).map_err(|e| {
-            crate::messages::error(
-                "file-save-failed",
-                &[("name", info.name.clone()), ("error", e.to_string())],
-                OpError::storage,
-            )
-        })
+        stored_path(&workspace, &info)?;
+        let layout = workspace
+            .layout()
+            .ok_or_else(|| crate::messages::error("workspace-closed", &[], OpError::storage))?;
+        gk_store::copy_out(&layout, &info.sha256, &target)
+            .map(|_| true)
+            .map_err(|e| {
+                crate::messages::error(
+                    "file-save-failed",
+                    &[("name", info.name.clone()), ("error", e.to_string())],
+                    OpError::storage,
+                )
+            })
     })
     .await
+}
+
+/// The private folder for plain copies of an encrypted workspace's files
+/// opened in other apps.
+pub(crate) mod private_copies {
+    use std::fs;
+    use std::io;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, PoisonError};
+
+    /// The start of each folder's name; the process ID and a stamp follow.
+    const PREFIX: &str = "glyphkeel-open-";
+
+    static FOLDER: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+    /// Where the folders go: the per-user runtime folder when there is one
+    /// (in memory, only this user may enter it), else the temporary folder.
+    fn base() -> PathBuf {
+        std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute() && p.is_dir())
+            .unwrap_or_else(std::env::temp_dir)
+    }
+
+    /// Makes `path`, which must not exist yet, as a folder only this user
+    /// may enter.
+    fn make_private(path: &Path) -> io::Result<()> {
+        let builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        let builder = {
+            use std::os::unix::fs::DirBuilderExt as _;
+            let mut builder = builder;
+            builder.mode(0o700);
+            builder
+        };
+        builder.create(path)
+    }
+
+    /// This run's folder, made when first needed. A new name each time it
+    /// is made, and never one that exists already, so nobody else can have
+    /// prepared it.
+    pub(crate) fn folder() -> io::Result<PathBuf> {
+        let mut kept = FOLDER.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(path) = kept.as_ref()
+            && path.is_dir()
+        {
+            return Ok(path.clone());
+        }
+        let base = base();
+        let mut last = None;
+        for attempt in 0..16u32 {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos());
+            let path = base.join(format!("{PREFIX}{}-{stamp:x}{attempt}", std::process::id()));
+            match make_private(&path) {
+                Ok(()) => {
+                    *kept = Some(path.clone());
+                    return Ok(path);
+                }
+                Err(e) => last = Some(e),
+            }
+        }
+        Err(last.unwrap_or_else(|| io::Error::other("no private folder")))
+    }
+
+    /// Removes this run's folder and the copies in it. Another app that
+    /// has a copy open keeps reading it until it closes it (Linux, macOS).
+    pub(crate) fn clean() {
+        let taken = FOLDER.lock().unwrap_or_else(PoisonError::into_inner).take();
+        if let Some(path) = taken {
+            let _ = fs::remove_dir_all(path);
+        }
+    }
+
+    /// Removes the folders that runs which have ended left behind: those
+    /// whose process is gone, where that can be told, else those older
+    /// than a day.
+    pub(crate) fn sweep() {
+        sweep_in(&base());
+    }
+
+    pub(super) fn sweep_in(base: &Path) {
+        let Ok(list) = fs::read_dir(base) else {
+            return;
+        };
+        let own = std::process::id();
+        for item in list.flatten() {
+            let name = item.file_name().to_string_lossy().into_owned();
+            let Some(rest) = name.strip_prefix(PREFIX) else {
+                continue;
+            };
+            let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else {
+                continue;
+            };
+            if pid == own || !item.file_type().is_ok_and(|t| t.is_dir()) {
+                continue;
+            }
+            if ended(pid, &item.path()) {
+                let _ = fs::remove_dir_all(item.path());
+            }
+        }
+    }
+
+    fn ended(pid: u32, path: &Path) -> bool {
+        if cfg!(target_os = "linux") && Path::new("/proc/self").is_dir() {
+            return !Path::new("/proc").join(pid.to_string()).exists();
+        }
+        fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age.as_secs() > 24 * 60 * 60)
+    }
 }
 
 /// The largest export the page may hand over to be saved.
@@ -1184,6 +1319,90 @@ mod tests {
         assert_eq!(again.status(), StatusCode::OK);
         assert!(again.body().starts_with(b"\x89PNG"));
         ws.close();
+    }
+
+    #[test]
+    fn an_encrypted_workspace_serves_its_sealed_images_from_memory() {
+        if !gk_store::encryption_available() {
+            return;
+        }
+        let _turn = crate::PASSPHRASE_TESTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let dir = TempDir::new().unwrap();
+        let layout = WorkspaceLayout::new(dir.path().join("Personal"));
+        let ws = workspace(&dir);
+        ws.close();
+        gk_engine::encryption::change(
+            &layout,
+            None,
+            &gk_engine::encryption::Change::Encrypt(
+                gk_store::Passphrase::new("protocol test passphrase").unwrap(),
+            ),
+            1,
+            "test",
+        )
+        .unwrap();
+        let ws = Workspace::open(&layout, EngineConfig::new(Role::App), Confirmation::Refuse);
+        let id = attach(&ws, "dot.png", PNG);
+        let info = file_info(&ws, &id).unwrap();
+        // On disk the file and its thumbnail are sealed …
+        let stored = gk_store::file_path(&layout, &info.sha256).unwrap();
+        assert!(gk_store::looks_sealed(&stored).unwrap());
+        let response = respond(&ws, "GET", &format!("/{id}"));
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.body().starts_with(b"\x89PNG"));
+        let thumb = respond(&ws, "GET", &format!("/{id}/thumb"));
+        assert_eq!(thumb.status(), StatusCode::OK);
+        assert!(thumb.body().starts_with(b"\x89PNG"));
+        let cached = gk_store::thumb_path(&layout, &info.sha256).unwrap();
+        assert!(gk_store::looks_sealed(&cached).unwrap());
+        // … and nothing plain was written next to them.
+        let mut stack = vec![layout.root().to_path_buf()];
+        while let Some(folder) = stack.pop() {
+            for item in std::fs::read_dir(&folder).unwrap().flatten() {
+                let path = item.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if let Ok(bytes) = std::fs::read(&path) {
+                    assert!(
+                        !bytes.starts_with(b"\x89PNG"),
+                        "plain image at {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+        ws.close();
+    }
+
+    #[test]
+    fn plain_copies_go_to_a_private_folder_that_is_removed() {
+        let first = private_copies::folder().unwrap();
+        assert_eq!(private_copies::folder().unwrap(), first);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = std::fs::metadata(&first).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o700);
+        }
+        std::fs::write(first.join("copy.txt"), "plain").unwrap();
+        private_copies::clean();
+        assert!(!first.exists());
+        // A folder of a run that ended is swept; others are left.
+        let base = TempDir::new().unwrap();
+        let ended = base.path().join("glyphkeel-open-4194303999-0");
+        let own = base
+            .path()
+            .join(format!("glyphkeel-open-{}-0", std::process::id()));
+        let other = base.path().join("unrelated");
+        for folder in [&ended, &own, &other] {
+            std::fs::create_dir(folder).unwrap();
+        }
+        private_copies::sweep_in(base.path());
+        assert!(!ended.exists() || !cfg!(target_os = "linux"));
+        assert!(own.exists());
+        assert!(other.exists());
     }
 
     #[test]

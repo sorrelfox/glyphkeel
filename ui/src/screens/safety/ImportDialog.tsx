@@ -12,13 +12,14 @@ import { useCall } from "../../data/hooks";
 import { useFailureToast, skippedReason } from "../../data/safety";
 import { type ImportResult, type KeyChange } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
-import { chooseImport, choosesFiles, importArchive, type ImportSource } from "../../ipc/transfer";
+import { chooseImport, choosesFiles, importArchive, wantsExportPassphrase, type ImportSource } from "../../ipc/transfer";
 import { Counts } from "./ExportDialog";
 import styles from "./Safety.module.css";
 
 type Step =
   | { kind: "choose" }
   | { kind: "checking"; source: ImportSource }
+  | { kind: "passphrase"; source: ImportSource; wrong: boolean }
   | { kind: "checked"; source: ImportSource; result: ImportResult; taken: readonly string[] }
   | { kind: "importing"; source: ImportSource; result: ImportResult; taken: readonly string[] }
   | { kind: "done"; result: ImportResult };
@@ -46,16 +47,23 @@ export function ImportDialog({ isOpen, onOpenChange }: { isOpen: boolean; onOpen
   const [step, setStep] = useState<Step>({ kind: "choose" });
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
+  const [passphrase, setPassphrase] = useState("");
 
-  const check = (source: ImportSource) => {
+  const check = (source: ImportSource, given?: string) => {
     setStep({ kind: "checking", source });
-    importArchive(call, source, true, []).then(
+    importArchive(call, source, true, [], given).then(
       (result) => {
         const taken = result.taken_keys ?? [];
         setKeys(Object.fromEntries(taken.map((key) => [key, `${key}2`])));
         setStep({ kind: "checked", source, result, taken });
       },
       (error: unknown) => {
+        // An encrypted export: ask for its passphrase (in the app only).
+        if ("token" in source && wantsExportPassphrase(error)) {
+          setPassphrase("");
+          setStep({ kind: "passphrase", source, wrong: given !== undefined });
+          return;
+        }
         fail(error);
         setStep({ kind: "choose" });
       },
@@ -167,6 +175,32 @@ export function ImportDialog({ isOpen, onOpenChange }: { isOpen: boolean; onOpen
               </Button>
             </form>
           ))}
+        {step.kind === "passphrase" && (
+          <form
+            className={styles.form}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (passphrase !== "") {
+                check(step.source, passphrase);
+              }
+            }}
+          >
+            <p>{t("transfer-import-encrypted", { name: step.source.name })}</p>
+            <span className="field">
+              <input type="password" autoComplete="off" aria-label={t("transfer-import-passphrase")} placeholder={t("transfer-import-passphrase")} value={passphrase} onChange={(event) => { setPassphrase(event.target.value); }} />
+            </span>
+            {step.wrong && (
+              <p role="alert" className="muted">
+                {t("transfer-import-passphrase-wrong")}
+              </p>
+            )}
+            <div className={styles.choice}>
+              <Button type="submit" className="btn primary" isDisabled={passphrase === ""}>
+                {t("transfer-import-open")}
+              </Button>
+            </div>
+          </form>
+        )}
         {busy && (
           <div role="status" className={styles.choice}>
             <div className="meter grow" role="progressbar" aria-label={t(step.kind === "checking" ? "transfer-checking" : "transfer-importing")}>

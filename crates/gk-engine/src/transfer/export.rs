@@ -21,7 +21,7 @@ use super::model::{
     ProjectFile, Relation, Revision, SavedView, SeriesLine, Sprint, Status, Task, TaskType,
     TemplateLine, TimeEntry, Version, WikiPage,
 };
-use super::sink::Sink;
+use super::sink::{Seal, Sink};
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
 use crate::engine::Engine;
 use crate::failure::Failure;
@@ -866,6 +866,7 @@ pub(crate) fn export(
     input: &ExportInput,
     target: &Path,
     format: ArchiveFormat,
+    seal: Option<&Seal>,
     progress: &Progress,
 ) -> Result<ExportResult, OpError> {
     report(progress, TransferPhase::Reading, 0, 1);
@@ -949,7 +950,7 @@ pub(crate) fn export(
             ],
         )
     };
-    let mut sink = Sink::create(target, format).map_err(cant_write)?;
+    let mut sink = Sink::create(target, format, seal).map_err(cant_write)?;
     let written = write_all(
         engine,
         &mut sink,
@@ -980,6 +981,7 @@ pub(crate) fn export(
             .collect(),
         counts,
         size,
+        encrypted: seal.is_some(),
     })
 }
 
@@ -1098,14 +1100,14 @@ fn write_all(
     let total = blobs.len() as u64;
     for (i, sha) in blobs.iter().enumerate() {
         report(progress, TransferPhase::Files, i as u64, total);
-        let source = gk_store::file_path(layout, sha).ok_or_else(|| {
+        gk_store::file_path(layout, sha).ok_or_else(|| {
             messages::error(
                 ErrorCode::Storage,
                 "transfer-stored-file-missing",
                 &[("sha256", sha.clone())],
             )
         })?;
-        sink.put_file(&format!("files/{sha}"), sha, &source)
+        sink.put_file(&format!("files/{sha}"), sha, layout)
             .map_err(io)?;
     }
     counts.blobs = total;

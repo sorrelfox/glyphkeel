@@ -51,6 +51,26 @@ pub(crate) fn unlock(layout: &WorkspaceLayout) -> Result<(), OpError> {
     )))
 }
 
+/// Whether `err` asks for the passphrase of an encrypted export.
+pub(crate) fn wants_export_passphrase(err: &OpError) -> bool {
+    err.details.get("passphrase").and_then(|v| v.as_str()) == Some("export")
+}
+
+/// Asks on the terminal for the passphrase of an encrypted export and
+/// keeps it for this run. `false` when there is no terminal or no answer:
+/// the command then fails as it did. `GLYPHKEEL_PASSPHRASE` is tried
+/// before anything is asked.
+pub(crate) fn ask_export() -> Result<bool, OpError> {
+    if !terminal() {
+        return Ok(false);
+    }
+    let Some(passphrase) = ask(&text("cli-passphrase-export", &[]))? else {
+        return Ok(false);
+    };
+    gk_store::remember_passphrase(&passphrase);
+    Ok(true)
+}
+
 /// A new passphrase: asked twice on the terminal, else read as one line
 /// from standard input, so scripts can pipe it in.
 pub(crate) fn new_passphrase() -> Result<Passphrase, OpError> {

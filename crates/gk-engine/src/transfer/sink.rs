@@ -4,6 +4,11 @@
 //! Writing an archive: a `.zip` file or a folder. Everything is written
 //! under a temporary name next to the target and renamed when complete, so
 //! a failed export leaves nothing that looks like an archive.
+//!
+//! An encrypted export is a `.zip` written straight into a sealed file (see
+//! `gk_store`'s sealed files): with the workspace's passphrase, so it opens
+//! on another computer with that passphrase, or with the workspace's file
+//! key when this program doesn't know the passphrase.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -11,6 +16,18 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use gk_api::ops::transfer::ArchiveFormat;
+use gk_store::{FileKey, Passphrase, SealWriter, WorkspaceLayout};
+
+/// How an encrypted export is sealed.
+#[derive(Debug, Clone)]
+pub(crate) enum Seal {
+    /// With a key from this passphrase.
+    Passphrase(Passphrase),
+    /// With the workspace's file key.
+    Key(FileKey),
+}
+
+type SealedZip = zip::ZipWriter<zip::write::StreamWriter<SealWriter<io::BufWriter<File>>>>;
 
 /// Where an archive is being written.
 pub(crate) struct Sink {
@@ -24,6 +41,7 @@ pub(crate) struct Sink {
 enum Kind {
     Folder,
     Zip(Box<zip::ZipWriter<File>>),
+    SealedZip(Box<SealedZip>),
 }
 
 impl std::fmt::Debug for Sink {
@@ -36,8 +54,13 @@ impl std::fmt::Debug for Sink {
 
 impl Sink {
     /// Starts an archive at `target`, which must not exist (a folder may
-    /// exist if it is empty).
-    pub(crate) fn create(target: &Path, format: ArchiveFormat) -> io::Result<Self> {
+    /// exist if it is empty). With `seal`, a sealed `.zip` (never a
+    /// folder).
+    pub(crate) fn create(
+        target: &Path,
+        format: ArchiveFormat,
+        seal: Option<&Seal>,
+    ) -> io::Result<Self> {
         let exists = match fs::symlink_metadata(target) {
             Ok(m) => !(m.is_dir() && fs::read_dir(target)?.next().is_none()),
             Err(_) => false,
@@ -63,12 +86,28 @@ impl Sink {
         } else if temp.exists() {
             fs::remove_file(&temp)?;
         }
-        let kind = match format {
-            ArchiveFormat::Folder => {
+        let kind = match (format, seal) {
+            (ArchiveFormat::Folder, None) => {
                 fs::create_dir_all(&temp)?;
                 Kind::Folder
             }
-            ArchiveFormat::Zip => Kind::Zip(Box::new(zip::ZipWriter::new(File::create(&temp)?))),
+            (ArchiveFormat::Folder, Some(_)) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "an encrypted export is a .zip file",
+                ));
+            }
+            (ArchiveFormat::Zip, None) => {
+                Kind::Zip(Box::new(zip::ZipWriter::new(File::create(&temp)?)))
+            }
+            (ArchiveFormat::Zip, Some(seal)) => {
+                let file = io::BufWriter::new(File::create(&temp)?);
+                let sealed = match seal {
+                    Seal::Passphrase(p) => SealWriter::with_passphrase(file, p)?,
+                    Seal::Key(key) => SealWriter::new(file, key)?,
+                };
+                Kind::SealedZip(Box::new(zip::ZipWriter::new_stream(sealed)))
+            }
         };
         Ok(Self {
             target: target.to_path_buf(),
@@ -117,14 +156,26 @@ impl Sink {
                     .map_err(io::Error::other)?;
                 zip.write_all(bytes)
             }
+            Kind::SealedZip(zip) => {
+                zip.start_file(path, Self::options(true, bytes.len() as u64))
+                    .map_err(io::Error::other)?;
+                zip.write_all(bytes)
+            }
         }
     }
 
-    /// Copies the stored file `source` as `path`, stored without
-    /// compression in a `.zip`; its name is its hash, so it isn't hashed
-    /// again.
-    pub(crate) fn put_file(&mut self, path: &str, sha256: &str, source: &Path) -> io::Result<()> {
+    /// Copies the stored file `sha256` of the workspace at `layout` as
+    /// `path`, stored without compression in a `.zip`; its name is its
+    /// hash, so it isn't hashed again. A sealed stored file is opened on
+    /// the way: an archive holds the content.
+    pub(crate) fn put_file(
+        &mut self,
+        path: &str,
+        sha256: &str,
+        layout: &WorkspaceLayout,
+    ) -> io::Result<()> {
         self.hashes.insert(path.to_owned(), sha256.to_owned());
+        let mut content = gk_store::open_file(layout, sha256)?;
         match &mut self.kind {
             Kind::Folder => {
                 let mut full = self.temp.clone();
@@ -132,16 +183,27 @@ impl Sink {
                 if let Some(parent) = full.parent() {
                     fs::create_dir_all(parent)?;
                 }
-                if fs::hard_link(source, &full).is_err() {
-                    fs::copy(source, &full)?;
+                let linked = !content.is_sealed()
+                    && layout
+                        .blob_path(sha256)
+                        .is_some_and(|source| fs::hard_link(source, &full).is_ok());
+                if !linked {
+                    io::copy(&mut content, &mut File::create(&full)?)?;
                 }
                 Ok(())
             }
             Kind::Zip(zip) => {
-                let size = fs::metadata(source)?.len();
+                let size = content.len()?;
                 zip.start_file(path, Self::options(false, size))
                     .map_err(io::Error::other)?;
-                io::copy(&mut File::open(source)?, zip.as_mut())?;
+                io::copy(&mut content, zip.as_mut())?;
+                Ok(())
+            }
+            Kind::SealedZip(zip) => {
+                let size = content.len()?;
+                zip.start_file(path, Self::options(false, size))
+                    .map_err(io::Error::other)?;
+                io::copy(&mut content, zip.as_mut())?;
                 Ok(())
             }
         }
@@ -159,6 +221,17 @@ impl Sink {
             }
             Kind::Zip(zip) => {
                 let file = zip.finish().map_err(io::Error::other)?;
+                file.sync_all()?;
+                drop(file);
+                fs::rename(&self.temp, &self.target)?;
+                Ok(fs::metadata(&self.target)?.len())
+            }
+            Kind::SealedZip(zip) => {
+                let sealed = zip.finish().map_err(io::Error::other)?.into_inner();
+                let file = sealed
+                    .finish()?
+                    .into_inner()
+                    .map_err(io::IntoInnerError::into_error)?;
                 file.sync_all()?;
                 drop(file);
                 fs::rename(&self.temp, &self.target)?;

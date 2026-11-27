@@ -28,6 +28,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # Content hashes of stored files.
 sha2 = { workspace = true }
+# Stored files of an encrypted workspace, and encrypted exports.
+chacha20poly1305 = { workspace = true }
+hkdf = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 zeroize = { workspace = true }

@@ -18,7 +18,7 @@ lock-open = Open
 
 preferences-page-security = Security
 security-encryption = Encryption
-security-encryption-lead = An encrypted workspace can't be read without its passphrase. Attached files are not encrypted; for those, and for the strongest protection, use an encrypted disk.
+security-encryption-lead = An encrypted workspace can't be read without its passphrase. Its attached files, thumbnails and exports are encrypted too. For the strongest protection, also use an encrypted disk.
 security-encryption-state = Workspace encryption
 security-is-encrypted = The workspace is encrypted.
 security-is-plain = The workspace is not encrypted.
@@ -42,6 +42,10 @@ security-decrypted = The workspace is no longer encrypted. The backup made befor
 security-backups-left-plain = { $count ->
         [one] One older backup could not be encrypted.
        *[other] { $count } older backups could not be encrypted.
+    }
+security-files-left = { $count ->
+        [one] One attached file could not be converted and was left as it was.
+       *[other] { $count } attached files could not be converted and were left as they were.
     }
 security-lock = App lock
 security-lock-after = Lock when idle

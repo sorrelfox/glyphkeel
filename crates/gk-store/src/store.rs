@@ -140,6 +140,9 @@ impl Store {
             return Err(StoreError::WorkspaceReplaced);
         }
         let workspace_id = read_workspace_id(&conn)?;
+        // The keys that seal and open the stored files of an encrypted
+        // workspace, kept inside its database.
+        crate::sealed::load_for_store(&conn, layout)?;
         let generation = crate::snapshot::generation(&conn)?;
         optimize(&conn, "open");
 

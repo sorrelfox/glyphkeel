@@ -90,6 +90,12 @@ sqlcipher-src = "420.0.0"
 pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }
 # Wiping passphrases and keys from memory (already in the lock).
 zeroize = "1.9.2"
+# Attachments, thumbnails and exports of an encrypted workspace:
+# ChaCha20-Poly1305 per chunk, with a key for each file from HKDF-SHA256
+# (RustCrypto; chacha20 and hmac were in the lock already). No default
+# features: the program draws its own random numbers.
+chacha20poly1305 = { version = "0.11.0", default-features = false }
+hkdf = "0.12.4"
 # Asking for a passphrase on the terminal without echo (the command line).
 rpassword = "7.4.0"
 # The operation catalog's JSON Schemas (inputs, outputs, the MCP tool list

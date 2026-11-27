@@ -62,6 +62,7 @@ mod layout;
 mod readers;
 mod requests;
 mod schema;
+mod sealed;
 mod snapshot;
 mod store;
 mod user_settings;
@@ -76,14 +77,15 @@ pub use checkpoint::{
 pub use cipher::{
     Encryption, PASSPHRASE_ENV, Passphrase, PassphraseCheck, Unlocked, can_open, decrypt_workspace,
     encrypt_file, encrypt_workspace, encryption_available, encryption_of, forget_passphrases,
-    passphrase_opens, remember_passphrase, unlock_without_asking,
+    known_passphrases, passphrase_opens, remember_passphrase, unlock_without_asking,
+    workspace_passphrase,
 };
 pub use connection::{COLLATION, JOURNAL_SIZE_LIMIT, collate};
 pub use error::{Result, StoreError, WriteError};
 pub use files::{
-    StoredFile, file_path, has_file, read_file, remove_file, sha256_file, sha256_hex,
-    sha256_reader, store_file, store_reader, store_reader_unsynced, store_thumb, sync_files,
-    thumb_path,
+    StoredFile, clear_thumbs, copy_out, file_path, has_file, open_file, read_file, read_thumb,
+    remove_file, sha256_file, sha256_hex, sha256_reader, sha256_stored, store_file, store_reader,
+    store_reader_unsynced, store_thumb, sync_files, thumb_path, workspace_seals,
 };
 pub use layout::{
     DATA_DIR_ENV, DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV,
@@ -91,6 +93,13 @@ pub use layout::{
 };
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
+pub use sealed::{
+    Content, Converted, FileKey, Header as SealHeader, MAGIC as SEALED_MAGIC, SealKind,
+    SealProblem, SealWriter, UnsealReader, add_file_keys_to, content_len, convert_blobs,
+    file_keys_of, learn_workspace_keys, load_file_keys, looks_sealed, open_stored,
+    open_with_passphrases, problem_of as seal_problem, save_file_keys, set_workspace_keys,
+    workspace_keys,
+};
 pub use snapshot::{
     BlobCopy, check_integrity, copy_blob, generation_of, open_read_only, put_back_before_upgrade,
     replace_database, schema_version_of, upgrade_copy, vacuum_into,

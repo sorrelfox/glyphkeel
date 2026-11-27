@@ -1345,6 +1345,11 @@ op-wiki-history--project = The project (key or ID); needed unless `page` is an I
 ## glyphkeel wiki export <page>
 
 op-wiki-export = Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.
+op-wiki-export--encrypt = Encrypt the archive (a `.zip` file) with the workspace's passphrase,
+    so that it opens only in Glyphkeel with that passphrase. Left out:
+    on when the workspace is encrypted and the archive is a `.zip` file
+    or goes into the `exports` folder. Only an encrypted workspace can
+    encrypt an export.
 op-wiki-export--format = A `.zip` file (the default) or a folder.
 op-wiki-export--page = The page: its title (any case), slug or ID. Left out: the project's
     whole wiki, every page in it.
@@ -1584,6 +1589,11 @@ op-backup-delete--name = The backup's name, from the backup list.
 ## glyphkeel export
 
 op-transfer-export = Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments.
+op-transfer-export--encrypt = Encrypt the archive (a `.zip` file) with the workspace's passphrase,
+    so that it opens only in Glyphkeel with that passphrase. Left out:
+    on when the workspace is encrypted and the archive is a `.zip` file
+    or goes into the `exports` folder. Only an encrypted workspace can
+    encrypt an export.
 op-transfer-export--format = A `.zip` file (the default) or a folder.
 op-transfer-export--path = Where to write it: a new file or folder. For agents, a plain name
     goes into the workspace's `exports` folder; other paths must be

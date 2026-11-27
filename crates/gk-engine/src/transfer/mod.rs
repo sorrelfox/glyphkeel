@@ -156,6 +156,10 @@ pub(crate) enum Rejected {
     Counts(String, u64, u64),
     TooManyRecords(u64),
     Encrypted(String),
+    /// An encrypted export that no passphrase this program knows opens.
+    Passphrase(String),
+    /// An encrypted export that was changed or cut off.
+    SealDamaged(String),
 }
 
 impl Rejected {
@@ -210,6 +214,8 @@ impl Rejected {
             }
             Self::TooManyRecords(n) => ("transfer-too-many-records", vec![("max", n.to_string())]),
             Self::Encrypted(p) => ("transfer-encrypted", vec![("path", p.clone())]),
+            Self::Passphrase(p) => ("transfer-passphrase-needed", vec![("path", p.clone())]),
+            Self::SealDamaged(p) => ("transfer-encrypted-damaged", vec![("path", p.clone())]),
             Self::Counts(what, said, found) => (
                 "transfer-counts",
                 vec![
@@ -224,6 +230,19 @@ impl Rejected {
     /// The error callers see.
     pub(crate) fn error(&self) -> OpError {
         let (id, args) = self.message();
+        if let Self::Passphrase(_) = self {
+            // Callers ask for the export's passphrase and try again.
+            return messages::hint(
+                messages::tag(
+                    OpError::new(gk_api::ErrorCode::Forbidden, messages::text(id, &args)),
+                    id,
+                    &args,
+                ),
+                "transfer-passphrase-needed-hint",
+                &[],
+            )
+            .with_detail("passphrase", "export");
+        }
         let mut e = messages::hint(
             messages::tag(OpError::invalid(messages::text(id, &args)), id, &args),
             "transfer-rejected-hint",
@@ -306,7 +325,8 @@ impl Engine {
                 })
                 .map_err(OpError::from)?;
         }
-        export::export(self, input, &target, format, progress)
+        let seal = export_seal(self, input.encrypt, format, input.path.is_none())?;
+        export::export(self, input, &target, format, seal.as_ref(), progress)
     }
 
     /// Imports the archive `input.path` names as new projects (or, with
@@ -343,6 +363,46 @@ impl Engine {
     pub(crate) fn now_ms(&self) -> i64 {
         (self.clock)()
     }
+}
+
+/// How an export is sealed: `None` for a plain one. `encrypt` is what the
+/// caller asked for; left out, an encrypted workspace encrypts a `.zip`
+/// export and anything written into its `exports` folder (`in_exports`).
+/// An encrypted export is one `.zip` file, sealed with the workspace's
+/// passphrase when this program knows it, else with its file key.
+pub(crate) fn export_seal(
+    engine: &Engine,
+    encrypt: Option<bool>,
+    format: ArchiveFormat,
+    in_exports: bool,
+) -> Result<Option<sink::Seal>, OpError> {
+    let layout = engine.store().layout();
+    let key = gk_store::workspace_seals(layout);
+    let wanted = encrypt.unwrap_or(key.is_some() && (format == ArchiveFormat::Zip || in_exports));
+    if !wanted {
+        return Ok(None);
+    }
+    let Some(key) = key else {
+        return Err(messages::error(
+            gk_api::ErrorCode::Invalid,
+            "transfer-encrypt-plain-workspace",
+            &[],
+        ));
+    };
+    if format == ArchiveFormat::Folder {
+        return Err(messages::hint(
+            messages::error(gk_api::ErrorCode::Invalid, "transfer-encrypt-folder", &[]),
+            "transfer-encrypt-folder-hint",
+            &[],
+        ));
+    }
+    let passphrase = gk_store::workspace_passphrase(&layout.database())
+        .ok()
+        .flatten();
+    Ok(Some(match passphrase {
+        Some(p) => sink::Seal::Passphrase(p),
+        None => sink::Seal::Key(key),
+    }))
 }
 
 /// The archive path of project `key`'s folder: the key, with a `_` in

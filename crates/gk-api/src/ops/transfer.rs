@@ -69,6 +69,13 @@ pub struct ExportInput {
     /// A `.zip` file (the default) or a folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<ArchiveFormat>,
+    /// Encrypt the archive (a `.zip` file) with the workspace's passphrase,
+    /// so that it opens only in Glyphkeel with that passphrase. Left out:
+    /// on when the workspace is encrypted and the archive is a `.zip` file
+    /// or goes into the `exports` folder. Only an encrypted workspace can
+    /// encrypt an export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encrypt: Option<bool>,
 }
 
 /// A finished export.
@@ -85,6 +92,9 @@ pub struct ExportResult {
     pub counts: ArchiveCounts,
     /// Its size in bytes.
     pub size: u64,
+    /// Whether it is encrypted.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub encrypted: bool,
 }
 
 /// A new key for a project whose key is taken.

@@ -146,16 +146,73 @@ fn an_encrypted_workspace_from_the_command_line_and_the_agent_server() {
     );
     assert_eq!(code(&task), 0, "{}", stderr(&task));
 
+    // An attached file is sealed on disk and reads back with the passphrase.
+    let note = home.join("note.txt");
+    std::fs::write(&note, "an attached secret").unwrap();
+    let note_arg = note.to_string_lossy().into_owned();
+    let attached = run(
+        home,
+        &env,
+        &[
+            "--json", w[0], w[1], "file", "attach", "--task", "TM-1", "--path", &note_arg,
+        ],
+    );
+    assert_eq!(code(&attached), 0, "{}", stderr(&attached));
+    let attached: Value = serde_json::from_str(&stdout(&attached)).unwrap();
+    let sha = attached["file"]["sha256"].as_str().unwrap();
+    let id = attached["file"]["id"].as_str().unwrap();
+    let blob = folder(home, "Work").join("files").join(&sha[..2]).join(sha);
+    assert!(gk_store::looks_sealed(&blob).unwrap());
+    let read = run(home, &env, &["--json", w[0], w[1], "file", "cat", id]);
+    assert_eq!(code(&read), 0, "{}", stderr(&read));
+    assert!(
+        stdout(&read).contains("an attached secret"),
+        "{}",
+        stdout(&read)
+    );
+
+    // An export lands encrypted in the exports folder; another workspace
+    // imports it with the passphrase only.
+    let exported = run(home, &env, &["--json", w[0], w[1], "export"]);
+    assert_eq!(code(&exported), 0, "{}", stderr(&exported));
+    let exported: Value = serde_json::from_str(&stdout(&exported)).unwrap();
+    assert_eq!(exported["encrypted"], true, "{exported}");
+    let archive = exported["path"].as_str().unwrap().to_owned();
+    assert!(gk_store::looks_sealed(Path::new(&archive)).unwrap());
+    assert_eq!(code(&run(home, &[], &["workspace", "create", "Other"])), 0);
+    let o = ["--workspace", "Other"];
+    let refused = run(home, &[], &["--json", o[0], o[1], "import", &archive]);
+    assert_eq!(code(&refused), 3, "{}", stderr(&refused));
+    let error: Value = serde_json::from_slice(&refused.stderr).unwrap();
+    assert_eq!(error["details"]["passphrase"], "export", "{error}");
+    let imported = run(home, &env, &["--json", o[0], o[1], "import", &archive]);
+    assert_eq!(code(&imported), 0, "{}", stderr(&imported));
+    let listed = run(home, &[], &["--json", o[0], o[1], "search", "secret"]);
+    assert!(
+        stdout(&listed).contains("Kept secret"),
+        "{}",
+        stdout(&listed)
+    );
+
     // The agent server opens it the same way.
     let mut agent = Agent::start_with(home, &folder(home, "Work"), "Helper", &env);
     let found = agent.ok("search", json!({ "text": "secret" }));
     assert!(found.to_string().contains("Kept secret"), "{found}");
+    let content = agent.ok("read_attachment", json!({ "attachment": id }));
+    assert!(
+        content.to_string().contains("an attached secret"),
+        "{content}"
+    );
     agent.finish();
 
     // Decrypting needs the passphrase too, and leaves a plain workspace.
     let out = run(home, &env, &[w[0], w[1], "workspace", "decrypt"]);
     assert_eq!(code(&out), 0, "{}", stderr(&out));
     assert_eq!(encryption_of(&database).unwrap(), Encryption::Plain);
+    assert_eq!(
+        std::fs::read_to_string(&blob).unwrap(),
+        "an attached secret"
+    );
     let listed = run(home, &[], &["--json", w[0], w[1], "search", "secret"]);
     assert_eq!(code(&listed), 0, "{}", stderr(&listed));
     assert!(stdout(&listed).contains("Kept secret"));

@@ -33,14 +33,16 @@ export interface ExportRequest {
   folder: boolean;
   /** The name the chooser suggests. */
   name: string;
+  /** Encrypt the export (a `.zip` file); absent: the engine's default, on for an encrypted workspace. */
+  encrypt?: boolean;
 }
 
 /** Exports where the person chooses; null when they cancelled the chooser. */
 export function exportArchive(call: Call, request: ExportRequest): Promise<ExportResult | null> {
   if (choosesFiles()) {
-    return command<ExportResult | null>("export_archive", { projects: [...request.projects], folder: request.folder, name: request.name });
+    return command<ExportResult | null>("export_archive", { projects: [...request.projects], folder: request.folder, name: request.name, encrypt: request.encrypt ?? null });
   }
-  return call("transfer.export", { projects: [...request.projects], format: request.folder ? "folder" : "zip" });
+  return call("transfer.export", { projects: [...request.projects], format: request.folder ? "folder" : "zip", ...(request.encrypt === undefined ? {} : { encrypt: request.encrypt }) });
 }
 
 /**
@@ -87,10 +89,19 @@ export function chooseImport(folder: boolean): Promise<ImportSource | null> {
   return command<{ token: string; name: string } | null>("choose_import", { folder });
 }
 
-/** Checks (`dryRun`) or imports a chosen archive, with new keys for taken ones. */
-export function importArchive(call: Call, source: ImportSource, dryRun: boolean, keys: readonly KeyChange[]): Promise<ImportResult> {
+/** Whether a failure asks for the passphrase of an encrypted export. */
+export function wantsExportPassphrase(error: unknown): boolean {
+  return error instanceof OpFailure && error.error.code !== "ipc" && error.error.details?.passphrase === "export";
+}
+
+/**
+ * Checks (`dryRun`) or imports a chosen archive, with new keys for taken
+ * ones. `passphrase` opens an encrypted export; the app keeps it in memory
+ * until it quits. Only the app takes one.
+ */
+export function importArchive(call: Call, source: ImportSource, dryRun: boolean, keys: readonly KeyChange[], passphrase?: string): Promise<ImportResult> {
   if ("token" in source) {
-    return command<ImportResult>("import_archive", { token: source.token, dryRun, keys: [...keys] });
+    return command<ImportResult>("import_archive", { token: source.token, dryRun, keys: [...keys], passphrase: passphrase ?? null });
   }
   return call("transfer.import", { path: source.path, dry_run: dryRun, keys: [...keys] });
 }

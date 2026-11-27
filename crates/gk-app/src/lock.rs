@@ -101,6 +101,7 @@ impl AppLock {
             return false;
         }
         self.locked.store(true, Ordering::SeqCst);
+        crate::files::private_copies::clean();
         true
     }
 
@@ -122,6 +123,7 @@ impl AppLock {
             .elapsed();
         if self.can_lock() && idle.is_some_and(|idle| since >= idle) {
             self.locked.store(true, Ordering::SeqCst);
+            crate::files::private_copies::clean();
             return true;
         }
         false
@@ -404,6 +406,8 @@ pub(crate) struct EncryptionChanged {
     backup: String,
     /// Backups that stayed unencrypted.
     backups_left_plain: u64,
+    /// Attached files the change left as they were.
+    files_failed: u64,
 }
 
 /// Encrypts the open workspace with `passphrase`, gives it that new
@@ -465,6 +469,7 @@ pub(crate) async fn change_encryption(
             view: view(&settings, &workspace),
             backup: changed.backup.name,
             backups_left_plain: changed.backups_left_plain,
+            files_failed: changed.files_failed,
         })
     })
     .await

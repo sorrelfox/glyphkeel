@@ -307,7 +307,17 @@ fn call(
     passphrase::unlock(&layout)?;
     let engine = Engine::open(&layout, config)?;
     let ctx = Context::user(Via::Cli).with_confirmation(confirm);
-    let result = engine.call(&ctx, cmd.op.id, input);
+    let mut result = engine.call(&ctx, cmd.op.id, input.clone());
+    // An encrypted export to import: ask for its passphrase and try again.
+    let mut tries = 0;
+    while let Err(err) = &result
+        && passphrase::wants_export_passphrase(err)
+        && tries < 3
+        && passphrase::ask_export().unwrap_or(false)
+    {
+        tries += 1;
+        result = engine.call(&ctx, cmd.op.id, input.clone());
+    }
     // Someone who only uses the command line and agents still gets a daily
     // backup. It never fails the command: the app and the next command try
     // again.

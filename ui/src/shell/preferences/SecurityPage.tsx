@@ -157,7 +157,12 @@ export function SecurityPage() {
         toasts.show({
           tone: "info",
           text: t(form === "decrypt" ? "security-decrypted" : form === "change" ? "security-changed" : "security-encrypted", { backup: done.backup }),
-          detail: done.backups_left_plain > 0 ? t("security-backups-left-plain", { count: done.backups_left_plain }) : undefined,
+          detail:
+            done.files_failed > 0
+              ? t("security-files-left", { count: done.files_failed })
+              : done.backups_left_plain > 0
+                ? t("security-backups-left-plain", { count: done.backups_left_plain })
+                : undefined,
         });
       },
       onError: (failure) => {

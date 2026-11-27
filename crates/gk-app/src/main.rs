@@ -8,6 +8,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent_http;
+
+/// The passphrases a process knows are shared by its threads: the tests
+/// that encrypt a workspace or forget the passphrases take turns.
+#[cfg(test)]
+pub(crate) static PASSPHRASE_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 mod app_settings;
 mod autostart;
 mod background;
@@ -187,6 +192,9 @@ fn main() -> ExitCode {
             });
         })
         .setup(move |app| {
+            // Plain copies of encrypted files that an earlier run opened in
+            // other apps and couldn't remove (it crashed).
+            files::private_copies::sweep();
             // The workspace opens before the window, so the page's first
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
@@ -273,6 +281,7 @@ fn main() -> ExitCode {
                     if let Some(workspace) = app.try_state::<Arc<Workspace>>() {
                         workspace.close();
                     }
+                    files::private_copies::clean();
                     #[cfg(target_os = "linux")]
                     if app
                         .state::<app_settings::Restart>()

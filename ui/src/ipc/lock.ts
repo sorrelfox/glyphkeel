@@ -46,6 +46,8 @@ export interface EncryptionChanged extends LockView {
   backup: string;
   /** Backups that stayed unencrypted. */
   backups_left_plain: number;
+  /** Attached files the change left as they were. */
+  files_failed: number;
 }
 
 export interface LockPatch {
@@ -185,7 +187,7 @@ export function changeEncryption(request: EncryptionRequest): Promise<Encryption
   } else {
     fake.workspacePassphrase = null;
   }
-  return Promise.resolve({ ...fakeView(), backup: "2026-11-27T120000Z", backups_left_plain: 0 });
+  return Promise.resolve({ ...fakeView(), backup: "2026-11-27T120000Z", backups_left_plain: 0, files_failed: 0 });
 }
 
 // ---------- Hooks ----------

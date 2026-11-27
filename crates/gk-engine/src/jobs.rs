@@ -375,6 +375,10 @@ impl Engine {
             .with_detail("missing", missing));
         }
         let previous = self.create_backup(BackupKind::PreRestore)?;
+        // The file keys the workspace and the backup keep: the restored
+        // database must still open the stored files of both.
+        let live_keys = gk_store::workspace_keys(layout.root()).unwrap_or((None, Vec::new()));
+        let backup_keys = gk_store::file_keys_of(&path).map_err(|e| store_error(&e))?;
         folder.put_files_back(name, &layout)?;
         let copy = layout.root().join(format!(".restore-{}.db", self.now()));
         let result = (|| {
@@ -395,8 +399,50 @@ impl Engine {
         let _ = fs::remove_file(&copy);
         let _ = fs::remove_file(copy.with_extension("db-journal"));
         result?;
+        restore_file_keys(&layout, live_keys, &backup_keys);
         self.upgraded.store(true, Ordering::Release);
         tracing::info!(name, previous = %previous.name, "workspace restored from a backup");
         Ok(BackupRestored { restored, previous })
     }
+}
+
+/// After a restore: keeps the file keys of the workspace before it and of
+/// the backup in the restored database (the workspace's key still seals
+/// new files when it is encrypted), and brings every stored file to the
+/// workspace's encryption. Problems are only logged: every file still
+/// opens with the keys kept.
+fn restore_file_keys(
+    layout: &gk_store::WorkspaceLayout,
+    (current, live): (Option<gk_store::FileKey>, Vec<gk_store::FileKey>),
+    backup: &[gk_store::FileKey],
+) {
+    let encrypted = gk_store::encryption_of(&layout.database())
+        .is_ok_and(|e| e == gk_store::Encryption::Encrypted);
+    let mut keys = Vec::new();
+    for key in current.iter().chain(&live).chain(backup) {
+        if !keys.contains(key) {
+            keys.push(key.clone());
+        }
+    }
+    if encrypted && keys.is_empty() {
+        match gk_store::FileKey::generate() {
+            Ok(key) => keys.push(key),
+            Err(e) => tracing::warn!(error = %e, "no file key"),
+        }
+    }
+    if let Err(e) = gk_store::save_file_keys(layout, &keys) {
+        tracing::warn!(error = %e, "the file keys were not kept after the restore");
+        return;
+    }
+    let target = if encrypted { keys.first() } else { None };
+    match gk_store::convert_blobs(&layout.files_dir(), target, None) {
+        Ok(done) if done.failed == 0 && !encrypted && !keys.is_empty() => {
+            if let Err(e) = gk_store::save_file_keys(layout, &[]) {
+                tracing::warn!(error = %e, "the file keys stayed after the restore");
+            }
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "stored files were not converted after the restore"),
+    }
+    let _ = gk_store::clear_thumbs(layout);
 }

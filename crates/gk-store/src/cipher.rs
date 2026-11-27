@@ -32,7 +32,8 @@
 //! into a new file with `sqlcipher_export`, check the new file and put it in
 //! place with one rename. They need the workspace to themselves: no other
 //! program may have it open ([`StoreError::InUse`]). The stored files in
-//! `files/` are not encrypted.
+//! `files/` are sealed separately (see the `sealed` module), with keys
+//! kept inside the encrypted database.
 
 use std::fs;
 use std::io::{self, Read};
@@ -156,7 +157,7 @@ impl PassphraseCheck {
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes
         .iter()
@@ -166,7 +167,7 @@ fn hex(bytes: &[u8]) -> String {
         })
 }
 
-fn unhex(text: &str) -> Option<Vec<u8>> {
+pub(crate) fn unhex(text: &str) -> Option<Vec<u8>> {
     if !text.len().is_multiple_of(2) {
         return None;
     }
@@ -266,6 +267,35 @@ pub fn forget_passphrases() {
     let mut keys = keys();
     keys.passphrases.clear();
     keys.derived.clear();
+}
+
+/// The passphrases this process knows, with the one in
+/// [`PASSPHRASE_ENV`] last: for opening an encrypted export.
+#[must_use]
+pub fn known_passphrases() -> Vec<Passphrase> {
+    let mut list = keys().passphrases.clone();
+    if let Some(env) = std::env::var(PASSPHRASE_ENV).ok().and_then(Passphrase::new)
+        && !list.contains(&env)
+    {
+        list.push(env);
+    }
+    list
+}
+
+/// The passphrase of the encrypted database at `database`, among those
+/// this process knows: for sealing an export with it. `None` for a plain
+/// database, or when this process doesn't know it.
+pub fn workspace_passphrase(database: &Path) -> Result<Option<Passphrase>> {
+    let Some(salt) = read_salt(database)? else {
+        return Ok(None);
+    };
+    let Some(key) = key_for(database)? else {
+        return Ok(None);
+    };
+    let candidates = keys().passphrases.clone();
+    Ok(candidates
+        .into_iter()
+        .find(|p| derive(p, &salt).as_ref() == key.as_ref()))
 }
 
 /// Whether the file at `path` can be opened: it is plain, or a passphrase
