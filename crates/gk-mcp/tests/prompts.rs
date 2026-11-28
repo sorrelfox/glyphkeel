@@ -449,7 +449,7 @@ async fn the_default_command_line_lists_every_prompt() {
         .iter()
         .map(|p| p["name"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(all.len(), 8);
+    assert_eq!(all.len(), 9);
     assert_eq!(names, all);
     conn.close().await;
 }

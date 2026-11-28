@@ -66,6 +66,7 @@ The safety class decides who may run an operation:
 | `field.delete` | permanent | app, command line, MCP | `delete_custom_field` | `glyphkeel field delete` |
 | `task.search` | read | app, command line, MCP | `search_tasks` | `glyphkeel task list` |
 | `task.get` | read | app, command line, MCP | `get_task` | `glyphkeel task show <keys>` |
+| `task.context` | read | app, command line, MCP | `get_task_context` | `glyphkeel task context <key>` |
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
@@ -509,6 +510,12 @@ Input: `TaskSearchInput`. Output: `TaskSearchResult`. Schemas: [catalog.schema.j
 One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request.
 
 Input: `TaskGetInput`. Output: `TaskList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.context`
+
+Everything needed to work on one task, in one read within a size: the task with its checklist, fields, sprint and version, its parents, subtasks and links, the recent comments and changes, the status rules, the project's agent brief, the wiki pages it links to, and waiting proposals; says what was trimmed.
+
+Input: `TaskContextInput`. Output: `TaskContext`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.create`
 

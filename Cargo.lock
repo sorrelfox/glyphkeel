@@ -1916,6 +1916,7 @@ dependencies = [
  "gk-api",
  "gk-core",
  "gk-engine",
+ "gk-seed",
  "gk-store",
  "http-body-util",
  "hyper",

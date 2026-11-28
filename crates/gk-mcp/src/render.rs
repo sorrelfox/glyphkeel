@@ -28,6 +28,9 @@ pub(crate) fn markdown(tool: &str, output: &Value) -> String {
         "verify_backup" => backup_check(output),
         "export_data" => export(output),
         "import_data" => import(output),
+        // Large by design and sized by its own `bytes`: compact, so the
+        // text costs what the context says.
+        "get_task_context" => output.to_string(),
         _ => fallback(output),
     }
 }
@@ -462,5 +465,18 @@ mod tests {
     #[test]
     fn unknown_tools_fall_back_to_json() {
         assert!(markdown("nope", &json!({"a": 1})).starts_with("```json"));
+    }
+
+    #[test]
+    fn a_task_context_is_compact_json_charged_once() {
+        let context = json!({ "task": { "key": "TM-1" }, "bytes": 27 });
+        let text = markdown("get_task_context", &context);
+        assert_eq!(text, context.to_string());
+        assert_eq!(crate::server::charged(&text, &context), text.len());
+        let other = markdown("get_task", &context);
+        assert_eq!(
+            crate::server::charged(&other, &context),
+            other.len() + context.to_string().len()
+        );
     }
 }

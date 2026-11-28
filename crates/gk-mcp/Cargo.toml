@@ -31,6 +31,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+gk-seed = { workspace = true }
 rmcp = { workspace = true, features = ["client"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }

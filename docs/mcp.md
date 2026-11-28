@@ -47,6 +47,28 @@ last day), grouped like the digest on Today, with counts. An agent limited to a
 project sees only that project's part. Agents can read the digest but not mark
 it as seen: that is the person's.
 
+To start on a task, an agent calls `get_task_context` once instead of reading
+the task, its parent, its links, its comments, the brief and the wiki pages
+one by one:
+
+```json
+get_task_context {"key": "TM-41", "depth": 2, "max_bytes": 16384}
+```
+
+It returns the task with its numbered checklist, custom fields, dates,
+estimate, time spent, sprint and version; its parents up to the top; its
+subtasks, `depth` levels down (default 1); its links with their status; the 20
+most recent comments; the project's statuses with their rules and its rules
+for agents; the agent brief; the opening of each wiki page the task links to;
+the 20 most recent changes; and changes proposed to it that wait for you. It
+stays within `max_bytes` of JSON (default 32 KB, from 4 KB to 256 KB): the
+oldest comments go first, then the pages' openings, the oldest changes and
+proposals, and then the brief and the description are cut. `trimmed` says
+what went, and `bytes` is the size. It counts as one read, and its size counts
+towards **Data read a minute**. An agent limited to a project sees no links to
+tasks outside it. From the command line, `glyphkeel task context TM-41 --json`
+gives the same.
+
 ## Profiles
 
 A profile sets how far an agent may go. Each tool has a safety class: it reads,
@@ -335,7 +357,7 @@ agent's claim** in the task menu ends one.
 The server also offers prompts: ready-made requests that many clients show as
 slash commands, such as `plan_my_day`, `weekly_review`, `triage_new_tasks`,
 `break_down_task`, `write_status_update`, `write_release_notes`,
-`review_schedule` and `summarise_task_history`. The ones that change something
+`review_schedule`, `summarise_task_history` and `work_on_task`. The ones that change something
 ask you first. A prompt is offered only when the agent may use every tool it
 needs.
 

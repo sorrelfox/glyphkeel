@@ -28,7 +28,7 @@ pub(super) fn register(r: &mut Registry) {
     });
 }
 
-fn brief(tx: &Transaction<'_>, id: Id, key: String) -> Result<AgentBrief, Failure> {
+pub(crate) fn brief(tx: &Transaction<'_>, id: Id, key: String) -> Result<AgentBrief, Failure> {
     let page: Option<(String, String)> = tx
         .query_row(
             "SELECT w.title, r.body FROM wiki_pages w JOIN wiki_revisions r ON r.id = w.current_rev
