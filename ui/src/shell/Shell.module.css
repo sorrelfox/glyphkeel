@@ -226,6 +226,15 @@
   }
 }
 
+/* Measured: the names would cut off the project's name. */
+.views[data-crowded] .viewName {
+  display: none;
+}
+
+.views[data-crowded] > .view {
+  padding-inline: 8px;
+}
+
 @container shell-main (width < 720px) {
   .views > .otherView {
     display: none;
