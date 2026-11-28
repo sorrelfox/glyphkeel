@@ -890,6 +890,7 @@ fn settings_can_be_set_back_to_their_default() {
 /// migration after version 3 must be undone here, which
 /// `going_back_to_3_drops_everything_later_migrations_made` checks.
 const BACK_TO_3: &str = "
+    DROP TABLE baseline_tasks; DROP TABLE baselines;
     DROP INDEX search_docs_task; DROP TRIGGER file_texts_with_blob; DROP TABLE file_texts;
     DROP TABLE proposals;
     DROP TABLE personal_marks; DROP INDEX activity_at;

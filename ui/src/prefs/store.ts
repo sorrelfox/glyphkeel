@@ -8,7 +8,7 @@ import { ACCENTS, DEFAULT_APPEARANCE, DENSITIES, THEMES, type Appearance } from 
 /**
  * Personal settings of this window that aren't workspace data: the
  * appearance, the sidebar's closed projects, the board's card size and its
- * collapsed swimlanes. The
+ * collapsed swimlanes, and what the Gantt chart shows. The
  * web view keeps nothing between starts, so in the app they live in the
  * app's settings file: the app hands them over before the page's first
  * frame (so the theme doesn't flash) and keeps every change. A plain
@@ -135,4 +135,22 @@ export function loadCollapsedLanes(project: string, grouping: string): string[] 
 
 export function saveCollapsedLanes(project: string, grouping: string, ids: readonly string[]): void {
   writePref(`board.collapsedLanes.${project}.${grouping}`, ids);
+}
+
+/** What the person shows on a project's Gantt chart: the critical path, and the baseline compared with. */
+export interface GanttShown {
+  critical: boolean;
+  /** The baseline's ID; none: no comparison. */
+  baseline: string | undefined;
+}
+
+/** The Gantt chart's critical path switch and shown baseline for a project (by project ID). */
+export function loadGanttShown(project: string): GanttShown {
+  const stored = readPref(`gantt.shown.${project}`);
+  const value = typeof stored === "object" && stored !== null ? (stored as Record<string, unknown>) : {};
+  return { critical: value.critical === true, baseline: typeof value.baseline === "string" ? value.baseline : undefined };
+}
+
+export function saveGanttShown(project: string, shown: GanttShown): void {
+  writePref(`gantt.shown.${project}`, { critical: shown.critical, ...(shown.baseline === undefined ? {} : { baseline: shown.baseline }) });
 }

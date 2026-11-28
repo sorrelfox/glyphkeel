@@ -126,6 +126,10 @@ export interface GanttProps {
   onRefused: (key: string, reason: ReadOnlyReason) => void;
   /** The project's versions with a due date, drawn as markers at the end of that day. */
   versions?: readonly VersionMarker[];
+  /** Highlight the critical path and show the slack column. */
+  critical?: boolean;
+  /** A baseline is compared with: ghost bars and the slip column. */
+  baseline?: boolean;
   ref?: Ref<GanttHandle>;
 }
 
@@ -168,6 +172,10 @@ export function useFormats(locale: string, today: Day) {
       monthYear: format({ month: "long", year: "numeric" }),
       year: format({ year: "numeric" }),
       percent: new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }),
+      /** Working days of slack, such as "2d" or "-1d". */
+      slack: new Intl.NumberFormat(locale, { style: "unit", unit: "day", unitDisplay: "narrow" }),
+      /** Days of slip with their sign, such as "+3d" or "-1d". */
+      slip: new Intl.NumberFormat(locale, { style: "unit", unit: "day", unitDisplay: "narrow", signDisplay: "exceptZero" }),
       /** A moment, such as when a claim ends, in the person's own time. */
       time: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }),
     };
@@ -190,6 +198,11 @@ export function headerText(cell: HeaderCell, top: boolean, fmt: Formats, t: Retu
     case "year":
       return fmt.year.format(asDate(cell.first));
   }
+}
+
+/** A number of days for a message: how many, and whether it is more (`late`), fewer (`early`) or none (`none`). */
+export function signed(days: number): { days: number; sign: "late" | "early" | "none" } {
+  return { days: Math.abs(days), sign: days > 0 ? "late" : days < 0 ? "early" : "none" };
 }
 
 /** Puts the focus on the chart that holds `element`, where its keys work. */
@@ -230,6 +243,8 @@ export const Gantt = memo(function Gantt({
   onRange,
   onRefused,
   versions = NO_VERSIONS,
+  critical = false,
+  baseline = false,
   ref,
 }: GanttProps) {
   const t = useT();
@@ -1007,6 +1022,31 @@ export const Gantt = memo(function Gantt({
   const preview = useMovePreview(previewInput);
   const ghosts = preview.moved !== undefined && !preview.stale ? preview.moved : [];
 
+  /** A bar's tooltip: its dates, its slack and its baseline dates, as each is shown. */
+  const barTip = (task: ScheduledTask): string => {
+    const range = (first: string | undefined, last: string | undefined) => {
+      const a = first ?? last;
+      const b = last ?? first;
+      if (a === undefined || b === undefined) {
+        return "";
+      }
+      return a === b ? fmt.cell(a) : t("gantt-drag-dates", { from: fmt.cell(a), to: fmt.cell(b) });
+    };
+    const lines = [`${task.key} ${task.title}`, range(task.summary?.start ?? task.start_date, task.summary?.end ?? task.due_date)];
+    if (critical && task.timing) {
+      lines.push(t(task.timing.critical ? "gantt-tip-critical" : "gantt-tip-slack", signed(task.timing.slack_days)));
+    }
+    if (baseline && task.baseline) {
+      lines.push(t("gantt-tip-baseline", { dates: range(task.baseline.start_date, task.baseline.due_date) }));
+      if (task.baseline.slip_days !== undefined) {
+        lines.push(t("gantt-tip-slip", signed(task.baseline.slip_days)));
+      }
+    } else if (baseline && task.new_since_baseline === true) {
+      lines.push(t("gantt-tip-new"));
+    }
+    return lines.filter((line) => line !== "").join("\n");
+  };
+
   const tooltip = (() => {
     if (!drag?.moving || drag.mode === "link") {
       return null;
@@ -1047,6 +1087,7 @@ export const Gantt = memo(function Gantt({
 
   const sizes = {
     "--gantt-table": `${String(tableW)}px`,
+    ...(critical || baseline ? { "--gantt-extra": [critical ? "var(--gantt-col-slack, 4em)" : "", baseline ? "var(--gantt-col-slip, 4.5em)" : ""].join(" ") } : {}),
     ...Object.fromEntries(SIZED.filter((column) => widths[column] !== undefined).map((column) => [`--gantt-col-${column}`, `${String(widths[column])}px`])),
   } as CSSProperties;
 
@@ -1130,6 +1171,16 @@ export const Gantt = memo(function Gantt({
               {t("gantt-col-progress")}
               <ResizeHandle column="progress" label={t("gantt-resize-column", { column: t("gantt-col-progress-label") })} value={widths.progress} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
+            {critical && (
+              <span role="columnheader" className={classes(styles.cell, styles.num)} data-column-head="slack">
+                {t("gantt-col-slack")}
+              </span>
+            )}
+            {baseline && (
+              <span role="columnheader" className={classes(styles.cell, styles.num)} data-column-head="slip">
+                {t("gantt-col-slip")}
+              </span>
+            )}
           </div>
 
           <div className={styles.head} aria-hidden="true" style={{ inlineSize: width }}>
@@ -1192,6 +1243,8 @@ export const Gantt = memo(function Gantt({
                   today={today}
                   readOnly={readOnly}
                   fields={fieldSummary(row.task.fields)}
+                  critical={critical}
+                  baseline={baseline}
                 />
               );
             })}
@@ -1206,6 +1259,13 @@ export const Gantt = memo(function Gantt({
                 <marker id={`${ids}-arrow-warn`} viewBox="0 0 6 6" refX="6" refY="3" markerWidth="6" markerHeight="6" orient="auto">
                   <path d="M0,0 L6,3 L0,6 z" className={classes(styles.arrowhead, styles.warn)} />
                 </marker>
+                <marker id={`${ids}-arrow-critical`} viewBox="0 0 6 6" refX="6" refY="3" markerWidth="6" markerHeight="6" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 z" className={classes(styles.arrowhead, styles.criticalHead)} />
+                </marker>
+                {/* Stripes over critical bars, so that they don't differ by colour alone. */}
+                <pattern id={`${ids}-critical`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="2" height="6" className={styles.stripe} />
+                </pattern>
               </defs>
               {(zoom === "day" || zoom === "week") && (
                 <Weekends origin={origin} ppd={ppd} x0={x0} x1={Math.min(x1, width)} height={height} weekend={weekend} />
@@ -1234,11 +1294,14 @@ export const Gantt = memo(function Gantt({
                   const lag = dependency.lag_days ?? 0;
                   const xa = ga.x2 + lag * ppd;
                   const warn = dependency.violated || gb.x1 < xa;
+                  // On the critical path: both ends critical and no slack between them.
+                  const onPath = critical && a.timing?.critical === true && b.timing?.critical === true;
                   const d = elbow(xa, ya * ROW + ROW / 2, gb.x1, yb * ROW + ROW / 2);
+                  const head = warn ? "-warn" : onPath ? "-critical" : "";
                   return (
-                    <g key={dependency.id} data-dependency={`${dependency.from}>${dependency.to}`} data-lag={lag > 0 ? lag : undefined}>
-                      {lag > 0 && <line className={classes(styles.lagSpan, warn && styles.warn)} x1={ga.x2} x2={xa} y1={ya * ROW + ROW / 2} y2={ya * ROW + ROW / 2} />}
-                      <path d={d} className={classes(styles.link, warn && styles.warn)} markerEnd={`url(#${ids}-arrow${warn ? "-warn" : ""})`} />
+                    <g key={dependency.id} data-dependency={`${dependency.from}>${dependency.to}`} data-lag={lag > 0 ? lag : undefined} data-critical={onPath ? "" : undefined}>
+                      {lag > 0 && <line className={classes(styles.lagSpan, warn && styles.warn, onPath && styles.criticalLink)} x1={ga.x2} x2={xa} y1={ya * ROW + ROW / 2} y2={ya * ROW + ROW / 2} />}
+                      <path d={d} className={classes(styles.link, onPath && styles.criticalLink, warn && styles.warn)} markerEnd={`url(#${ids}-arrow${head})`} />
                       <path
                         d={lag > 0 ? `M${String(ga.x2)},${String(ya * ROW + ROW / 2)} H${String(xa)} ${d.replace(/^M[^ ]+ /u, "")}` : d}
                         className={styles.linkHit}
@@ -1254,6 +1317,23 @@ export const Gantt = memo(function Gantt({
                   );
                 })}
               </g>
+              {baseline &&
+                shown.map((row, k) => {
+                  if (row.kind !== "task" || !row.task.baseline) {
+                    return null;
+                  }
+                  const then = row.task.baseline;
+                  const geo = geometry(row.task, origin, ppd, { start: then.start_date, due: then.due_date });
+                  if (!geo) {
+                    return null;
+                  }
+                  const y = (r0 + k) * ROW + ROW / 2 + 10;
+                  return geo.shape === "milestone" || geo.x2 - geo.x1 < 3 ? (
+                    <rect key={`b-${row.task.key}`} className={styles.baselineGhost} x={(geo.x1 + geo.x2) / 2 - 3} y={y - 1} width={6} height={6} transform={`rotate(45 ${String((geo.x1 + geo.x2) / 2)} ${String(y + 2)})`} data-baseline-ghost={row.task.key} />
+                  ) : (
+                    <rect key={`b-${row.task.key}`} className={styles.baselineGhost} x={geo.x1} y={y} width={Math.max(2, geo.x2 - geo.x1)} height={4} rx={2} data-baseline-ghost={row.task.key} />
+                  );
+                })}
               {ghosts.map((moved) => {
                 const task = byKey.get(moved.key);
                 const at = index.get(moved.key);
@@ -1273,6 +1353,9 @@ export const Gantt = memo(function Gantt({
                     focused={focusKey === row.task.key}
                     target={drag?.target === row.task.key}
                     behind={behindSchedule(row.task, today) !== undefined}
+                    critical={critical && row.task.timing?.critical === true}
+                    tip={barTip(row.task)}
+                    pattern={`${ids}-critical`}
                     readOnly={readOnly}
                     onDown={onBarDown}
                     onOpen={onOpen}
@@ -1507,9 +1590,13 @@ interface TableRowProps {
   readOnly: boolean;
   /** The task's custom field values, one "Name: value" a line, for the title's tooltip. */
   fields: string;
+  /** Show the slack column. */
+  critical: boolean;
+  /** Show the slip column. */
+  baseline: boolean;
 }
 
-const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen, today, readOnly, fields }: TableRowProps) {
+const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen, today, readOnly, fields, critical, baseline }: TableRowProps) {
   const t = useT();
   const task: ScheduledTask | UnscheduledTask = row.task;
   const scheduled = row.kind === "task" ? row.task : undefined;
@@ -1546,6 +1633,16 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
   }
   if (task.read_only !== undefined) {
     label = t("gantt-row-read-only", { row: label, reason: task.read_only });
+  }
+  const timing = task.timing;
+  if (critical && timing) {
+    label = t(timing.critical ? "gantt-row-critical" : "gantt-row-slack", { row: label, ...signed(timing.slack_days) });
+  }
+  const slip = scheduled?.baseline?.slip_days;
+  if (baseline && scheduled?.new_since_baseline === true) {
+    label = t("gantt-row-new", { row: label });
+  } else if (baseline && slip !== undefined) {
+    label = t("gantt-row-slip", { row: label, ...signed(slip) });
   }
 
   const dateCell = (field: Editing["field"]) => {
@@ -1685,6 +1782,16 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
       <span role="gridcell" className={classes(styles.cell, styles.num)}>
         {progress}
       </span>
+      {critical && (
+        <span role="gridcell" className={classes(styles.cell, styles.num, timing?.critical === true && styles.criticalCell)} data-slack={timing?.slack_days}>
+          {timing === undefined ? "" : fmt.slack.format(timing.slack_days)}
+        </span>
+      )}
+      {baseline && (
+        <span role="gridcell" className={classes(styles.cell, styles.num, slip !== undefined && slip > 0 && styles.late, slip !== undefined && slip < 0 && styles.early)} data-slip={slip}>
+          {scheduled?.new_since_baseline === true ? <span className={styles.newMark}>{t("gantt-new")}</span> : slip === undefined ? "" : fmt.slip.format(slip)}
+        </span>
+      )}
     </div>
   );
 });
@@ -1705,6 +1812,12 @@ interface BarProps {
   focused: boolean;
   target: boolean;
   behind: boolean;
+  /** On the critical path, with the toggle on: striped, in the critical colour. */
+  critical: boolean;
+  /** The tooltip. */
+  tip: string;
+  /** The ID of the stripes drawn over critical bars. */
+  pattern: string;
   readOnly: boolean;
   onDown: (event: ReactPointerEvent, key: string, mode: Drag["mode"], task: ScheduledTask) => void;
   onOpen: (key: string) => void;
@@ -1712,7 +1825,7 @@ interface BarProps {
 }
 
 const Bar = memo(
-  function Bar({ task, geo, y, focused, target, behind, readOnly, onDown, onOpen, onTap }: BarProps) {
+  function Bar({ task, geo, y, focused, target, behind, critical, tip, pattern, readOnly, onDown, onOpen, onTap }: BarProps) {
     if (!geo) {
       return null;
     }
@@ -1728,19 +1841,24 @@ const Bar = memo(
       onTap(task.key);
     };
     const fixed = readOnly || task.read_only !== undefined;
-    const cls = classes(styles.bar, SHAPE_CLASS[geo.shape], focused && styles.focusedBar, target && styles.target, task.closed && styles.closedBar, task.overdue && styles.overdue, behind && styles.behind, fixed && styles.fixed);
+    const cls = classes(styles.bar, SHAPE_CLASS[geo.shape], focused && styles.focusedBar, target && styles.target, task.closed && styles.closedBar, task.overdue && styles.overdue, behind && styles.behind, fixed && styles.fixed, critical && styles.critical);
+    const title = <title>{tip}</title>;
+    const stripes = critical ? <rect className={styles.stripes} x={geo.x1} y={cy - (geo.shape === "summary" ? 4 : 9)} width={Math.max(2, w)} height={geo.shape === "summary" ? 8 : 18} rx={geo.shape === "summary" ? 2 : 4} fill={`url(#${pattern})`} pointerEvents="none" /> : null;
     const handle = readOnly ? null : <circle className={styles.handle} cx={geo.x2 + 7} cy={cy} r={4} onPointerDown={down("link")} data-handle="link" />;
     if (geo.shape === "summary") {
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape} onClick={tap}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-critical={critical ? "" : undefined} onClick={tap}>
+          {title}
           <rect x={geo.x1} y={cy - 4} width={w} height={8} rx={2} />
+          {stripes}
         </g>
       );
     }
     if (geo.shape === "milestone") {
       const cx = (geo.x1 + geo.x2) / 2;
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-critical={critical ? "" : undefined} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+          {title}
           <rect className={styles.diamond} x={cx - 5} y={cy - 5} width={10} height={10} rx={2} transform={`rotate(45 ${String(cx)} ${String(cy)})`} onPointerDown={down("move")} />
           {handle}
         </g>
@@ -1749,7 +1867,8 @@ const Bar = memo(
     if (geo.shape === "deadline") {
       const x = geo.x2;
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-critical={critical ? "" : undefined} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+          {title}
           <path className={styles.bracket} d={`M${String(x - 9)},${String(cy - 9)} h5 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-5`} />
           <rect className={styles.hit} x={x - 9} y={cy - 9} width={9} height={18} onPointerDown={down("move")} data-handle="move" />
           <rect className={styles.edge} x={x - 15} y={cy - 9} width={6} height={18} onPointerDown={down("start")} data-handle="start" />
@@ -1760,9 +1879,11 @@ const Bar = memo(
     const edge = Math.min(6, w / 4);
     const done = Math.max(0, Math.min(100, task.progress_percent));
     return (
-      <g className={cls} data-bar={task.key} data-shape={geo.shape} data-dependents={task.dependents} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+      <g className={cls} data-bar={task.key} data-shape={geo.shape} data-critical={critical ? "" : undefined} data-dependents={task.dependents} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
+        {title}
         <rect className={styles.body} x={geo.x1} y={cy - 9} width={w} height={18} rx={4} onPointerDown={down("move")} data-handle="move" />
         {done > 0 && geo.shape === "bar" && <rect className={styles.progress} x={geo.x1} y={cy - 9} width={(w * done) / 100} height={18} rx={4} pointerEvents="none" />}
+        {stripes}
         <rect className={styles.edge} x={geo.x1} y={cy - 9} width={edge} height={18} onPointerDown={down("start")} data-handle="start" />
         <rect className={styles.edge} x={geo.x2 - edge} y={cy - 9} width={edge} height={18} onPointerDown={down("end")} data-handle="end" />
         {handle}
@@ -1778,6 +1899,8 @@ const Bar = memo(
     a.focused === b.focused &&
     a.target === b.target &&
     a.behind === b.behind &&
+    a.critical === b.critical &&
+    a.tip === b.tip &&
     a.readOnly === b.readOnly &&
     a.onDown === b.onDown &&
     a.onOpen === b.onOpen &&

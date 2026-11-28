@@ -11,6 +11,7 @@ pub(crate) mod across;
 pub(crate) mod agent;
 pub(crate) mod automation;
 pub(crate) mod backup;
+pub(crate) mod baseline;
 pub(crate) mod board;
 pub(crate) mod builtin_templates;
 pub(crate) mod bulk;
@@ -101,6 +102,7 @@ pub(crate) fn register(r: &mut Registry) {
     view::register(r);
     dashboard::register(r);
     folder::register(r);
+    baseline::register(r);
     digest::register(r);
     version::register(r);
     sprint::register(r);

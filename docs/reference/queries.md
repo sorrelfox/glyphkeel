@@ -48,10 +48,13 @@ answer a mistake with its place in the query and a suggestion.
 | `created`, `edited`, `updated`, `closed` | a date; `updated` is any change, `edited` the task's own fields |
 | `estimate`, `spent`, `remaining` | a duration, or `none` |
 | `progress` | a percentage, `50` or `50%` |
+| `slack` | working days of slack on the critical path, such as `2d`; negative when the end can't be met. Not in automation rule conditions |
+| `slip` | days later than in the project's newest baseline, or the one `baseline:` names, such as `3d` or `-1d` |
+| `baseline` | a baseline's name: the task is in that baseline of its project |
 | `author` (`creator`) | `me`, `agent`, or an agent's name |
 | `claimed` | an agent's name, or `any` |
 | `comments`, `files`, `subtasks` | a number |
-| `is` | `open`, `closed`, `overdue`, `due-soon`, `blocked`, `claimed`, `subtask`, `parent`, `unscheduled`, `milestone`, `over-estimate` |
+| `is` | `open`, `closed`, `overdue`, `due-soon`, `blocked`, `claimed`, `subtask`, `parent`, `unscheduled`, `milestone`, `over-estimate`, `critical` |
 | `has` | `due`, `start`, `estimate`, `description`, `labels`, `version`, `sprint`, `files`, `comments`, `subtasks`, `parent`, `links`, `time`, `reminder`, `attachment-text` (a file whose text search reads) |
 | `in` | `files`: `in:files` looks for the query's words only inside attached files, `-in:files` never there |
 | `was`, `changed`, `changed-by` | the history: see below |

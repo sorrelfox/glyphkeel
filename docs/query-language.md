@@ -123,7 +123,7 @@ subtasks>0
 ```text
 is:open            is:closed           is:overdue         is:due-soon
 is:blocked         is:claimed          is:subtask         is:parent
-is:unscheduled     is:milestone        is:over-estimate
+is:unscheduled     is:milestone        is:over-estimate   is:critical
 
 has:due            has:estimate        has:description    has:labels
 has:version        has:sprint          has:files          has:comments
@@ -135,6 +135,31 @@ has:reminder       has:attachment-text
 reads.
 
 Combine them with `-`: `is:open -has:labels` finds open tasks without labels.
+
+## The critical path and baselines
+
+`is:critical` finds the tasks on the critical path of their project: the
+chain of `blocks` links that decides when the project can end. `slack` is how
+many working days a task can slip without moving that end; `slack<2d` finds
+the tasks with less than two. Each project is worked out on its own, counting
+back from its latest finish.
+
+`slip` compares a task's end with a saved baseline (see
+[Calendar and Gantt chart](guide/calendar-and-gantt.md#baselines)): how many
+days later it ends now, or earlier when negative. It uses the project's
+newest baseline, or the one a `baseline:` condition in the same query names.
+
+`is:critical` and `slack` work in the list, saved views, the board, reports,
+dashboards, bulk changes, the command line and MCP, but not in the conditions
+of automation rules, where they match no task.
+
+```text
+is:critical is:open
+slack<2d
+slip>3d
+baseline:"Kick-off" slip>3d
+slip<0
+```
 
 ## Projects, people and links
 

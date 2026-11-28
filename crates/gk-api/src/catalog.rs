@@ -12,7 +12,9 @@ use crate::ops::{
     file, history, link, planning, project, query, report, rules, schedule, search, settings,
     sprint, task, time, today, transfer, trash, version, view, wiki, workspace,
 };
-use crate::ops::{automation, digest, folder, proposal, recurrence, task_context, template};
+use crate::ops::{
+    automation, baseline, digest, folder, proposal, recurrence, task_context, template,
+};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -293,6 +295,10 @@ pub static CATALOG: &[OpDescriptor] = &[
     schedule::SCHEDULE_PREVIEW_MOVE,
     schedule::GANTT_LAYOUT_GET,
     schedule::GANTT_LAYOUT_UPDATE,
+    baseline::BASELINE_LIST,
+    baseline::BASELINE_CREATE,
+    baseline::BASELINE_RENAME,
+    baseline::BASELINE_DELETE,
     wiki::WIKI_LIST,
     wiki::WIKI_SEARCH,
     wiki::WIKI_GET,

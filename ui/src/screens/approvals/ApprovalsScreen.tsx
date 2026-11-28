@@ -302,7 +302,7 @@ function sides(change: FieldChange, show: (value: unknown) => string): { before:
   return { before: show(change.before), after: show(change.after) };
 }
 
-const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "view", "version", "sprint", "wiki_page", "template", "work_kind", "automation_rule", "dashboard", "project_folder"]);
+const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "view", "version", "sprint", "wiki_page", "template", "work_kind", "automation_rule", "dashboard", "project_folder", "baseline"]);
 
 function entityName(entity: string): string {
   return ENTITIES.has(entity) ? entity : "other";

@@ -227,6 +227,20 @@ pub enum Cond {
     /// `in:files`, where it is written. It never stays in a checked
     /// filter: checking turns it into the scope of the text terms.
     InFiles(Span),
+    /// Total slack on the critical path within any of the bounds (working
+    /// days).
+    Slack(Vec<Bounds>),
+    /// How many days later the task ends than in a baseline, within any of
+    /// the bounds: the baseline named by the query's `baseline:`, else its
+    /// project's newest.
+    Slip {
+        /// The bounds, in days.
+        bounds: Vec<Bounds>,
+        /// The baseline's folded name, from `baseline:`.
+        baseline: Option<String>,
+    },
+    /// In a baseline of its project with one of these names.
+    Baselines(Vec<NameRef>),
 }
 
 /// What `was:` looks for.
@@ -404,6 +418,23 @@ impl Checked {
         out
     }
 
+    /// Whether the filter looks at the critical path (`is:critical`,
+    /// `slack`), which the engine works out and hands to
+    /// [`crate::Compiled::provide_schedule`].
+    #[must_use]
+    pub fn uses_schedule(&self) -> bool {
+        fn uses(f: &Filter) -> bool {
+            match f {
+                Filter::And(items) | Filter::Or(items) => items.iter().any(uses),
+                Filter::Not(inner) => uses(inner),
+                Filter::Cond(Cond::Slack(_)) => true,
+                Filter::Cond(Cond::Is(flags)) => flags.contains(&"critical"),
+                Filter::Cond(_) => false,
+            }
+        }
+        self.filter.as_ref().is_some_and(uses)
+    }
+
     /// Every name the engine must find in the workspace.
     #[must_use]
     pub fn names(&self) -> Vec<NameUse> {
@@ -528,7 +559,10 @@ impl std::fmt::Debug for CheckEnv<'_> {
 /// # Errors
 /// The first field, operator or value that doesn't fit.
 pub fn check(query: &Query, env: CheckEnv<'_>) -> Result<Checked, QueryError> {
-    let filter = query.filter.as_ref().map(|e| expr(e, env)).transpose()?;
+    let mut filter = query.filter.as_ref().map(|e| expr(e, env)).transpose()?;
+    if let Some(f) = &mut filter {
+        bind_baseline(f);
+    }
     let filter = match filter {
         Some(f) => scope_files(f)?,
         None => None,
@@ -1114,6 +1148,55 @@ fn minutes_of(v: &Value, env: CheckEnv<'_>) -> Result<(i64, i64), QueryError> {
     }
 }
 
+/// A number of days, `3d`, `3` or `-1d`.
+fn days_value(v: &Value) -> Result<(i64, i64), QueryError> {
+    let one = |t: &str| {
+        let digits = t
+            .strip_suffix('d')
+            .or_else(|| t.strip_suffix('D'))
+            .unwrap_or(t);
+        digits
+            .parse::<i32>()
+            .ok()
+            .filter(|n| n.unsigned_abs() <= 100_000)
+            .map(i64::from)
+            .ok_or_else(|| QueryError::new("query-bad-days", v.span).arg("value", t))
+    };
+    match &v.kind {
+        ValueKind::Word { text, .. } => one(text).map(|n| (n, n)),
+        ValueKind::Range(a, b) => Ok((one(a)?, one(b)?)),
+    }
+}
+
+/// Gives the `slip` conditions the baseline named by the query's one
+/// `baseline:` condition outside negations and alternatives, if it has
+/// exactly one with one name.
+fn bind_baseline(filter: &mut Filter) {
+    fn named(f: &Filter, out: &mut Vec<String>) {
+        match f {
+            Filter::And(items) => items.iter().for_each(|i| named(i, out)),
+            Filter::Cond(Cond::Baselines(names)) if names.len() == 1 => {
+                out.push(names[0].folded.clone());
+            }
+            _ => {}
+        }
+    }
+    fn bind(f: &mut Filter, name: &str) {
+        match f {
+            Filter::And(items) | Filter::Or(items) => items.iter_mut().for_each(|i| bind(i, name)),
+            Filter::Not(inner) => bind(inner, name),
+            Filter::Cond(Cond::Slip { baseline, .. }) => *baseline = Some(name.to_owned()),
+            Filter::Cond(_) => {}
+        }
+    }
+    let mut names = Vec::new();
+    named(filter, &mut names);
+    names.dedup();
+    if let [name] = names.as_slice() {
+        bind(filter, name);
+    }
+}
+
 fn whole_number(v: &Value, percent: bool) -> Result<(i64, i64), QueryError> {
     let one = |t: &str| {
         let digits = if percent {
@@ -1372,6 +1455,25 @@ fn condition(
             values
                 .iter()
                 .map(|v| whole_number(v, true).map(|(lo, hi)| bounds(op, lo, hi)))
+                .collect::<Result<_, _>>()?,
+        ),
+        FieldType::Slack => Cond::Slack(
+            values
+                .iter()
+                .map(|v| days_value(v).map(|(lo, hi)| bounds(op, lo, hi)))
+                .collect::<Result<_, _>>()?,
+        ),
+        FieldType::Slip => Cond::Slip {
+            bounds: values
+                .iter()
+                .map(|v| days_value(v).map(|(lo, hi)| bounds(op, lo, hi)))
+                .collect::<Result<_, _>>()?,
+            baseline: None,
+        },
+        FieldType::Baseline => Cond::Baselines(
+            values
+                .iter()
+                .map(|v| name_ref(v, field))
                 .collect::<Result<_, _>>()?,
         ),
         FieldType::Count(of) => Cond::Count(
@@ -1844,6 +1946,56 @@ mod tests {
 
     fn err(src: &str) -> QueryError {
         run(src).expect_err(src)
+    }
+
+    #[test]
+    fn slack_and_slip_take_days_and_slip_follows_the_one_baseline_named() {
+        let slip = |src: &str| -> Vec<(Vec<Bounds>, Option<String>)> {
+            fn walk(f: &Filter, out: &mut Vec<(Vec<Bounds>, Option<String>)>) {
+                match f {
+                    Filter::And(items) | Filter::Or(items) => {
+                        items.iter().for_each(|i| walk(i, out))
+                    }
+                    Filter::Not(inner) => walk(inner, out),
+                    Filter::Cond(Cond::Slip { bounds, baseline }) => {
+                        out.push((bounds.clone(), baseline.clone()));
+                    }
+                    Filter::Cond(_) => {}
+                }
+            }
+            let mut out = Vec::new();
+            if let Some(f) = &run(src).unwrap_or_else(|e| panic!("{src}: {e:?}")).filter {
+                walk(f, &mut out);
+            }
+            out
+        };
+        let above = |n: i64| Bounds {
+            lo: Some(n),
+            hi: None,
+        };
+        assert_eq!(slip("slip>3d"), vec![(vec![above(4)], None)]);
+        assert_eq!(
+            slip("slip<-1d"),
+            vec![(
+                vec![Bounds {
+                    lo: None,
+                    hi: Some(-2)
+                }],
+                None
+            )]
+        );
+        assert_eq!(
+            slip("baseline:\"Plan A\" slip>=2"),
+            vec![(vec![above(2)], Some("plan a".to_owned()))]
+        );
+        // Two baselines, or one in an alternative: the newest.
+        assert_eq!(slip("baseline:A baseline:B slip>2d")[0].1, None);
+        assert_eq!(slip("(baseline:A OR is:open) slip>2d")[0].1, None);
+        assert!(run("slack<2d").unwrap().uses_schedule());
+        assert!(run("-is:critical").unwrap().uses_schedule());
+        assert!(!run("slip>2d is:open").unwrap().uses_schedule());
+        assert_eq!(err("slack<soon").id, "query-bad-days");
+        assert_eq!(err("slip>2h").id, "query-bad-days");
     }
 
     #[test]

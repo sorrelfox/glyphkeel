@@ -376,6 +376,7 @@ impl Flow {
                         default_sort: Vec::new(),
                     },
                 );
+                let compiled = super::query::with_schedule(tx, &checked, compiled)?;
                 Some(
                     super::query::matching_ids(tx, &compiled)?
                         .into_iter()
