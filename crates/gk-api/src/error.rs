@@ -31,6 +31,9 @@ pub enum ErrorCode {
     /// An agent read faster than its session's read limits allow;
     /// `details.retry_after` says how many seconds to wait.
     RateLimited,
+    /// The change was not made: the workspace keeps it as a proposal that
+    /// waits for the person's approval; `details.proposal` is its ID.
+    PendingApproval,
     /// Another program kept the workspace locked; trying again later works.
     Busy,
     /// A newer program upgraded the workspace while this one was running.
@@ -50,7 +53,11 @@ impl ErrorCode {
         match self {
             Self::Invalid => 1,
             Self::NotFound => 2,
-            Self::Conflict | Self::Forbidden | Self::Limit | Self::RateLimited => 3,
+            Self::Conflict
+            | Self::Forbidden
+            | Self::Limit
+            | Self::RateLimited
+            | Self::PendingApproval => 3,
             Self::Busy | Self::WorkspaceUpgraded | Self::WorkspaceTooNew | Self::Storage => 4,
         }
     }
@@ -65,6 +72,7 @@ impl ErrorCode {
             Self::Forbidden => "forbidden",
             Self::Limit => "limit",
             Self::RateLimited => "rate_limited",
+            Self::PendingApproval => "pending_approval",
             Self::Busy => "busy",
             Self::WorkspaceUpgraded => "workspace_upgraded",
             Self::WorkspaceTooNew => "workspace_too_new",

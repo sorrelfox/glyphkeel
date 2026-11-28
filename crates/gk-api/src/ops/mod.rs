@@ -40,6 +40,7 @@ pub mod folder;
 pub mod history;
 pub mod link;
 pub mod project;
+pub mod proposal;
 pub mod query;
 pub mod recurrence;
 pub mod report;

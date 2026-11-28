@@ -29,6 +29,7 @@ import {
   type StatusRules,
   type Backup,
   type SavedView,
+  type Proposal,
   type Settings,
   type TrashEntry,
   type Via,
@@ -363,6 +364,8 @@ export interface FakeState {
   folders?: FakeFolder[];
   /** The workspace's own CSV import presets; none until one is saved. */
   csvPresets?: CsvPreset[];
+  /** Changes agents proposed for the person's approval, oldest first; none until one is proposed. */
+  proposals?: Proposal[];
   workspaceName: string;
   seq: number;
 }

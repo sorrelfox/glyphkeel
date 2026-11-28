@@ -35,6 +35,7 @@ mod notifications;
 mod open_links;
 mod page;
 mod platform;
+mod proposal_notices;
 mod quick_add;
 mod reminders;
 mod shortcut;

@@ -75,6 +75,7 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
                 _ if input.get("confirmations").and_then(Value::as_bool) == Some(true) => {
                     "confirm-agent-confirmations-on"
                 }
+                _ if input.get("approvals").is_some() => "confirm-agent-approvals-off",
                 _ => "confirm-agent-raise-standard",
             };
             (text(question, &[]), "confirm-agent-raise")

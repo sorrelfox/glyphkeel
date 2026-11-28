@@ -65,6 +65,11 @@ pub struct Caller {
     /// The agent session; left out for the person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
+    /// For an agent: which of its changes wait for the person's approval
+    /// (`off`, `destructive` or `all_writes`); such a change returns
+    /// `pending_approval` with the proposal's ID. Left out for the person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approvals: Option<crate::ops::proposal::ApprovalMode>,
 }
 
 op!(

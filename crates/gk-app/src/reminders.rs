@@ -43,6 +43,13 @@ pub(crate) trait Notifier: Send + Sync {
     /// Shows `notice`. A failure is the notifier's own to report; the
     /// reminder counts as shown either way, or it would come back forever.
     fn show(&self, notice: &Notice);
+
+    /// Shows `notice`, or `locked` instead where the app is locked and
+    /// must not say what happened.
+    fn show_private(&self, notice: &Notice, locked: &Notice) {
+        let _ = locked;
+        self.show(notice);
+    }
 }
 
 /// At most this many missed reminders show one by one; more show as one

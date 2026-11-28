@@ -433,7 +433,9 @@ impl<'a> WriteCtx<'a> {
                 }
             }
         }
-        if ctx.is_agent() {
+        // A change the person approved was reviewed item by item; the caps
+        // on what an agent moves to the trash keep an unreviewed loop small.
+        if ctx.is_agent() && ctx.approved.is_none() {
             let trashed = self
                 .changes
                 .iter()
@@ -475,7 +477,7 @@ impl<'a> WriteCtx<'a> {
                     change.project.map(|p| p.as_bytes().to_vec()),
                     change.entity,
                     change.id.as_bytes().as_slice(),
-                    changes_json(fields, ctx.person_confirmed),
+                    changes_json(fields, ctx.person_confirmed, ctx.approved.is_some()),
                     json!({ "set": inverse }).to_string(),
                 ])?;
                 seq = Some(self.tx.last_insert_rowid());
@@ -540,12 +542,17 @@ impl Finished {
     }
 }
 
-/// The `changes` column of one history row: the fields, and for a call the
-/// person allowed when an agent asked, `confirmed`.
-fn changes_json(fields: Map<String, Value>, confirmed: bool) -> String {
+/// The `changes` column of one history row: the fields; for a call the
+/// person allowed when an agent asked, `confirmed`; for an agent's proposal
+/// the person approved later, `approved`.
+fn changes_json(fields: Map<String, Value>, confirmed: bool, approved: bool) -> String {
+    let mut out = Map::new();
+    out.insert("fields".to_owned(), Value::Object(fields));
     if confirmed {
-        json!({ "fields": fields, "confirmed": true }).to_string()
-    } else {
-        json!({ "fields": fields }).to_string()
+        out.insert("confirmed".to_owned(), Value::Bool(true));
     }
+    if approved {
+        out.insert("approved".to_owned(), Value::Bool(true));
+    }
+    Value::Object(out).to_string()
 }

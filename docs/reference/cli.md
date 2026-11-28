@@ -10,7 +10,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | Command | Operation | What it does |
 |---|---|---|
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
-| `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. |
+| `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for, whether agents may ask the person to allow one change beyond it, and which of their changes wait for the person's approval. |
 | `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. |
 | `glyphkeel automation create` | `automation.create` | Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification. |
 | `glyphkeel automation delete <rule>` | `automation.delete` | Delete an automation rule; revert brings it back. |
@@ -80,6 +80,10 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel project rules <project>` | `rules.update` | Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). |
 | `glyphkeel project show <project>` | `project.get` | One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. |
 | `glyphkeel project unarchive <project>` | `project.unarchive` | Unarchive a project and its sub-projects. |
+| `glyphkeel proposals approve <ids>` | `proposal.approve` | Approve proposed changes, by ID or every waiting one of an agent session: each runs as the agent, and history records that the person approved it. |
+| `glyphkeel proposals list` | `proposal.list` | List changes agents proposed, newest first, with their status, a preview of what each changes, the fields changed since and the person's decision. An agent sees its own. |
+| `glyphkeel proposals reject <ids>` | `proposal.reject` | Reject proposed changes, by ID or every waiting one of an agent session, with a reason the agent can read. |
+| `glyphkeel proposals show <id>` | `proposal.get` | One proposed change: what it runs, its preview, the fields changed since and the decision. |
 | `glyphkeel recurrence clear <key>` | `recurrence.clear` | Stop a task repeating: it stays, and no more occurrences are made. |
 | `glyphkeel recurrence preview` | `recurrence.preview` | Read a recurrence rule, in words or by fields, and list its next dates. |
 | `glyphkeel recurrence run` | `recurrence.run` | Make the occurrences of series that are made ahead whose day has come; the app does this by itself. |

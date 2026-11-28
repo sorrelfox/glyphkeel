@@ -310,6 +310,10 @@ pub struct AgentPolicyPatch {
     /// deletes many items; left out: unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<bool>,
+    /// Which changes of agents wait for the person's approval, per
+    /// profile, and how long a proposal waits; left out: unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approvals: Option<crate::ops::proposal::AgentApprovals>,
 }
 
 op!(
@@ -345,7 +349,7 @@ pub(crate) const AGENT_SESSIONS: OpDescriptor = OpDescriptor::of::<AgentSessions
 });
 
 pub(crate) const AGENT_POLICY_UPDATE: OpDescriptor = OpDescriptor::of::<AgentPolicyUpdate>(Meta {
-    summary: "Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.",
+    summary: "Set the most an agent may do, whatever profile it asks for, whether agents may ask the person to allow one change beyond it, and which of their changes wait for the person's approval.",
     kind: OpKind::Command,
     safety: Safety::App,
     exposure: Exposure::App {

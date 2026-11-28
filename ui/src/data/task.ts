@@ -45,7 +45,7 @@ export function useTaskHistory(task: string, enabled: boolean, actor?: ActorKind
   });
 }
 
-/** Whether a history group can still be offered for revert. */
+/** Whether a history group can still be offered for revert. A decision on a proposed change is no change of its own. */
 export function revertible(entry: ActivityEntry): boolean {
-  return entry.reverted_by === undefined && !entry.op.startsWith("history.") && entry.fields.purged === undefined;
+  return entry.reverted_by === undefined && !entry.op.startsWith("history.") && entry.fields.purged === undefined && entry.entity !== "proposal";
 }

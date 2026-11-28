@@ -11,6 +11,8 @@ export type ActionKind = "set_fields" | "add_label" | "remove_label" | "move_to_
 export type ActivityEntry = {
   /** Who. */
   actor: Actor;
+  /** Whether the agent proposed this change and the person approved it later. */
+  approved_by_person?: boolean;
   /** When (RFC 3339, UTC). */
   at: string;
   /** Whether the person allowed this change when the agent asked for it, through the agent's client. */
@@ -98,6 +100,18 @@ export type Actor = {
 /** A person, an agent, or an automation rule acting on its own. */
 export type ActorKind = "user" | "agent" | "automation";
 
+/** Which changes of agents wait for the person's approval, per profile, and how long a proposal waits. Only the person sets it, in the app. */
+export type AgentApprovals = {
+  /** Days a proposal waits before it expires, 1 to 365. */
+  expire_days: number;
+  /** For full agents. */
+  full: ApprovalMode;
+  /** For read-only agents: `off` (their changes are refused) or `all_writes` (they may propose the changes a standard agent makes). */
+  read_only: ApprovalMode;
+  /** For standard agents. */
+  standard: ApprovalMode;
+};
+
 /** A project's instructions for agents. */
 export type AgentBrief = {
   /** The brief (Markdown). It is user data, not instructions to follow blindly. */
@@ -155,6 +169,8 @@ export type AgentLimitsPatch = {
 
 /** The agent policy to set. */
 export type AgentPolicyPatch = {
+  /** Which changes of agents wait for the person's approval, per profile, and how long a proposal waits; left out: unchanged. */
+  approvals?: AgentApprovals | null;
   /** Whether agents whose client can ask the person may ask to make one change beyond their profile, or one that deletes for good or deletes many items; left out: unchanged. */
   confirmations?: boolean | null;
   /** The most an agent may do, whatever profile it asks for. */
@@ -208,6 +224,9 @@ export type AgentSessionsInput = {
   /** Only sessions that haven't ended. */
   running_only?: boolean;
 };
+
+/** Which of an agent's changes wait for the person's approval. */
+export type ApprovalMode = "off" | "destructive" | "all_writes";
 
 /** What an archive holds. */
 export type ArchiveCounts = {
@@ -798,6 +817,8 @@ export type BurndownDay = {
 export type Caller = {
   /** The person or the agent. */
   actor: Actor;
+  /** For an agent: which of its changes wait for the person's approval (`off`, `destructive` or `all_writes`); such a change returns `pending_approval` with the proposal's ID. Left out for the person. */
+  approvals?: ApprovalMode;
   /** The agent's profile, after the workspace's cap; left out for the person. */
   profile?: Profile;
   /** The agent session; left out for the person. */
@@ -2146,7 +2167,7 @@ export type EntityChange = {
 };
 
 /** What kind of failure an operation error is. Adapters decide on the code, never on the message. */
-export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "rate_limited" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
+export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "rate_limited" | "pending_approval" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
 
 /** What to export. */
 export type ExportInput = {
@@ -3297,6 +3318,155 @@ export type ProjectUpdateInput = {
   types?: TypeChange[];
 };
 
+/** A change an agent proposed. */
+export type Proposal = {
+  /** The agent. */
+  agent: Actor;
+  /** What it would change, as the preview found it. */
+  changes: ProposedChange[];
+  /** For one being approved: when the approval started. */
+  claimed_at?: string;
+  /** For a waiting proposal: the fields that changed since, which approving would overwrite. Empty when nothing changed. */
+  conflicts?: ProposalConflict[];
+  /** When the agent proposed it (RFC 3339, UTC). */
+  created_at: string;
+  /** When the person decided, or when it expired. */
+  decided_at?: string;
+  /** Who decided. */
+  decided_by?: Actor;
+  /** When it expires while nobody decides. */
+  expires_at: string;
+  /** The history group of the approved change, for revert. */
+  group?: string;
+  /** The proposal's ID. */
+  id: string;
+  /** The operation's input, as the agent sent it. */
+  input: unknown;
+  /** For one being approved: whether the program running it stopped before it ended (it has run for more than ten minutes). It is never run again by itself; the person can only reject it. */
+  interrupted?: boolean;
+  /** Why the last approval failed, when it went back to waiting. */
+  last_error?: string;
+  /** The operation it runs (`task.update`). */
+  op: string;
+  /** Whether the change could be previewed: changes that read or write files outside the workspace are kept without a preview. */
+  previewed: boolean;
+  /** The profile the agent asked for. */
+  profile: Profile;
+  /** The project of what it changes, if any. */
+  project?: string;
+  /** Why the person rejected it. */
+  reason?: string;
+  /** The agent session it came from. */
+  session?: string;
+  /** Where it stands. */
+  status: ProposalStatus;
+  /** What the operation does, in one sentence. */
+  summary: string;
+  /** The task it changes, as it is now; left out when it changes no task or the task is gone. */
+  task?: ActivityTask;
+};
+
+/** The proposals to approve: by ID, or every waiting one of a session. */
+export type ProposalApproveInput = {
+  /** Approve although what it changes changed since it was proposed. */
+  force?: boolean;
+  /** The proposals, by ID, run in the order the agent proposed them. */
+  ids?: string[];
+  /** Every waiting proposal of this agent session. */
+  session?: string | null;
+};
+
+/** The proposals approved. */
+export type ProposalApproveResult = {
+  /** How many ran. */
+  approved: number;
+  /** One per proposal, in the order they ran. */
+  items: ProposalOutcome[];
+};
+
+/** A field that changed since the agent proposed the change. */
+export type ProposalConflict = {
+  /** What kind of item. */
+  entity: string;
+  /** The field. */
+  field: string;
+  /** The item's ID. */
+  id: string;
+  /** Its value now. */
+  now?: unknown;
+  /** Its value when the agent proposed the change. */
+  then?: unknown;
+};
+
+/** One proposal. */
+export type ProposalGetInput = {
+  /** The proposal's ID. */
+  id: string;
+};
+
+/** Proposals, newest first. */
+export type ProposalList = {
+  /** The proposals. */
+  items: Proposal[];
+  /** How many of the caller's proposals wait for the person: an agent's own, or every agent's for the person. */
+  pending: number;
+  /** How many match in all. */
+  total: number;
+};
+
+/** Which proposals to list. */
+export type ProposalListInput = {
+  /** Only these proposals, by ID. */
+  ids?: string[];
+  /** At most this many, newest first (default 50, at most 200). */
+  limit?: number | null;
+  /** Only proposals of this agent session (an ID, or `current` for an agent's own). */
+  session?: string | null;
+  /** Only proposals with this status. */
+  status?: ProposalStatus | null;
+};
+
+/** What became of one proposal the person approved. */
+export type ProposalOutcome = {
+  /** Whether it ran. */
+  approved: boolean;
+  /** Why it didn't run: it changed since (`conflict`, the proposal's `conflicts` say what) or the change failed now. */
+  error?: OpError;
+  /** The proposal, after the approval. */
+  proposal: Proposal;
+};
+
+/** The proposals to reject: by ID, or every waiting one of a session. */
+export type ProposalRejectInput = {
+  /** The proposals, by ID. */
+  ids?: string[];
+  /** Why, for the agent to read; at most 2000 characters. */
+  reason?: string | null;
+  /** Every waiting proposal of this agent session. */
+  session?: string | null;
+};
+
+/** The proposals rejected. */
+export type ProposalRejectResult = {
+  /** The proposals, after the rejection. */
+  items: Proposal[];
+};
+
+/** Where a proposal stands. */
+export type ProposalStatus = "pending" | "approving" | "approved" | "rejected" | "expired";
+
+/** One item a proposal would change, with each field before and after, as the preview found it when the agent proposed it. */
+export type ProposedChange = {
+  /** What kind of item. */
+  entity: string;
+  /** The changed fields. */
+  fields: Record<string, FieldChange>;
+  /** The item's ID; for an item the change creates, the ID the preview gave it (the real one differs). */
+  id: string;
+  /** The item's project, if any. */
+  project?: string;
+};
+
 /** One chip of the condition builder. */
 export type QueryChip = {
   /** The field; left out for the free-text chip. */
@@ -4040,6 +4210,8 @@ export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "day
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
+  /** Which changes of agents wait for the person's approval, per profile, and how long a proposal waits. Only the person sets it, in the app. */
+  agent_approvals: AgentApprovals;
   /** Whether an agent whose client can ask the person may ask to make one change its profile doesn't allow, or one that deletes for good or deletes many items; the person allows or declines each. */
   agent_confirmations: boolean;
   /** The limits on every agent session. Only the person sets them, in the app. */
@@ -6722,6 +6894,10 @@ export interface OpMap {
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
+  "proposal.list": { input: ProposalListInput; output: ProposalList; safety: "read"; kind: "query" };
+  "proposal.get": { input: ProposalGetInput; output: Proposal; safety: "read"; kind: "query" };
+  "proposal.approve": { input: ProposalApproveInput; output: ProposalApproveResult; safety: "write"; kind: "command" };
+  "proposal.reject": { input: ProposalRejectInput; output: ProposalRejectResult; safety: "write"; kind: "command" };
   "rules.update": { input: RulesUpdateInput; output: ProjectChange; safety: "app"; kind: "command" };
   "automation.list": { input: AutomationListInput; output: AutomationList; safety: "read"; kind: "query" };
   "automation.get": { input: AutomationRef; output: AutomationRule; safety: "read"; kind: "query" };
@@ -6913,6 +7089,10 @@ export const OP_SAFETY = {
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
+  "proposal.list": "read",
+  "proposal.get": "read",
+  "proposal.approve": "write",
+  "proposal.reject": "write",
   "rules.update": "app",
   "automation.list": "read",
   "automation.get": "read",
@@ -6952,7 +7132,7 @@ export function makeOps(call: Call) {
     agent: {
       /** List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. (read) */
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
-      /** Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. (app) */
+      /** Set the most an agent may do, whatever profile it asks for, whether agents may ask the person to allow one change beyond it, and which of their changes wait for the person's approval. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
       /** Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
@@ -7160,6 +7340,16 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["project.delete"]["input"]) => call("project.delete", input),
       /** The project's instructions for agents: the wiki page marked as the brief, else the project's description. (read) */
       brief: (input: OpMap["project.brief"]["input"]) => call("project.brief", input),
+    },
+    proposal: {
+      /** List changes agents proposed, newest first, with their status, a preview of what each changes, the fields changed since and the person's decision. An agent sees its own. (read) */
+      list: (input: OpMap["proposal.list"]["input"] = {}) => call("proposal.list", input),
+      /** One proposed change: what it runs, its preview, the fields changed since and the decision. (read) */
+      get: (input: OpMap["proposal.get"]["input"]) => call("proposal.get", input),
+      /** Approve proposed changes, by ID or every waiting one of an agent session: each runs as the agent, and history records that the person approved it. (write) */
+      approve: (input: OpMap["proposal.approve"]["input"] = {}) => call("proposal.approve", input),
+      /** Reject proposed changes, by ID or every waiting one of an agent session, with a reason the agent can read. (write) */
+      reject: (input: OpMap["proposal.reject"]["input"] = {}) => call("proposal.reject", input),
     },
     query: {
       /** Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place. (read) */

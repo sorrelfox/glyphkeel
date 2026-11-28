@@ -5,6 +5,11 @@ expression: "ws.ok(&[\"settings\", \"set\", \"--hours-per-day\", \"6\", \"--week
 changed: hours_per_day, week_start
 group: [id]
 settings:
+  agent_approvals:
+    expire_days: 14
+    full: off
+    read_only: off
+    standard: off
   agent_confirmations: yes
   agent_limits:
     read_burst: 60

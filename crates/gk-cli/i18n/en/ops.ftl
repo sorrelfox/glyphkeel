@@ -1474,11 +1474,41 @@ op-agent-sessions--running-only = Only sessions that haven't ended.
 
 ## glyphkeel agents policy
 
-op-agent-policy-update = Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.
+op-agent-policy-update = Set the most an agent may do, whatever profile it asks for, whether agents may ask the person to allow one change beyond it, and which of their changes wait for the person's approval.
+op-agent-policy-update--approvals = Which changes of agents wait for the person's approval, per
+    profile, and how long a proposal waits; left out: unchanged.
 op-agent-policy-update--confirmations = Whether agents whose client can ask the person may ask to make one
     change beyond their profile, or one that deletes for good or
     deletes many items; left out: unchanged.
 op-agent-policy-update--max-profile = The most an agent may do, whatever profile it asks for.
+
+## glyphkeel proposals list
+
+op-proposal-list = List changes agents proposed, newest first, with their status, a preview of what each changes, the fields changed since and the person's decision. An agent sees its own.
+op-proposal-list--ids = Only these proposals, by ID.
+op-proposal-list--limit = At most this many, newest first (default 50, at most 200).
+op-proposal-list--session = Only proposals of this agent session (an ID, or `current` for an
+    agent's own).
+op-proposal-list--status = Only proposals with this status.
+
+## glyphkeel proposals show <id>
+
+op-proposal-get = One proposed change: what it runs, its preview, the fields changed since and the decision.
+op-proposal-get--id = The proposal's ID.
+
+## glyphkeel proposals approve <ids>
+
+op-proposal-approve = Approve proposed changes, by ID or every waiting one of an agent session: each runs as the agent, and history records that the person approved it.
+op-proposal-approve--force = Approve although what it changes changed since it was proposed.
+op-proposal-approve--ids = The proposals, by ID, run in the order the agent proposed them.
+op-proposal-approve--session = Every waiting proposal of this agent session.
+
+## glyphkeel proposals reject <ids>
+
+op-proposal-reject = Reject proposed changes, by ID or every waiting one of an agent session, with a reason the agent can read.
+op-proposal-reject--ids = The proposals, by ID.
+op-proposal-reject--reason = Why, for the agent to read; at most 2000 characters.
+op-proposal-reject--session = Every waiting proposal of this agent session.
 
 ## glyphkeel project rules <project>
 

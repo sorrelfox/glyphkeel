@@ -31,6 +31,10 @@ pub(super) fn register(r: &mut crate::registry::Registry) {
                 via: q.caller.via,
                 profile: q.profile,
                 session: q.caller.session.map(|s| s.to_string()),
+                approvals: q
+                    .profile
+                    .map(|p| settings.agent_approvals.mode(p))
+                    .filter(|_| q.caller.is_agent()),
             },
             agent_limits: settings.agent_limits,
             agent_folders: q

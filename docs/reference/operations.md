@@ -171,6 +171,10 @@ The safety class decides who may run an operation:
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
+| `proposal.list` | read | app, command line, MCP | `get_proposals` | `glyphkeel proposals list` |
+| `proposal.get` | read | app, command line, MCP | `get_proposals` | `glyphkeel proposals show <id>` |
+| `proposal.approve` | write | app, command line | — | `glyphkeel proposals approve <ids>` |
+| `proposal.reject` | write | app, command line | — | `glyphkeel proposals reject <ids>` |
 | `rules.update` | app | app, command line | — | `glyphkeel project rules <project>` |
 | `automation.list` | read | app, command line, MCP | `list_automations` | `glyphkeel automation list` |
 | `automation.get` | read | app, command line, MCP | `get_automation` | `glyphkeel automation show <rule>` |
@@ -1156,7 +1160,7 @@ Input: `AgentSessionsInput`. Output: `AgentSessionList`. Schemas: [catalog.schem
 
 ## `agent.policy.update`
 
-Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.
+Set the most an agent may do, whatever profile it asks for, whether agents may ask the person to allow one change beyond it, and which of their changes wait for the person's approval.
 
 Input: `AgentPolicyPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -1169,6 +1173,34 @@ Change the limits on agent sessions: changes a minute, new tasks a day, items mo
 Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.
+
+## `proposal.list`
+
+List changes agents proposed, newest first, with their status, a preview of what each changes, the fields changed since and the person's decision. An agent sees its own.
+
+Input: `ProposalListInput`. Output: `ProposalList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `proposal.get`
+
+One proposed change: what it runs, its preview, the fields changed since and the decision.
+
+Input: `ProposalGetInput`. Output: `Proposal`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `proposal.approve`
+
+Approve proposed changes, by ID or every waiting one of an agent session: each runs as the agent, and history records that the person approved it.
+
+Input: `ProposalApproveInput`. Output: `ProposalApproveResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: The person decides on what agents propose; an agent that could call it would approve its own changes.
+
+## `proposal.reject`
+
+Reject proposed changes, by ID or every waiting one of an agent session, with a reason the agent can read.
+
+Input: `ProposalRejectInput`. Output: `ProposalRejectResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: The person decides on what agents propose; an agent that could call it would decide on proposals instead of the person.
 
 ## `rules.update`
 

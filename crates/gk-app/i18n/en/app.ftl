@@ -30,6 +30,7 @@ confirm-agent-raise-full = Let agents do everything, including deleting for good
 confirm-agent-raise-refused = Agents may do no more than before: the change was not confirmed.
 confirm-agent-limits-raise = Raise the limits on agents? Every agent connected through MCP may then make more changes, create more tasks or move more items to the trash than before.
 confirm-agent-confirmations-on = Let agents ask you to allow a change their profile doesn't allow, or one that deletes a lot? Each time, their MCP client shows you the question, and only what you allow there runs.
+confirm-agent-approvals-off = Let agents make changes without your approval that wait for it now? Every agent connected through MCP may then make them at once, as its profile allows.
 confirm-agent-http-on = Let agents connect to the app over local HTTP? Any program on this computer that has the token may then work in the open workspace as an agent.
 confirm-agent-http-refused = The HTTP endpoint for agents stays off: the change was not confirmed.
 confirm-agent-limits-refused = The limits on agents stay as they were: the change was not confirmed.
@@ -37,6 +38,19 @@ confirm-agent-limits-refused = The limits on agents stay as they were: the chang
 ## Notifications of reminders
 
 notification-open = Open
+# An agent proposed changes that wait for the person's approval.
+notification-proposals = { $count ->
+        [one] A change waits for your approval
+       *[other] { $count } changes wait for your approval
+    }
+notification-proposals-body = { $count ->
+        [one] { $agent } proposed it. Open Approvals in Glyphkeel to review it.
+       *[other] { $agent } proposed them. Open Approvals in Glyphkeel to review them.
+    }
+notification-proposals-body-agents = { $count ->
+        [one] An agent proposed it. Open Approvals in Glyphkeel to review it.
+       *[other] Agents proposed them. Open Approvals in Glyphkeel to review them.
+    }
 # $key is a task key, such as TM-41.
 notification-reminder = Reminder: { $key }
 # $day is the due date as the task has it, such as 2026-11-24.
@@ -193,6 +207,8 @@ agent-http-port-range = Port { $port } can't be used: choose one from 1024 to 65
 app-locked = Glyphkeel is locked.
 lock-notice-title = Glyphkeel reminder
 lock-notice-body = A reminder is due. Unlock Glyphkeel to see it.
+lock-notice-proposals-title = Glyphkeel approval
+lock-notice-proposals-body = A change waits for your approval. Unlock Glyphkeel to see it.
 lock-passphrase-empty = Enter the passphrase.
 lock-passphrase-wrong = That passphrase is not right.
 lock-not-possible = There is no passphrase to unlock with.

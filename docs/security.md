@@ -121,6 +121,18 @@ local address; see the next section.
   run (backups, settings about agents) are never offered, asked or not. You
   can turn the questions off in Preferences › Agents & CLI; turning them on
   again asks you in a window of the desktop.
+- **Approvals.** You can have every change of an agent, or only those that
+  move items to the trash or delete for good, wait for you, per profile. The
+  change isn't made: the engine keeps it as a proposal with a preview, and
+  only you approve or reject it, in the app or with `glyphkeel proposals`;
+  agents can't reach either. An approved change runs through the same checks
+  as any other, as the agent, with the workspace's settings as they are then
+  (a lower cap refuses it), and the history notes that you approved it. If
+  what it changes changed since, you see what before it runs. A proposal
+  runs at most once, even when two programs approve it together (it is
+  claimed first; an interrupted one is never run again by itself), and one
+  nobody decides on expires (after 14 days, by default). A read-only agent
+  may be allowed to propose changes; it still makes none.
 - **A project scope.** An agent can be limited to one project and its
   sub-projects.
 - **Limits.** Agents may make only a limited number of changes a minute, and

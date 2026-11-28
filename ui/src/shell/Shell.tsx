@@ -71,6 +71,9 @@ export function viewOf(pathname: string): View {
   if (pathname.startsWith("/activity")) {
     return "activity";
   }
+  if (pathname.startsWith("/approvals")) {
+    return "approvals";
+  }
   return pathname.startsWith("/all") ? "all-tasks" : "today";
 }
 
@@ -84,6 +87,7 @@ const VIEW_TITLES: Record<Exclude<View, "project">, string> = {
   search: "view-search",
   trash: "view-trash",
   activity: "view-activity",
+  approvals: "view-approvals",
 };
 
 /**
@@ -154,7 +158,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
         }
       : null,
     setView: (next) => {
-      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "reports" ? "/reports" : next === "dashboards" ? "/dashboards" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : "/" });
+      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "reports" ? "/reports" : next === "dashboards" ? "/dashboards" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : next === "approvals" ? "/approvals" : "/" });
     },
     projectView:
       view === "project" && projectKey !== undefined

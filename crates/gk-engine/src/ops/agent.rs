@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! `agent.sessions`, `agent.policy.update` and `agent.limits.update`.
+//! `agent.sessions`, `agent.policy.update` (with the approvals setting)
+//! and `agent.limits.update`.
 
 use gk_api::Profile;
 use gk_api::ops::agent::{
@@ -9,6 +10,7 @@ use gk_api::ops::agent::{
     AgentPolicyUpdate, AgentSession, AgentSessionList, AgentSessions, AgentSessionsInput,
 };
 use gk_api::ops::common::{DEFAULT_LIMIT, MAX_LIMIT};
+use gk_api::ops::proposal::{AgentApprovals, ApprovalMode, PROPOSAL_EXPIRE_DAYS_MAX};
 use gk_api::ops::settings::SettingsChange;
 use gk_core::Id;
 use gk_store::StoreError;
@@ -25,6 +27,27 @@ use crate::write::WriteCtx;
 /// The setting that holds the limits on agent sessions. A workspace without
 /// it has the default limits.
 pub(crate) const LIMITS_SETTING: &str = "agent_limits";
+/// The setting that says which changes of agents wait for the person's
+/// approval.
+pub(crate) const APPROVALS_SETTING: &str = "agent_approvals";
+
+/// Refuses approvals that don't fit: a read-only agent proposes every
+/// change or none, and proposals wait 1 to 365 days.
+fn check_approvals(approvals: &AgentApprovals) -> Result<(), Failure> {
+    if approvals.read_only == ApprovalMode::Destructive {
+        return Err(messages::invalid(
+            "approvals.read_only",
+            "proposal-read-only-mode",
+            &[],
+        ));
+    }
+    settings::in_range(
+        "approvals.expire_days",
+        approvals.expire_days,
+        1,
+        PROPOSAL_EXPIRE_DAYS_MAX,
+    )
+}
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<AgentSessions, _>(desc::<AgentSessions>(), |q, input| {
@@ -35,6 +58,10 @@ pub(super) fn register(r: &mut Registry) {
         let mut wanted = vec![("agent_max_profile", value)];
         if let Some(on) = input.confirmations {
             wanted.push(("agent_confirmations", Value::Bool(on)));
+        }
+        if let Some(approvals) = input.approvals {
+            check_approvals(&approvals)?;
+            wanted.push((APPROVALS_SETTING, settings::to_value(approvals)?));
         }
         settings::set_all(w, &wanted)
     });

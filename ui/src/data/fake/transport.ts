@@ -5,6 +5,7 @@ import { type Changed } from "../../generated/ops";
 import { type Transport } from "../transport";
 import { FakeError, FakeWorkspace } from "./engine";
 import { addManyLinks, addManyTasks } from "./many";
+import { addSampleProposals } from "./sampleProposals";
 import { seed } from "./seed";
 import { addSampleWiki } from "./wiki";
 import { registerFakeWorkspaces, WORKSPACE_NAME } from "./workspaces";
@@ -20,6 +21,8 @@ export interface FakeOptions {
   sampleWiki?: boolean;
   /** Dates for those tasks and `blocks` links between them, for a large Gantt chart. */
   extraLinks?: number;
+  /** Changes agents proposed, waiting for approval, for the Approvals screen. */
+  sampleProposals?: boolean;
 }
 
 /**
@@ -43,6 +46,12 @@ export function fakeTransport(options: FakeOptions = {}): Transport & { workspac
   // Several workspaces, by name, as the app's data folder holds them; the
   // sample data is the first, and a new one starts empty.
   const workspaces = new Map<string, FakeWorkspace>([[state.workspaceName, new FakeWorkspace(state, today)]]);
+  if (options.sampleProposals === true) {
+    const first = workspaces.get(state.workspaceName);
+    if (first) {
+      addSampleProposals(first, today());
+    }
+  }
   let current = state.workspaceName;
   const open = () => workspaces.get(current) ?? fail("not_found", "There is no workspace.");
   const listeners = new Set<(event: Changed) => void>();

@@ -233,6 +233,7 @@ revert-deleted = A deleted { $entity } can't be brought back by a revert.
 revert-not-yet = Changes to { $entity } { $field } can't be reverted yet.
 revert-changed-since = { $entity } { $field } was changed again since.
 revert-app-only-setting = It changed a setting that only the person changes, in the app.
+revert-proposal = It only records a decision on a proposed change, which stays as it is.
 
 ## The pipeline
 
@@ -767,6 +768,28 @@ wiki-holds-pages = The page now holds other pages, so its creation can't be reve
 
 query-task-limit = Ask for 1 to { $max } tasks at once.
 list-cursor-hint = Pass the next_cursor of the page before, or leave it out.
+
+## Proposals
+
+proposal-pending = The change was not made yet: it waits for the person's approval as proposal { $id }.
+proposal-pending-hint = Don't send it again. get_proposals shows whether the person approved or rejected it, and why; subscribe to glyphkeel://proposals to hear when it is decided.
+proposal-not-found = There is no proposal { $id }.
+proposal-no-own-session = Only an agent has a current session.
+proposal-too-many = This session already has { $max } proposals waiting for the person.
+proposal-too-many-hint = Wait until the person has decided on some of them.
+proposal-decided = Proposal { $id } is no longer waiting: it is { $status }.
+proposal-being-decided = Proposal { $id } is being approved right now, by this or another program.
+proposal-being-decided-hint = Wait, then look at it again. If it stays so, the program that approved it stopped; see the activity log for whether it ran, then reject it to set it aside.
+proposal-expired = Proposal { $id } expired before anyone decided on it.
+proposal-stale = { $count ->
+        [one] Since proposal { $id } was made, one field it changes was changed again.
+       *[other] Since proposal { $id } was made, { $count } fields it changes were changed again.
+    }
+proposal-stale-hint = Look at the conflicts, then approve it anyway or reject it.
+proposal-ids-or-session = Name the proposals by ID, or give a session, not both.
+proposal-none-waiting = No proposal waits for a decision there.
+proposal-reason-too-long = A reason is at most { $max } characters long.
+proposal-read-only-mode = Read-only agents propose every change or none: use off or all_writes.
 
 ## Settings
 

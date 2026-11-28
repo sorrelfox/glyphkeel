@@ -50,6 +50,7 @@ pub fn error_text(error: &OpError) -> String {
             "retry_after" => "Retry after (s)",
             "max" => "Most allowed",
             "min" => "Least allowed",
+            "proposal" => "Proposal",
             other => other,
         };
         text.push_str(&format!("\n{label}: {value}"));

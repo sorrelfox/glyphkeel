@@ -36,6 +36,21 @@ pub struct Context {
     /// the agent had the full profile, without the limits on the trash,
     /// and its history records the confirmation.
     pub person_confirmed: bool,
+    /// For an agent's call that carries out a proposal: the proposal and
+    /// the person who approved it. History records the approval.
+    pub approved: Option<Approval>,
+    /// Whether this call of an agent only previews its change, to keep it
+    /// as a proposal for the person.
+    pub(crate) proposing: bool,
+}
+
+/// The person's approval of a proposed change.
+#[derive(Debug, Clone)]
+pub struct Approval {
+    /// The proposal.
+    pub proposal: Id,
+    /// Who approved it.
+    pub by: Actor,
 }
 
 impl Context {
@@ -55,6 +70,8 @@ impl Context {
             confirm: Confirmation::Refuse,
             project_scope: None,
             person_confirmed: false,
+            approved: None,
+            proposing: false,
         }
     }
 
@@ -73,6 +90,8 @@ impl Context {
             confirm: Confirmation::Refuse,
             project_scope: None,
             person_confirmed: false,
+            approved: None,
+            proposing: false,
         }
     }
 
@@ -93,6 +112,8 @@ impl Context {
             confirm: Confirmation::Refuse,
             project_scope: None,
             person_confirmed: false,
+            approved: None,
+            proposing: false,
         }
     }
 
@@ -112,14 +133,34 @@ impl Context {
 
     /// The profile an agent works with under the workspace's `cap`: the one
     /// it asked for, capped; the full profile for a call the person
-    /// allowed.
+    /// allowed. A read-only agent proposes, and its approved proposals run,
+    /// as a standard agent: the person reviews each change.
     #[must_use]
     pub fn agent_profile_under(&self, cap: Profile) -> Profile {
         if self.person_confirmed {
             Profile::Full
         } else {
-            self.profile.unwrap_or(Profile::Standard).capped_by(cap)
+            let profile = self.profile.unwrap_or(Profile::Standard).capped_by(cap);
+            if self.proposing || self.approved.is_some() {
+                profile.max(Profile::Standard)
+            } else {
+                profile
+            }
         }
+    }
+
+    /// The same agent, carrying out `proposal` that `by` approved.
+    #[must_use]
+    pub fn approved_by(mut self, proposal: Id, by: Actor) -> Self {
+        self.approved = Some(Approval { proposal, by });
+        self
+    }
+
+    /// The same agent, previewing its change for a proposal.
+    #[must_use]
+    pub(crate) fn proposing(mut self) -> Self {
+        self.proposing = true;
+        self
     }
 
     /// The same caller limited to `project` (a key or ID) and its

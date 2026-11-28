@@ -161,6 +161,14 @@ impl Notifier for Masked {
             self.inner.show(notice);
         }
     }
+
+    fn show_private(&self, notice: &Notice, locked: &Notice) {
+        if self.lock.is_locked() {
+            self.inner.show(locked);
+        } else {
+            self.inner.show(notice);
+        }
+    }
 }
 
 fn masked_notice() -> Notice {

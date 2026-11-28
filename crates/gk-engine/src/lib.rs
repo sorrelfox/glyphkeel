@@ -30,7 +30,7 @@ pub mod workspaces;
 mod write;
 
 pub use agent_files::AgentFolders;
-pub use context::{ConfirmRequest, Confirmation, Context};
+pub use context::{Approval, ConfirmRequest, Confirmation, Context};
 pub use engine::{Engine, EngineConfig, Role, SessionStart};
 pub use failure::{Failure, store_error};
 pub use jobs::JobsReport;

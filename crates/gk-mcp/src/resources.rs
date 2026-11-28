@@ -9,12 +9,14 @@
 //! | `glyphkeel://tasks/{key}`             | the task, as `get_task`     |
 //! | `glyphkeel://projects/{key}`          | the project, as `get_project` |
 //! | `glyphkeel://queries{?query}`         | the first 50 matches of a query |
+//! | `glyphkeel://proposals`               | the agent's proposed changes, as `get_proposals` |
 //!
 //! Watching uses the engine's change events: this program's own commits,
 //! and for `glyphkeel mcp` those of other programs too (the app watches
 //! them already). A task's URI changes when the task does, a project's
 //! when the project or anything in it does, and a query's when its result
-//! does. Notifications are throttled: at most one per URI a second.
+//! does; the proposals' when one of the agent's proposals is made or
+//! decided. Notifications are throttled: at most one per URI a second.
 //!
 //! The reads and watches happen within the agent's project when the
 //! session is limited to one; every profile may read. The limit is checked
@@ -57,12 +59,17 @@ pub(crate) enum Resource {
     Project(String),
     /// A query in the query language.
     Query(String),
+    /// The agent's own proposed changes.
+    Proposals,
 }
 
 impl Resource {
     /// The resource `uri` names, if it names one.
     pub(crate) fn parse(uri: &str) -> Option<Self> {
         let rest = uri.strip_prefix(SCHEME)?;
+        if rest == "proposals" {
+            return Some(Self::Proposals);
+        }
         if let Some(key) = rest.strip_prefix("tasks/") {
             return single(key).map(Self::Task);
         }
@@ -137,6 +144,18 @@ pub(crate) fn templates() -> Vec<ResourceTemplate> {
     ]
 }
 
+/// The resources with a fixed URI, for `resources/list`.
+pub(crate) fn fixed() -> Vec<rmcp::model::Resource> {
+    vec![
+        rmcp::model::Resource::new("glyphkeel://proposals", "proposals")
+            .with_title("Your proposed changes")
+            .with_description(
+                "The changes you proposed for the person's approval, newest first, as get_proposals returns them. Subscribe to hear when one is approved or rejected.",
+            )
+            .with_mime_type("application/json"),
+    ]
+}
+
 /// The error for a URI that names nothing.
 pub(crate) fn unknown(uri: &str) -> OpError {
     messages::hint(
@@ -161,6 +180,7 @@ pub(crate) fn read(engine: &Engine, ctx: &Context, resource: &Resource) -> Resul
             "task.search",
             json!({ "query": query, "limit": QUERY_LIMIT }),
         ),
+        Resource::Proposals => engine.call(ctx, "proposal.list", json!({ "limit": QUERY_LIMIT })),
     }
 }
 
@@ -184,6 +204,14 @@ pub(crate) enum Target {
         /// A hash of its last result.
         last: Option<u64>,
     },
+    /// Changes to proposals, then the agent's proposals are compared with
+    /// the last ones.
+    Proposals {
+        /// The agent whose proposals these are.
+        agent: String,
+        /// A hash of the last list.
+        last: Option<u64>,
+    },
 }
 
 impl Target {
@@ -205,6 +233,10 @@ impl Target {
                 query: query.clone(),
                 last: Some(hash(&value)),
             },
+            Resource::Proposals => Self::Proposals {
+                agent: ctx.actor.name.clone(),
+                last: Some(hash(&value)),
+            },
         })
     }
 
@@ -214,6 +246,7 @@ impl Target {
             Self::Task(id) => Resource::Task(id.clone()),
             Self::Project(id) => Resource::Project(id.clone()),
             Self::Query { query, .. } => Resource::Query(query.clone()),
+            Self::Proposals { .. } => Resource::Proposals,
         }
     }
 
@@ -229,6 +262,7 @@ impl Target {
                 .iter()
                 .any(|c| (c.entity == "project" && &c.id == id) || c.project.as_ref() == Some(id)),
             Self::Query { .. } => !event.changes.is_empty(),
+            Self::Proposals { .. } => event.changes.iter().any(|c| c.entity == "proposal"),
         }
     }
 }
@@ -300,6 +334,19 @@ pub(crate) fn changed(
         let keep = match watched.get_mut(&uri) {
             Some(Target::Query { query, last }) => {
                 let now = read(engine, ctx, &Resource::Query(query.clone()))
+                    .ok()
+                    .map(|v| hash(&v));
+                let differs = now != *last;
+                *last = now;
+                if differs {
+                    out.push(uri.clone());
+                }
+                true
+            }
+            Some(Target::Proposals { agent, last }) => {
+                let mut own = ctx.clone();
+                own.actor.name.clone_from(agent);
+                let now = read(engine, &own, &Resource::Proposals)
                     .ok()
                     .map(|v| hash(&v));
                 let differs = now != *last;
