@@ -16,17 +16,19 @@ import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
 import { errorToast, failureText, useCommand, useOp, useUndo } from "../../data/hooks";
 import { defaultView, useListNames, useParsedQuery, useQueryFields, useSavedViews } from "../../data/list";
-import { useGanttLayout, useSchedule } from "../../data/schedule";
+import { useBaselines, useGanttLayout, useSchedule } from "../../data/schedule";
 import { markersOf, useVersions } from "../../data/versions";
 import { type GanttGrouping, type QueryProblem, type ReadOnlyReason, type SavedView, type Schedule, type ScheduleDependency } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
+import { loadGanttShown, saveGanttShown, type GanttShown } from "../../prefs/store";
 import { useScreenActions, useStatus, useTimerTask } from "../../shell/context";
 import { isoDay } from "../board/model";
 import { asDate, firstDayOfWeek, type Day } from "../calendar/model";
 import { SaveControls, useViewCommands, ViewPicker } from "../list/ViewMenu";
 import { chartSvg, exportSpan, lightPalette, printSvg, svgToPng } from "./export";
 import { DEFAULT_TABLE, Gantt, groupText, headerText, noteOf, useFormats, type GanttHandle, type Movable } from "./Gantt";
+import { BaselineMenu, RemovedPanel } from "./Baselines";
 import { MilestonesButton } from "./Milestones";
 import { GROUPINGS, layoutFrom, layoutUpdate, type Column, type GanttLayout } from "./layout";
 import { datesUpdate, endsLater, undatedQuery, type Dates, type GroupOrder } from "./model";
@@ -147,7 +149,29 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
   const field = useRef<QueryFieldHandle>(null);
   const chart = useRef<GanttHandle>(null);
 
-  const data = useSchedule({ project, includeSubprojects, query: running });
+  // The critical path, highlighted on request; a baseline compared with, when one is chosen.
+  // Both are the person's own, per project, kept with the window's other preferences.
+  const projectId = projectInfo.data?.id;
+  const [own, setOwn] = useState<GanttShown & { project: string | undefined }>({ project: undefined, critical: false, baseline: undefined });
+  const shown: GanttShown = own.project === projectId || projectId === undefined ? own : loadGanttShown(projectId);
+  const changeShown = (change: Partial<GanttShown>) => {
+    const next = { ...shown, ...change };
+    setOwn({ ...next, project: projectId });
+    if (projectId !== undefined) {
+      saveGanttShown(projectId, next);
+    }
+  };
+  const critical = shown.critical;
+  const baselineId = shown.baseline;
+  const setCritical = (on: boolean) => {
+    changeShown({ critical: on });
+  };
+  const setBaselineId = (id: string | undefined) => {
+    changeShown({ baseline: id });
+  };
+  const { baselines } = useBaselines(project);
+  const shownBaseline = baselines?.some((baseline) => baseline.id === baselineId) === true ? baselineId : undefined;
+  const data = useSchedule({ project, includeSubprojects, query: running, baseline: shownBaseline });
   const schedule = data.schedule;
   // The project's versions with due dates show as markers.
   const versionList = useVersions(project);
@@ -416,6 +440,12 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
           </div>
         )}
         <div className={styles.toolbarItem}>
+          <Switch isSelected={critical} onChange={setCritical}>
+            {t("gantt-critical-path")}
+          </Switch>
+        </div>
+        <div className={styles.toolbarItem}>
+          <BaselineMenu project={project} baselines={baselines ?? []} shown={shownBaseline} onShow={setBaselineId} />
           <GroupMenu value={groupBy} onChange={group} />
           <MilestonesButton project={project} includeSubprojects={includeSubprojects} onShow={(key) => chart.current?.show(key) ?? false} onOpen={onOpen} />
           <MenuTrigger>
@@ -445,6 +475,12 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
       {data.error !== null && (
         <p className={styles.note} role="alert">
           {t("gantt-error", { message: failureText(t, data.error) })}
+        </p>
+      )}
+      {schedule?.baseline && shownBaseline !== undefined && <RemovedPanel baseline={schedule.baseline} />}
+      {critical && schedule?.critical_path && (
+        <p className={styles.note} role="status" data-testid="gantt-critical-note">
+          {t("gantt-critical-summary", { count: schedule.critical_path.tasks.length, finish: full.format(asDate(schedule.critical_path.finish)), end: full.format(asDate(schedule.critical_path.end)), left: schedule.critical_path.left_out?.length ?? 0 })}
         </p>
       )}
       {schedule && unscheduledCount > schedule.unscheduled.length && (
@@ -499,6 +535,8 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
             onRange={setRange}
             onRefused={onRefused}
             versions={versionMarkers}
+            critical={critical}
+            baseline={shownBaseline !== undefined && schedule.baseline !== undefined}
           />
         </>
       )}

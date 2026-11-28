@@ -35,6 +35,7 @@ import {
   type Via,
 } from "../../generated/ops";
 import { type FakeDashboard } from "./dashboards";
+import { type FakeBaseline } from "./baselines";
 import { type FakeFolder } from "./folders";
 import { type FakeSprint } from "./sprints";
 import { type FakeVersion } from "./versions";
@@ -364,6 +365,8 @@ export interface FakeState {
   dashboards?: FakeDashboard[];
   /** Project folders; none until one is made. */
   folders?: FakeFolder[];
+  /** Schedule baselines of the projects; none until one is saved. */
+  baselines?: FakeBaseline[];
   /** The workspace's own CSV import presets; none until one is saved. */
   csvPresets?: CsvPreset[];
   /** Changes agents proposed for the person's approval, oldest first; none until one is proposed. */

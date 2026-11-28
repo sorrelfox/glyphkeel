@@ -19,15 +19,17 @@ use gk_api::ops::common::Category;
 use gk_api::ops::common::Hue;
 use gk_api::ops::query::TaskSearchInput;
 use gk_api::ops::schedule::{
-    DayRange, MovedTask, ReadOnlyReason, Schedule, ScheduleDependency, ScheduleGet, ScheduleInput,
-    SchedulePreview, SchedulePreviewInput, SchedulePreviewMove, ScheduleProblem,
-    ScheduleProblemKind, ScheduleShape, ScheduledTask, UnscheduledTask,
+    BaselineDates, CriticalPath, DayRange, LeftOutTask, MovedTask, ReadOnlyReason, RemovedTask,
+    Schedule, ScheduleBaseline, ScheduleDependency, ScheduleGet, ScheduleInput, SchedulePreview,
+    SchedulePreviewInput, SchedulePreviewMove, ScheduleProblem, ScheduleProblemKind, ScheduleShape,
+    ScheduledTask, TaskTiming, TimingLeftOut, UnscheduledTask,
 };
 use gk_api::ops::task::{Claim, LabelRef, StatusRef};
+use gk_core::critical::{self, Timing, Work, WorkWeek};
 use gk_core::schedule::{self as rules, Dates, Dependency, Graph, ShiftError};
 use gk_core::{Day, Id, SubtaskProgress};
 use gk_store::rusqlite::types::Value as Sql;
-use gk_store::rusqlite::{Row, Transaction, params_from_iter};
+use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params_from_iter};
 
 use super::desc;
 use super::fields::{self, TASK, text};
@@ -50,6 +52,9 @@ const CHUNK: usize = 500;
 /// Levels of subtasks followed for progress; subtasks go 5 levels deep,
 /// so this only guards against damaged data.
 const MAX_DEPTH: usize = 16;
+/// The most tasks listed as left out of the critical path, and as removed
+/// since a baseline.
+const MAX_LISTED: usize = 200;
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<ScheduleGet, _>(desc::<ScheduleGet>(), get);
@@ -492,7 +497,7 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
     }
     // The first of the tasks without dates, in the query's order; the
     // others are only counted.
-    let unscheduled_total = u32::try_from(undated.len()).unwrap_or(u32::MAX);
+    let mut unscheduled_total = u32::try_from(undated.len()).unwrap_or(u32::MAX);
     undated.truncate(MAX_UNSCHEDULED);
 
     // The tree of rows: a task under its parent when the parent is shown.
@@ -514,6 +519,43 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             }
         }
     }
+
+    // The critical path of the tasks shown.
+    let considered: Vec<Id> = ordered
+        .iter()
+        .map(|(id, _)| *id)
+        .chain(undated.iter().copied())
+        .collect();
+    let units = super::task::units(tx)?;
+    let week = WorkWeek::new(units.days_per_week());
+    let target = critical_target(q, &input, &rows)?;
+    let plan = plan_of(
+        &rows,
+        &children,
+        &links,
+        &considered,
+        week,
+        units.hours_per_day(),
+        target,
+        today,
+    );
+    if input.critical {
+        ordered.retain(|(id, _)| plan.timing.get(id).is_some_and(|t| t.critical));
+        undated.retain(|id| plan.timing.get(id).is_some_and(|t| t.critical));
+    }
+
+    // The baseline compared with.
+    let compared = match input.baseline.as_deref().filter(|t| !t.trim().is_empty()) {
+        Some(text) => {
+            let Some(project) = &input.project else {
+                return Err(messages::invalid("baseline", "baseline-needs-project", &[]));
+            };
+            let project = super::lookup::project(tx, "project", project)?;
+            let (id, record) = super::baseline::find(tx, project.id, "baseline", text)?;
+            Some((id, record, project.id, super::baseline::by_task(tx, id)?))
+        }
+        None => None,
+    };
 
     let mut progress = Progress {
         rows: &rows,
@@ -576,6 +618,13 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             version: r.version,
             id: id.to_string(),
             fields: super::custom_field::listed_values(q.tx, *id)?,
+            timing: plan.timing.get(id).cloned(),
+            baseline: compared
+                .as_ref()
+                .and_then(|(_, _, _, entries)| baseline_dates(entries.get(id)?, &r.dates)),
+            new_since_baseline: compared.as_ref().is_some_and(|(_, _, project, entries)| {
+                r.project == *project && r.dates.is_dated() && !entries.contains_key(id)
+            }),
         });
     }
     let unscheduled: Vec<UnscheduledTask> = undated
@@ -596,9 +645,32 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
                 version: r.version,
                 id: id.to_string(),
                 fields: super::custom_field::listed_values(q.tx, *id)?,
+                timing: plan.timing.get(id).cloned(),
             })
         })
         .collect::<Result<_, Failure>>()?;
+    if input.critical {
+        unscheduled_total = u32::try_from(unscheduled.len()).unwrap_or(u32::MAX);
+    }
+    let baseline = match &compared {
+        Some((id, record, project, entries)) => Some(ScheduleBaseline {
+            id: id.to_string(),
+            name: record.name.clone(),
+            created_at: crate::time::rfc3339(record.created_at),
+            ..removed_since(tx, &rows, *project, entries)?
+        }),
+        None => None,
+    };
+    let critical_path = plan.path.map(|mut path| {
+        path.tasks = ordered
+            .iter()
+            .map(|(id, _)| id)
+            .chain(undated.iter())
+            .filter(|id| plan.timing.get(id).is_some_and(|t| t.critical))
+            .filter_map(key_of)
+            .collect();
+        path
+    });
 
     // Links between the tasks shown.
     let out: HashSet<Id> = ordered
@@ -731,6 +803,328 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
         unscheduled_total,
         dependencies,
         problems,
+        critical_path,
+        baseline,
+    })
+}
+
+// ---------------------------------------------------------------------
+// The critical path
+
+/// The tasks' times on the critical path, rolled up to parents, and the
+/// path itself.
+struct PlanOut {
+    timing: HashMap<Id, TaskTiming>,
+    path: Option<CriticalPath>,
+}
+
+/// The end the critical path counts back from, as the input names it.
+fn critical_target(
+    q: &QueryCtx<'_>,
+    input: &ScheduleInput,
+    rows: &HashMap<Id, Entry>,
+) -> Result<Option<Day>, Failure> {
+    let Some(text) = input
+        .target
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    else {
+        return Ok(None);
+    };
+    let tx = q.tx;
+    if let Ok(day) = super::task::parse_date(tx, &q.env.zone, q.now, "target", text) {
+        return Ok(Some(day));
+    }
+    if let Ok(task) = super::lookup::task(tx, "target", text) {
+        let due = rows.get(&task.id).and_then(|r| r.dates.due).or_else(|| {
+            fields::read(tx, TASK, task.id, "due_date")
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_str().and_then(|d| d.parse().ok()))
+        });
+        return due.map(Some).ok_or_else(|| {
+            messages::invalid(
+                "target",
+                "schedule-target-no-date",
+                &[("target", text.to_owned())],
+            )
+        });
+    }
+    if let Some(project) = &input.project {
+        let project = super::lookup::project(tx, "project", project)?;
+        let found: Option<Option<String>> = tx
+            .query_row(
+                "SELECT due_date FROM versions WHERE project_id = ?1 AND name_fold = ?2",
+                gk_store::rusqlite::params![b(project.id), gk_core::fold(text)],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(due) = found {
+            return day(due).map(Some).ok_or_else(|| {
+                messages::invalid(
+                    "target",
+                    "schedule-target-no-date",
+                    &[("target", text.to_owned())],
+                )
+            });
+        }
+    }
+    Err(messages::invalid(
+        "target",
+        "schedule-target-unknown",
+        &[("target", text.to_owned())],
+    ))
+}
+
+/// A task's length and earliest start for the critical path: from its
+/// dates, else from its estimate; `None` when it has neither.
+fn work_of(r: &Entry, week: WorkWeek, hours_per_day: u32) -> Option<Work> {
+    if let (Some(begin), Some(end)) = (r.dates.begin(), r.dates.end()) {
+        return Some(Work {
+            days: week.length(begin, end),
+            not_before: Some(week.begin_index(begin)),
+            included: true,
+        });
+    }
+    let minutes = r.estimate.filter(|m| *m > 0)?;
+    let per_day = i64::from(hours_per_day.max(1)) * 60;
+    Some(Work {
+        days: ((minutes + per_day - 1) / per_day).max(1),
+        not_before: None,
+        included: true,
+    })
+}
+
+fn timing_out(t: &Timing, week: WorkWeek) -> Option<TaskTiming> {
+    let d = |i: i64| week.day(i).ok().map(|d| d.to_string());
+    Some(TaskTiming {
+        earliest_start: d(t.earliest_start)?,
+        earliest_finish: d(t.earliest_finish)?,
+        latest_start: d(t.latest_start)?,
+        latest_finish: d(t.latest_finish)?,
+        slack_days: t.slack(),
+        critical: t.critical(),
+    })
+}
+
+/// Works out the critical path of `considered` over the links between
+/// them, and rolls each parent up from its subtasks.
+#[allow(clippy::too_many_arguments)]
+fn plan_of(
+    rows: &HashMap<Id, Entry>,
+    children: &HashMap<Id, Vec<Id>>,
+    links: &[Link],
+    considered: &[Id],
+    week: WorkWeek,
+    hours_per_day: u32,
+    target: Option<Day>,
+    today: Day,
+) -> PlanOut {
+    let index: HashMap<Id, usize> = considered
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (*id, i))
+        .collect();
+    let deps = links.iter().filter_map(|l| {
+        Some(Dependency {
+            from: *index.get(&l.from)?,
+            to: *index.get(&l.to)?,
+            lag_days: l.lag_days.unwrap_or(0),
+        })
+    });
+    let graph = Graph::new(considered.len(), deps);
+    let mut left_out = Vec::new();
+    let work: Vec<Work> = considered
+        .iter()
+        .map(|id| {
+            let r = &rows[id];
+            work_of(r, week, hours_per_day).unwrap_or_else(|| {
+                if !children.contains_key(id) && !r.closed && left_out.len() < MAX_LISTED {
+                    left_out.push(LeftOutTask {
+                        key: r.key(),
+                        reason: TimingLeftOut::NoDatesOrEstimate,
+                    });
+                }
+                Work {
+                    days: 1,
+                    not_before: None,
+                    included: false,
+                }
+            })
+        })
+        .collect();
+    let begin = considered
+        .iter()
+        .filter_map(|id| rows[id].dates.begin())
+        .min()
+        .map_or_else(|| week.begin_index(today), |d| week.begin_index(d));
+    let plan = critical::critical_path(&graph, &work, begin, target.map(|d| week.end_index(d)));
+    for &i in plan.in_loops.iter().take(MAX_LISTED) {
+        left_out.push(LeftOutTask {
+            key: rows[&considered[i]].key(),
+            reason: TimingLeftOut::DependencyLoop,
+        });
+    }
+    let mut own: HashMap<Id, Timing> = HashMap::new();
+    for (i, t) in plan.timing.iter().enumerate() {
+        if let Some(t) = t {
+            own.insert(considered[i], *t);
+        }
+    }
+    // A parent spans its subtasks: the earliest of their starts, the latest
+    // of their finishes, and the least slack among them.
+    let mut timing = HashMap::with_capacity(considered.len());
+    for id in considered {
+        let t = if children.contains_key(id) {
+            let mut rolled: Option<(Timing, i64)> = None;
+            for d in descendants(children, *id) {
+                let Some(t) = own.get(&d) else { continue };
+                rolled = Some(match rolled {
+                    None => (*t, t.slack()),
+                    Some((a, slack)) => (
+                        Timing {
+                            earliest_start: a.earliest_start.min(t.earliest_start),
+                            earliest_finish: a.earliest_finish.max(t.earliest_finish),
+                            latest_start: a.latest_start.min(t.latest_start),
+                            latest_finish: a.latest_finish.max(t.latest_finish),
+                        },
+                        slack.min(t.slack()),
+                    ),
+                });
+            }
+            rolled.and_then(|(t, slack)| {
+                let mut out = timing_out(&t, week)?;
+                out.slack_days = slack;
+                out.critical = slack <= 0;
+                Some(out)
+            })
+        } else {
+            own.get(id).and_then(|t| timing_out(t, week))
+        };
+        if let Some(t) = t {
+            timing.insert(*id, t);
+        }
+    }
+    let path = match (plan.end, plan.finish) {
+        (Some(end), Some(finish)) => match (week.day(end), week.day(finish)) {
+            (Ok(end), Ok(finish)) => Some(CriticalPath {
+                end: end.to_string(),
+                finish: finish.to_string(),
+                working_days_per_week: week.per_week(),
+                tasks: Vec::new(),
+                left_out,
+            }),
+            _ => None,
+        },
+        _ => None,
+    };
+    PlanOut { timing, path }
+}
+
+/// Per task of the projects of `project_ids`, its slack and whether it is
+/// critical, each project worked out on its own: for the query terms
+/// `is:critical` and `slack`.
+pub(crate) fn slack_of_projects(
+    tx: &Transaction<'_>,
+    project_ids: &[Id],
+    today: Day,
+) -> Result<Vec<(Id, i64, bool)>, Failure> {
+    let mut rows = HashMap::new();
+    rows_where(tx, "t.project_id", project_ids, &mut rows)?;
+    let mut children: HashMap<Id, Vec<Id>> = HashMap::new();
+    for r in rows.values() {
+        if let Some(p) = r.parent {
+            children.entry(p).or_default().push(r.id);
+        }
+    }
+    let links = links(tx)?;
+    let units = super::task::units(tx)?;
+    let week = WorkWeek::new(units.days_per_week());
+    let mut by_project: HashMap<Id, Vec<Id>> = HashMap::new();
+    for r in rows.values() {
+        by_project.entry(r.project).or_default().push(r.id);
+    }
+    let mut out = Vec::new();
+    for (_, mut ids) in by_project {
+        ids.sort();
+        let plan = plan_of(
+            &rows,
+            &children,
+            &links,
+            &ids,
+            week,
+            units.hours_per_day(),
+            None,
+            today,
+        );
+        for (id, t) in plan.timing {
+            out.push((id, t.slack_days, t.critical));
+        }
+    }
+    Ok(out)
+}
+
+// ---------------------------------------------------------------------
+// Baselines
+
+/// A task's dates in a baseline, with its slip against `now`.
+fn baseline_dates(entry: &super::baseline::Entry, now: &Dates) -> Option<BaselineDates> {
+    let then = Dates::new(day(entry.start.clone()), day(entry.due.clone()));
+    let slip = match (now.end(), then.end()) {
+        (Some(a), Some(b)) => Some(a.days_since_epoch() - b.days_since_epoch()),
+        _ => None,
+    };
+    Some(BaselineDates {
+        start_date: entry.start.clone(),
+        due_date: entry.due.clone(),
+        slip_days: slip,
+    })
+}
+
+/// The tasks of a baseline that are no longer dated tasks of its project.
+fn removed_since(
+    tx: &Transaction<'_>,
+    rows: &HashMap<Id, Entry>,
+    project: Id,
+    entries: &HashMap<Id, super::baseline::Entry>,
+) -> Result<ScheduleBaseline, Failure> {
+    let mut gone: Vec<(&Id, &super::baseline::Entry)> = entries
+        .iter()
+        .filter(|(id, _)| {
+            rows.get(id)
+                .is_none_or(|r| r.project != project || !r.dates.is_dated())
+        })
+        .collect();
+    gone.sort_by(|a, b| a.1.key.cmp(&b.1.key).then(a.0.cmp(b.0)));
+    let total = u32::try_from(gone.len()).unwrap_or(u32::MAX);
+    let mut removed = Vec::new();
+    for (id, e) in gone.into_iter().take(MAX_LISTED) {
+        let deleted = if rows.contains_key(id) {
+            false
+        } else {
+            tx.query_row(
+                "SELECT deleted_at IS NOT NULL FROM tasks WHERE id = ?1",
+                [b(*id)],
+                |r| r.get::<_, bool>(0),
+            )
+            .optional()?
+            .unwrap_or(true)
+        };
+        removed.push(RemovedTask {
+            key: e.key.clone(),
+            title: e.title.clone(),
+            start_date: e.start.clone(),
+            due_date: e.due.clone(),
+            deleted,
+        });
+    }
+    Ok(ScheduleBaseline {
+        id: String::new(),
+        name: String::new(),
+        created_at: String::new(),
+        removed,
+        removed_total: total,
     })
 }
 

@@ -668,6 +668,84 @@ export type BackupRestored = {
   restored: Backup;
 };
 
+/** A saved baseline. */
+export type Baseline = {
+  /** When it was saved (RFC 3339). */
+  created_at: string;
+  /** Who saved it. */
+  created_by: Actor;
+  /** The baseline's ID. */
+  id: string;
+  /** Its name, unique in the project (ignoring case). */
+  name: string;
+  /** Its project's key. */
+  project: string;
+  /** How many tasks it holds. */
+  tasks: number;
+  /** When it was last renamed, or saved (RFC 3339). */
+  updated_at: string;
+};
+
+/** A baseline after a change. */
+export type BaselineChange = {
+  /** The baseline after the change (before it, for a deletion). */
+  baseline: Baseline;
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+};
+
+/** A new baseline of a project's current plan. */
+export type BaselineCreateInput = {
+  /** The baseline's name, unique in the project (1 to 100 characters). */
+  name: string;
+  /** The project (key or ID). Its tasks with dates are saved, at every level of subtasks; its sub-projects' are not. */
+  project: string;
+};
+
+/** A task's dates in a baseline, and how far it moved since. */
+export type BaselineDates = {
+  /** Its due date then. */
+  due_date?: string;
+  /** How many calendar days later it ends now than then (its due date, or its start without one); negative when earlier. Left out when it has no dates now. */
+  slip_days?: number;
+  /** Its start date then. */
+  start_date?: string;
+};
+
+/** A project's baselines, newest first. */
+export type BaselineList = {
+  /** The baselines. */
+  items: Baseline[];
+  /** How many there are. */
+  total: number;
+};
+
+/** Which baselines to list. */
+export type BaselineListInput = {
+  /** The project (key or ID). */
+  project: string;
+};
+
+/** One baseline. */
+export type BaselineRef = {
+  /** The baseline: its ID or its name. */
+  baseline: string;
+  /** The project (key or ID). */
+  project: string;
+};
+
+/** A new name for a baseline. */
+export type BaselineRenameInput = {
+  /** The baseline: its ID or its name. */
+  baseline: string;
+  /** Its new name, unique in the project. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+};
+
 /** A project's board as the person sees it. */
 export type Board = {
   /** The columns, in the layout's order, hidden ones included and flagged. */
@@ -1412,6 +1490,20 @@ export type CreatedClosedRow = {
   reopened: number;
   /** The period's first day. */
   start: string;
+};
+
+/** The critical path of the tasks shown. */
+export type CriticalPath = {
+  /** The day the latest times count back from: the target asked for, or the plan's own finish. */
+  end: string;
+  /** The earliest day the plan can finish. */
+  finish: string;
+  /** The tasks left out, and why; open tasks without dates and estimate are listed here, the first 200. */
+  left_out?: LeftOutTask[];
+  /** The critical tasks' keys, in the order of the chart's rows. */
+  tasks: string[];
+  /** Working days per week, from the workspace settings. */
+  working_days_per_week: number;
 };
 
 /** One column of the file and where it goes. */
@@ -2992,6 +3084,14 @@ export type LayoutUpdateInput = {
   sort_mode?: SortMode | null;
 };
 
+/** A task the critical path leaves out. */
+export type LeftOutTask = {
+  /** The task's key. */
+  key: string;
+  /** Why. */
+  reason: TimingLeftOut;
+};
+
 /** A link from one task to another. */
 export type Link = {
   /** The link's ID. */
@@ -4098,6 +4198,20 @@ export type ReminderSetInput = {
   time?: string | null;
 };
 
+/** A task a baseline has that the schedule no longer shows: deleted, moved to another project, or without dates now. */
+export type RemovedTask = {
+  /** Whether the task is deleted (in the trash or gone), rather than only without dates or out of view. */
+  deleted: boolean;
+  /** Its due date then. */
+  due_date?: string;
+  /** Its key when the baseline was saved. */
+  key: string;
+  /** Its start date then. */
+  start_date?: string;
+  /** Its title then. */
+  title: string;
+};
+
 /** Texts to render for the reader. */
 export type RenderInput = {
   /** One to 200 texts. */
@@ -4306,6 +4420,10 @@ export type SavedView = {
 
 /** The schedule of a project or a query. */
 export type Schedule = {
+  /** The baseline compared with, when one was asked for. */
+  baseline?: ScheduleBaseline;
+  /** The critical path of the tasks shown; left out when none has dates or an estimate. */
+  critical_path?: CriticalPath;
   /** The `blocks` links between the tasks shown. */
   dependencies: ScheduleDependency[];
   /** What is wrong with the schedule of the tasks shown, task by task. */
@@ -4320,6 +4438,20 @@ export type Schedule = {
   unscheduled: UnscheduledTask[];
   /** How many tasks without dates there are, also those beyond the first 200 listed in `unscheduled`. */
   unscheduled_total: number;
+};
+
+/** The baseline a schedule is compared with. */
+export type ScheduleBaseline = {
+  /** When it was saved (RFC 3339). */
+  created_at: string;
+  /** The baseline's ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** The tasks it has that the schedule doesn't show, the first 200. */
+  removed?: RemovedTask[];
+  /** How many such tasks there are. */
+  removed_total: number;
 };
 
 /** A finish-to-start dependency: a `blocks` link between two shown tasks. */
@@ -4341,6 +4473,10 @@ export type ScheduleEvery = "daily" | "weekly";
 
 /** Which tasks to schedule. */
 export type ScheduleInput = {
+  /** Compare with this baseline of the project (its ID or name): each task gets its baseline dates and slip, and the tasks the baseline had that are gone are listed. */
+  baseline?: string | null;
+  /** Only the tasks on the critical path (and the parents they roll up to). Every task carries its slack either way. */
+  critical?: boolean;
   /** Leave out tasks that end before this day: `YYYY-MM-DD` or a natural date such as `today` or `-2w`. */
   from?: string | null;
   /** With `project`: its sub-projects' tasks too. Off unless asked. */
@@ -4349,6 +4485,8 @@ export type ScheduleInput = {
   project?: string | null;
   /** Only the tasks matching this query (`is:open label:release`); with `project`, inside that project. Its `sort:` orders the top-level rows; by default they go by start date, then due date. */
   query?: string | null;
+  /** The end the critical path counts back from: a day (`YYYY-MM-DD` or a natural date), a milestone's task key (its due date) or the name of one of the project's versions (its due date). Left out: the latest finish of the tasks shown. */
+  target?: string | null;
   /** Leave out tasks that begin after this day, written as for `from`. */
   to?: string | null;
 };
@@ -4395,6 +4533,8 @@ export type ScheduleShape = "bar" | "deadline" | "no_deadline" | "milestone" | "
 
 /** One row of the chart. */
 export type ScheduledTask = {
+  /** Its dates in the baseline compared with, when one is and has it. */
+  baseline?: BaselineDates;
   /** A task that blocks it is still open. */
   blocked: boolean;
   /** The agent session that claimed it, while the claim lasts. */
@@ -4415,6 +4555,8 @@ export type ScheduledTask = {
   key: string;
   /** Its labels, in the project's label order. */
   labels?: LabelRef[];
+  /** Added after the baseline compared with was saved: it has no dates there. */
+  new_since_baseline?: boolean;
   /** Open and due before today. */
   overdue: boolean;
   /** The parent task's key, for a subtask. */
@@ -4435,6 +4577,8 @@ export type ScheduledTask = {
   status: StatusRef;
   /** For a task with subtasks: from the earliest start to the latest due date among it and all its subtasks, at every level. */
   summary?: DayRange;
+  /** Its place on the critical path; for a parent, rolled up from its subtasks. Left out for tasks the path leaves out. */
+  timing?: TaskTiming;
   /** Its title. */
   title: string;
   /** Its version, for `expected_version`. */
@@ -5448,6 +5592,22 @@ export type TaskSearchResult = {
   totals: ListTotals;
 };
 
+/** A task's place on the critical path, in days (`YYYY-MM-DD`) and working days. Working days are the workspace's days per week, from Monday. */
+export type TaskTiming = {
+  /** On the critical path: no slack, or less. */
+  critical: boolean;
+  /** The earliest day it can finish. */
+  earliest_finish: string;
+  /** The earliest day it can begin, after the tasks that block it. */
+  earliest_start: string;
+  /** The latest day it can finish without moving the end target. */
+  latest_finish: string;
+  /** The latest day it can begin without moving the end target. */
+  latest_start: string;
+  /** Total slack in working days: how far it can slip without moving the end target; negative when the target can't be met. */
+  slack_days: number;
+};
+
 /** A task type. */
 export type TaskType = {
   /** New tasks of this type are due this many days after the day they are made, unless given a due date; left out when they get none. */
@@ -5934,6 +6094,9 @@ export type TimerStopInput = {
   work_kind?: string | null;
 };
 
+/** Why a task has no place on the critical path. */
+export type TimingLeftOut = "no_dates_or_estimate" | "dependency_loop";
+
 /** What needs attention today. */
 export type Today = {
   /** Tasks agents are working on (claimed), by when the claim ends. */
@@ -6219,6 +6382,8 @@ export type UnscheduledTask = {
   read_only?: ReadOnlyReason;
   /** Its status. */
   status: StatusRef;
+  /** Its place on the critical path, from its estimate; left out when it has no estimate. */
+  timing?: TaskTiming;
   /** Its title. */
   title: string;
   /** Its version, for `expected_version`. */
@@ -7289,6 +7454,10 @@ export interface OpMap {
   "schedule.preview_move": { input: SchedulePreviewInput; output: SchedulePreview; safety: "read"; kind: "query" };
   "gantt.layout.get": { input: GanttLayoutGetInput; output: GanttLayoutChange; safety: "read"; kind: "query" };
   "gantt.layout.update": { input: GanttLayoutUpdateInput; output: GanttLayoutChange; safety: "write"; kind: "command" };
+  "baseline.list": { input: BaselineListInput; output: BaselineList; safety: "read"; kind: "query" };
+  "baseline.create": { input: BaselineCreateInput; output: BaselineChange; safety: "write"; kind: "command" };
+  "baseline.rename": { input: BaselineRenameInput; output: BaselineChange; safety: "write"; kind: "command" };
+  "baseline.delete": { input: BaselineRef; output: BaselineChange; safety: "write"; kind: "command" };
   "wiki.list": { input: WikiListInput; output: WikiTree; safety: "read"; kind: "query" };
   "wiki.search": { input: WikiSearchInput; output: WikiSearchResult; safety: "read"; kind: "query" };
   "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
@@ -7491,6 +7660,10 @@ export const OP_SAFETY = {
   "schedule.preview_move": "read",
   "gantt.layout.get": "read",
   "gantt.layout.update": "write",
+  "baseline.list": "read",
+  "baseline.create": "write",
+  "baseline.rename": "write",
+  "baseline.delete": "write",
   "wiki.list": "read",
   "wiki.search": "read",
   "wiki.get": "read",
@@ -7595,6 +7768,16 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["backup.delete"]["input"]) => call("backup.delete", input),
       /** Move the backup folder to another place, or back to the default; backups already made stay where they are. (app) */
       folderUpdate: (input: OpMap["backup.folder.update"]["input"] = {}) => call("backup.folder.update", input),
+    },
+    baseline: {
+      /** A project's schedule baselines, newest first: each one's name, how many tasks it holds, and who saved it when. (read) */
+      list: (input: OpMap["baseline.list"]["input"]) => call("baseline.list", input),
+      /** Save a project's current plan as a named baseline: every dated task's start and due date. Compare with it through the schedule's baseline and the query field slip. (write) */
+      create: (input: OpMap["baseline.create"]["input"]) => call("baseline.create", input),
+      /** Rename a baseline of a project. (write) */
+      rename: (input: OpMap["baseline.rename"]["input"]) => call("baseline.rename", input),
+      /** Delete a baseline of a project; the tasks stay as they are. Revert brings it back. (write) */
+      delete: (input: OpMap["baseline.delete"]["input"]) => call("baseline.delete", input),
     },
     board: {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts. (read) */
@@ -7835,7 +8018,7 @@ export function makeOps(call: Call) {
       update: (input: OpMap["rules.update"]["input"]) => call("rules.update", input),
     },
     schedule: {
-      /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
+      /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, problems such as a task starting before its blocker ends, each task's slack on the critical path, and its slip against a baseline. (read) */
       get: (input: OpMap["schedule.get"]["input"] = {}) => call("schedule.get", input),
       /** The tasks that "also move dependents" would move, and their new dates, if a task got the given dates; nothing is changed. (read) */
       previewMove: (input: OpMap["schedule.preview_move"]["input"]) => call("schedule.preview_move", input),

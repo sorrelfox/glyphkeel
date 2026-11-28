@@ -73,6 +73,13 @@ pub enum FieldType {
     /// Where the query's words are looked for: `in:files` only inside
     /// attached files, `-in:files` never there.
     In,
+    /// Total slack on the critical path, in working days.
+    Slack,
+    /// How many days later a task ends than in a baseline.
+    Slip,
+    /// A baseline of the task's project, by name: the task is in it, and
+    /// `slip` in the same query compares with it.
+    Baseline,
 }
 
 /// Which text a full-text field searches.
@@ -195,6 +202,7 @@ pub const IS_FLAGS: &[&str] = &[
     "unscheduled",
     "milestone",
     "over-estimate",
+    "critical",
 ];
 /// What `has:` checks.
 pub const HAS_PARTS: &[&str] = &[
@@ -543,6 +551,33 @@ pub static FIELDS: &[Field] = &[
         true,
         true,
         "a percentage, 50 or 50%",
+    ),
+    field(
+        "slack",
+        &[],
+        FieldType::Slack,
+        NUMBER_OPS,
+        true,
+        false,
+        "working days of slack on the critical path, such as 2d; negative when late",
+    ),
+    field(
+        "slip",
+        &[],
+        FieldType::Slip,
+        NUMBER_OPS,
+        true,
+        false,
+        "days later than in the newest baseline, or the one baseline: names, such as 3d or -1d",
+    ),
+    field(
+        "baseline",
+        &["baselines"],
+        FieldType::Baseline,
+        ONE_OP,
+        false,
+        false,
+        "a baseline name of the task's project",
     ),
     field(
         "author",
@@ -912,6 +947,12 @@ const VALUES_ARGS: &[(&str, &[(&str, &str)])] = &[
     ("spent", &[]),
     ("remaining", &[]),
     ("progress", &[("plain", "50"), ("percent", "50%")]),
+    ("slack", &[("example", "2d")]),
+    (
+        "slip",
+        &[("baseline", "baseline:"), ("late", "3d"), ("early", "-1d")],
+    ),
+    ("baseline", &[]),
     ("author", &[("me", "me"), ("agent", "agent")]),
     ("claimed", &[("any", "any")]),
     ("comments", &[]),

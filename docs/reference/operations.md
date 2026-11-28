@@ -153,6 +153,10 @@ The safety class decides who may run an operation:
 | `schedule.preview_move` | read | app | — | — |
 | `gantt.layout.get` | read | app | — | — |
 | `gantt.layout.update` | write | app | — | — |
+| `baseline.list` | read | app, command line, MCP | `list_baselines` | `glyphkeel baseline list <project>` |
+| `baseline.create` | write | app, command line, MCP | `create_baseline` | `glyphkeel baseline create <project>` |
+| `baseline.rename` | write | app, command line, MCP | `update_baseline` | `glyphkeel baseline rename <project>` |
+| `baseline.delete` | write | app, command line, MCP | `delete_baseline` | `glyphkeel baseline delete <project>` |
 | `wiki.list` | read | app, command line, MCP | `list_wiki_pages` | `glyphkeel wiki list` |
 | `wiki.search` | read | app, command line, MCP | `search_wiki_pages` | `glyphkeel wiki search <text>` |
 | `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
@@ -1039,7 +1043,7 @@ Not available to agents: It shows the app's date fields which day the words mean
 
 ## `schedule.get`
 
-The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.
+The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, problems such as a task starting before its blocker ends, each task's slack on the critical path, and its slip against a baseline.
 
 Input: `ScheduleInput`. Output: `Schedule`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -1066,6 +1070,30 @@ Change the zoom level, table or column widths, grouping or the "also move depend
 Input: `GanttLayoutUpdateInput`. Output: `GanttLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It changes how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.
+
+## `baseline.list`
+
+A project's schedule baselines, newest first: each one's name, how many tasks it holds, and who saved it when.
+
+Input: `BaselineListInput`. Output: `BaselineList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `baseline.create`
+
+Save a project's current plan as a named baseline: every dated task's start and due date. Compare with it through the schedule's baseline and the query field slip.
+
+Input: `BaselineCreateInput`. Output: `BaselineChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `baseline.rename`
+
+Rename a baseline of a project.
+
+Input: `BaselineRenameInput`. Output: `BaselineChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `baseline.delete`
+
+Delete a baseline of a project; the tasks stay as they are. Revert brings it back.
+
+Input: `BaselineRef`. Output: `BaselineChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `wiki.list`
 

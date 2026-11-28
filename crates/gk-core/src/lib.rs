@@ -9,6 +9,7 @@
 //! current time in where a rule needs it.
 
 pub mod actor;
+pub mod critical;
 pub mod custom_field;
 pub mod day;
 pub mod duration;

@@ -104,6 +104,8 @@ import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, t
 import { checkReadOnly, enter as enterRules } from "./rules";
 import { parseNaturalDay } from "./naturalDate";
 import { nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
+import { baselineDates, createBaseline, deleteBaseline, findBaseline, listBaselines, removedSince, renameBaseline, type BaselineHost } from "./baselines";
+import { criticalPath } from "./critical";
 import { moveDependents, scheduleOf } from "./schedule";
 import { type FakeHost, type NewTask } from "./host";
 import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
@@ -2687,6 +2689,9 @@ export class FakeWorkspace {
       projects: this.state.projects.map((project) => project.key),
       today: localDay(this.today()),
       history: (key) => this.taskHistory(key),
+      schedule: () => this.slackByKey(),
+      slip: (key, baseline) => this.slipOf(key, baseline),
+      inBaseline: (key, name) => this.inBaseline(key, name),
     };
   }
 
@@ -2970,6 +2975,57 @@ export class FakeWorkspace {
     newId: () => nextUuid(),
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
+
+  /** What the schedule baselines need of this workspace. */
+  private readonly baselineHost: BaselineHost = {
+    baselines: () => (this.state.baselines ??= []),
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    tasksOf: (project) => this.listedTasks().filter((task) => task.project === project.key),
+    milestone: (task) => this.state.projects.some((project) => project.types.some((type) => type.id === task.type.id && type.glyph === "milestone")),
+    actor: () => (this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }),
+    now: () => this.today().toISOString(),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
+  /** Each task's slack and whether it is critical, by key, every project worked out on its own. */
+  private slackByKey(): Map<string, { slack: number; critical: boolean }> {
+    const units = unitsOf(this.state.settings);
+    const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to, lagDays: relation.lagDays }));
+    const all = this.listedTasks();
+    const out = new Map<string, { slack: number; critical: boolean }>();
+    for (const project of this.state.projects) {
+      const tasks = all.filter((task) => task.project === project.key);
+      for (const [key, t] of criticalPath(tasks, links, units.daysPerWeek, units.hoursPerDay, localDay(this.today())).timing) {
+        out.set(key, { slack: t.slack_days, critical: t.critical });
+      }
+    }
+    return out;
+  }
+
+  /** A task's slip against a baseline of its project: the named one, else the newest. */
+  private slipOf(key: string, baseline: string | undefined): number | undefined {
+    const task = this.listedTasks().find((each) => each.key === key);
+    if (!task) {
+      return undefined;
+    }
+    const project = this.project(task.project);
+    const mine = (this.state.baselines ?? []).filter((each) => each.projectId === project.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const chosen = baseline === undefined ? mine[0] : mine.find((each) => each.name.trim().toLowerCase() === baseline.trim().toLowerCase());
+    const entry = chosen?.tasks.find((each) => each.task === task.id);
+    return entry ? baselineDates(entry, task.start_date, task.due_date).slip_days : undefined;
+  }
+
+  /** Whether a task is in a baseline of its project named `name`. */
+  private inBaseline(key: string, name: string): boolean {
+    const task = this.listedTasks().find((each) => each.key === key);
+    if (!task) {
+      return false;
+    }
+    const project = this.project(task.project);
+    return (this.state.baselines ?? []).some((each) => each.projectId === project.id && each.name.trim().toLowerCase() === name.trim().toLowerCase() && each.tasks.some((entry) => entry.task === task.id));
+  }
 
   /** What the dashboards need of this workspace. */
   private readonly dashboardHost: DashboardHost = {
@@ -4272,8 +4328,64 @@ export class FakeWorkspace {
       const tasks = this.listedTasks().filter((task) => (keys === null || keys.has(task.project)) && (filter === null || filter.has(task.key)));
       const milestoneTypes = new Set(this.state.projects.flatMap((project) => project.types.filter((type) => type.glyph === "milestone").map((type) => type.id)));
       const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to, lagDays: relation.lagDays }));
-      return scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()), archived);
+      const schedule = scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()), archived);
+      // The critical path, from the dates or the estimates.
+      const units = unitsOf(this.state.settings);
+      let target: string | undefined;
+      const wanted = input.target?.trim();
+      if (wanted !== undefined && wanted !== "") {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(wanted)) {
+          target = wanted;
+        } else {
+          const byKey = this.listedTasks().find((task) => task.key === wanted.toUpperCase());
+          const version = scope === null ? undefined : (this.state.versions ?? []).find((each) => each.projectId === scope.id && each.name.toLowerCase() === wanted.toLowerCase());
+          target = byKey?.due_date ?? version?.dueDate ?? undefined;
+          if (target === undefined) {
+            fail("invalid", `"${wanted}" is neither a date, a task key nor a version of the project.`, { details: { path: "target", message_id: "schedule-target-unknown", args: { target: wanted } } });
+          }
+        }
+      }
+      const plan = criticalPath(tasks, links, units.daysPerWeek, units.hoursPerDay, schedule.today, target);
+      for (const row of [...schedule.tasks, ...schedule.unscheduled]) {
+        const timing = plan.timing.get(row.key);
+        if (timing) {
+          row.timing = timing;
+        }
+      }
+      if (input.critical === true) {
+        schedule.tasks = schedule.tasks.filter((row) => row.timing?.critical === true);
+        schedule.unscheduled = schedule.unscheduled.filter((row) => row.timing?.critical === true);
+        schedule.unscheduled_total = schedule.unscheduled.length;
+      }
+      if (plan.path) {
+        schedule.critical_path = { ...plan.path, tasks: [...schedule.tasks, ...schedule.unscheduled].filter((row) => row.timing?.critical === true).map((row) => row.key) };
+      }
+      // The baseline compared with.
+      const named = input.baseline?.trim();
+      if (named !== undefined && named !== "") {
+        if (scope === null) {
+          fail("invalid", "A baseline belongs to one project: give `project` with `baseline`.", { details: { path: "baseline", message_id: "baseline-needs-project" } });
+        }
+        const baseline = findBaseline(this.baselineHost, scope, named);
+        const entries = new Map(baseline.tasks.map((entry) => [entry.task, entry]));
+        for (const row of schedule.tasks) {
+          const entry = entries.get(row.id);
+          if (entry) {
+            row.baseline = baselineDates(entry, row.start_date, row.due_date);
+          } else if (row.project === scope.key && (row.start_date !== undefined || row.due_date !== undefined)) {
+            row.new_since_baseline = true;
+          }
+        }
+        const live = new Map(this.listedTasks().map((task) => [task.id, task]));
+        const gone = removedSince(baseline, live, scope.key);
+        schedule.baseline = { id: baseline.id, name: baseline.name, created_at: baseline.createdAt, ...(gone.removed.length > 0 ? { removed: gone.removed } : {}), removed_total: gone.total };
+      }
+      return schedule;
     },
+    "baseline.list": (input) => listBaselines(this.baselineHost, input),
+    "baseline.create": (input) => createBaseline(this.baselineHost, input),
+    "baseline.rename": (input) => renameBaseline(this.baselineHost, input),
+    "baseline.delete": (input) => deleteBaseline(this.baselineHost, input),
     "search.query": (input) => {
       const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
       const keys = scope === null ? null : new Set([scope, ...(input.include_subprojects === true ? this.descendants(scope) : [])].map((project) => project.key));

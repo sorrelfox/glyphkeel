@@ -132,6 +132,8 @@ impl MacroSource for WikiMacros<'_> {
                 default_sort: Vec::new(),
             },
         );
+        let compiled =
+            super::query::with_schedule(self.tx, &checked, compiled).map_err(|_| unreadable())?;
         let ids = super::query::matching_ids(self.tx, &compiled).map_err(|_| unreadable())?;
         let mut items = Vec::with_capacity(ids.len().min(MAX_TASKS));
         for id in ids.iter().take(MAX_TASKS) {

@@ -39,6 +39,135 @@ pub struct ScheduleInput {
     /// Leave out tasks that begin after this day, written as for `from`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to: Option<String>,
+    /// Only the tasks on the critical path (and the parents they roll up
+    /// to). Every task carries its slack either way.
+    #[serde(default)]
+    pub critical: bool,
+    /// The end the critical path counts back from: a day (`YYYY-MM-DD` or
+    /// a natural date), a milestone's task key (its due date) or the name
+    /// of one of the project's versions (its due date). Left out: the
+    /// latest finish of the tasks shown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// Compare with this baseline of the project (its ID or name): each
+    /// task gets its baseline dates and slip, and the tasks the baseline
+    /// had that are gone are listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<String>,
+}
+
+/// A task's place on the critical path, in days (`YYYY-MM-DD`) and working
+/// days. Working days are the workspace's days per week, from Monday.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskTiming {
+    /// The earliest day it can begin, after the tasks that block it.
+    pub earliest_start: String,
+    /// The earliest day it can finish.
+    pub earliest_finish: String,
+    /// The latest day it can begin without moving the end target.
+    pub latest_start: String,
+    /// The latest day it can finish without moving the end target.
+    pub latest_finish: String,
+    /// Total slack in working days: how far it can slip without moving the
+    /// end target; negative when the target can't be met.
+    pub slack_days: i64,
+    /// On the critical path: no slack, or less.
+    pub critical: bool,
+}
+
+/// Why a task has no place on the critical path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TimingLeftOut {
+    /// It has neither dates nor an estimate.
+    NoDatesOrEstimate,
+    /// It is in a loop of tasks that block each other.
+    DependencyLoop,
+}
+
+/// A task the critical path leaves out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LeftOutTask {
+    /// The task's key.
+    pub key: String,
+    /// Why.
+    pub reason: TimingLeftOut,
+}
+
+/// The critical path of the tasks shown.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CriticalPath {
+    /// The day the latest times count back from: the target asked for, or
+    /// the plan's own finish.
+    pub end: String,
+    /// The earliest day the plan can finish.
+    pub finish: String,
+    /// Working days per week, from the workspace settings.
+    pub working_days_per_week: u32,
+    /// The critical tasks' keys, in the order of the chart's rows.
+    pub tasks: Vec<String>,
+    /// The tasks left out, and why; open tasks without dates and estimate
+    /// are listed here, the first 200.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<LeftOutTask>,
+}
+
+/// A task's dates in a baseline, and how far it moved since.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BaselineDates {
+    /// Its start date then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    /// Its due date then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    /// How many calendar days later it ends now than then (its due date,
+    /// or its start without one); negative when earlier. Left out when it
+    /// has no dates now.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slip_days: Option<i64>,
+}
+
+/// A task a baseline has that the schedule no longer shows: deleted, moved
+/// to another project, or without dates now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RemovedTask {
+    /// Its key when the baseline was saved.
+    pub key: String,
+    /// Its title then.
+    pub title: String,
+    /// Its start date then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    /// Its due date then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    /// Whether the task is deleted (in the trash or gone), rather than
+    /// only without dates or out of view.
+    pub deleted: bool,
+}
+
+/// The baseline a schedule is compared with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleBaseline {
+    /// The baseline's ID.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// When it was saved (RFC 3339).
+    pub created_at: String,
+    /// The tasks it has that the schedule doesn't show, the first 200.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<RemovedTask>,
+    /// How many such tasks there are.
+    #[serde(default)]
+    pub removed_total: u32,
 }
 
 /// How the chart draws a task.
@@ -137,6 +266,17 @@ pub struct ScheduledTask {
     /// when it has none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Its place on the critical path; for a parent, rolled up from its
+    /// subtasks. Left out for tasks the path leaves out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<TaskTiming>,
+    /// Its dates in the baseline compared with, when one is and has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<BaselineDates>,
+    /// Added after the baseline compared with was saved: it has no dates
+    /// there.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub new_since_baseline: bool,
 }
 
 /// A task without dates, for the Unscheduled lane.
@@ -175,6 +315,10 @@ pub struct UnscheduledTask {
     /// when it has none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Its place on the critical path, from its estimate; left out when
+    /// it has no estimate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<TaskTiming>,
 }
 
 /// A finish-to-start dependency: a `blocks` link between two shown tasks.
@@ -262,6 +406,13 @@ pub struct Schedule {
     pub dependencies: Vec<ScheduleDependency>,
     /// What is wrong with the schedule of the tasks shown, task by task.
     pub problems: Vec<ScheduleProblem>,
+    /// The critical path of the tasks shown; left out when none has dates
+    /// or an estimate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub critical_path: Option<CriticalPath>,
+    /// The baseline compared with, when one was asked for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<ScheduleBaseline>,
 }
 
 /// A task that "also move dependents" moved.
@@ -428,7 +579,7 @@ op!(
 );
 
 pub(crate) const SCHEDULE_GET: OpDescriptor = OpDescriptor::of::<ScheduleGet>(Meta {
-    summary: "The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.",
+    summary: "The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, problems such as a task starting before its blocker ends, each task's slack on the critical path, and its slip against a baseline.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

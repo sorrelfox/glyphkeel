@@ -588,6 +588,36 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
                 ));
             }
         }
+        let mut baseline_names = HashSet::new();
+        for line in &proj.file.baselines {
+            unique(&pj, 1, &line.id)?;
+            let day_ok = |d: &Option<String>| {
+                d.as_deref()
+                    .is_none_or(|d| d.parse::<gk_core::Day>().is_ok())
+            };
+            let tasks_ok = line.tasks.iter().all(|t| {
+                t.task.parse::<Id>().is_ok()
+                    && day_ok(&t.start_date)
+                    && day_ok(&t.due_date)
+                    && (t.start_date.is_some() || t.due_date.is_some())
+            });
+            if line.name.trim().is_empty()
+                || line.name.chars().count() > 100
+                || !matches!(
+                    line.created_by_kind.as_str(),
+                    "user" | "agent" | "automation"
+                )
+                || !tasks_ok
+                || !baseline_names.insert(fold(&line.name))
+            {
+                return Err(bad_with(
+                    pj.clone(),
+                    1,
+                    "transfer-invalid-baseline",
+                    &[("baseline", &line.name)],
+                ));
+            }
+        }
         for v in &proj.file.views {
             unique(&pj, 1, &v.id)?;
             rank_ok(&pj, 1, &v.rank)?;
@@ -1039,6 +1069,9 @@ pub(crate) fn plan(
         }
         for s in &p.file.sprints {
             replace("sprints", &s.id)?;
+        }
+        for l in &p.file.baselines {
+            replace("baselines", &l.id)?;
         }
         for v in &p.file.views {
             replace("saved_views", &v.id)?;
@@ -1645,6 +1678,29 @@ fn write(
                 s.created_at,
                 s.updated_at
             ])?;
+        }
+        for line in &proj.file.baselines {
+            let record = crate::ops::baseline::Record {
+                project: id.to_string(),
+                name: line.name.clone(),
+                created_at: line.created_at,
+                created_by_kind: line.created_by_kind.clone(),
+                created_by_name: line.created_by_name.clone(),
+                updated_at: line.updated_at,
+            };
+            let entries: Vec<crate::ops::baseline::Entry> = line
+                .tasks
+                .iter()
+                .map(|t| crate::ops::baseline::Entry {
+                    task: plan.id(&t.task).to_string(),
+                    key: t.key.clone(),
+                    title: t.title.clone(),
+                    start: t.start_date.clone(),
+                    due: t.due_date.clone(),
+                    milestone: t.milestone,
+                })
+                .collect();
+            crate::ops::baseline::insert_imported(tx, plan.id(&line.id), &record, &entries)?;
         }
         super::custom_fields::write_fields(tx, &proj.file.custom_fields, id, &|t| plan.id(t), now)?;
         for v in &proj.file.views {

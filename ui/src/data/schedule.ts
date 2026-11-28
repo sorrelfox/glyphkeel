@@ -7,7 +7,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { type GanttLayoutChange, type MovedTask, type Schedule, type ScheduleInput, type SchedulePreview, type SchedulePreviewInput } from "../generated/ops";
+import { type Baseline, type GanttLayoutChange, type MovedTask, type Schedule, type ScheduleInput, type SchedulePreview, type SchedulePreviewInput } from "../generated/ops";
 import { useCall, useOp } from "./hooks";
 import { opKey } from "./queries";
 import { type OpFailure } from "./transport";
@@ -17,6 +17,8 @@ export interface ScheduleScope {
   includeSubprojects: boolean;
   /** The person's query; empty for every task. */
   query: string;
+  /** The baseline to compare with, by ID; none: no comparison. */
+  baseline?: string | undefined;
 }
 
 export function scheduleInput(scope: ScheduleScope): ScheduleInput {
@@ -24,7 +26,14 @@ export function scheduleInput(scope: ScheduleScope): ScheduleInput {
     project: scope.project,
     include_subprojects: scope.includeSubprojects,
     ...(scope.query.trim() === "" ? {} : { query: scope.query }),
+    ...(scope.baseline === undefined ? {} : { baseline: scope.baseline }),
   };
+}
+
+/** A project's schedule baselines, newest first. */
+export function useBaselines(project: string): { baselines: Baseline[] | undefined; error: OpFailure | null } {
+  const result = useOp("baseline.list", { project });
+  return { baselines: result.data?.items, error: result.error };
 }
 
 export interface ScheduleData {

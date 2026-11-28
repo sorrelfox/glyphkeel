@@ -48,6 +48,19 @@ export interface QueryNames {
   today: string;
   /** A task's recorded changes, oldest first, for `was:`, `changed:` and `changed-by:`; none when left out. */
   history?: (key: string) => readonly TaskHistory[];
+  /** Every task's slack and whether it is critical, by key, for `is:critical` and `slack`. */
+  schedule?: () => ReadonlyMap<string, { slack: number; critical: boolean }>;
+  /** A task's slip in days against the named baseline of its project, or the newest. */
+  slip?: (key: string, baseline: string | undefined) => number | undefined;
+  /** Whether a task is in the baseline of its project with this name. */
+  inBaseline?: (key: string, name: string) => boolean;
+}
+
+/** What conditions on the critical path and baselines look at, worked out once per query. */
+interface Facts {
+  schedule: () => ReadonlyMap<string, { slack: number; critical: boolean }>;
+  slip: (key: string) => number | undefined;
+  inBaseline: (key: string, name: string) => boolean;
 }
 
 /** One recorded change of a task, its values as names (statuses, types, labels and versions by name). */
@@ -71,7 +84,7 @@ export interface CustomQueryField {
   options: readonly string[];
 }
 
-type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "sprint" | "parent" | "date" | "span" | "duration" | "number" | "is" | "was" | "changed" | "changed-by";
+type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "sprint" | "parent" | "date" | "span" | "duration" | "number" | "days" | "baseline" | "is" | "was" | "changed" | "changed-by";
 
 interface FieldSpec {
   name: string;
@@ -131,7 +144,10 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "estimate", aliases: ["est"], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h, or none" },
   { name: "spent", aliases: [], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h" },
   { name: "progress", aliases: [], type: "number", operators: ORDERED_OPS, sortable: true, values: "a percentage, 0 to 100" },
-  { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked, unscheduled", choices: ["open", "closed", "blocked", "unscheduled"] },
+  { name: "slack", aliases: [], type: "days", operators: ORDERED_OPS, sortable: false, values: "working days of slack on the critical path, such as 2d; negative when late" },
+  { name: "slip", aliases: [], type: "days", operators: ORDERED_OPS, sortable: false, values: "days later than in the newest baseline, or the one baseline: names, such as 3d or -1d" },
+  { name: "baseline", aliases: ["baselines"], type: "baseline", operators: [":"], sortable: false, values: "a baseline name of the task's project" },
+  { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked, unscheduled, critical", choices: ["open", "closed", "blocked", "unscheduled", "critical"] },
   { name: "was", aliases: [], type: "was", operators: [":"], sortable: false, values: "a field and a value the task had at any time: was:status:Review", choices: WAS_FIELDS },
   { name: "changed", aliases: [], type: "changed", operators: [":"], sortable: false, values: "a field that changed; with dates, when: changed:due>-7d", choices: CHANGED_FIELDS },
   { name: "changed-by", aliases: [], type: "changed-by", operators: NAME_OPS, sortable: false, values: "me, agent, or an agent's name: who changed the task's fields" },
@@ -195,6 +211,8 @@ const VALUES_ARGS: Readonly<Record<string, Record<string, string>>> = {
   created: { today: "today", back: "-7d", month: "this-month" },
   estimate: { examples: "90m, 1.5h, 1h30m, 2d", none: "none" },
   progress: { plain: "50", percent: "50%" },
+  slack: { example: "2d" },
+  slip: { baseline: "baseline:", late: "3d", early: "-1d" },
   was: { example: "was:status:Review" },
   changed: { example: "changed:due>-7d" },
   "changed-by": { me: "me", agent: "agent" },
@@ -517,6 +535,13 @@ function checkValue(field: FieldSpec, value: string, range: TextRange, names: Qu
       if (value !== "none" && parseDuration(value) === null) {
         throw new QueryFailure("query-bad-duration", `"${value}" is not a duration. Write it as 90m, 1.5h, 1h30m or 2d.`, range, { value });
       }
+      return;
+    case "days":
+      if (!DAYS.test(value.split("..")[0] ?? "") || !DAYS.test(value.split("..")[1] ?? "0")) {
+        throw new QueryFailure("query-bad-days", `"${value}" is not a number of days, such as 3d or -1d.`, range, { value });
+      }
+      return;
+    case "baseline":
       return;
     case "number":
       if (!/^\d+$/.test(value) || Number(value) > 100) {
@@ -859,14 +884,31 @@ function matchesHistory(task: ListedTask, field: FieldSpec, op: string, value: s
   });
 }
 
-function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: string, today: string, history: readonly TaskHistory[] = []): boolean {
+/** A number of days as conditions write it: `3d`, `3` or `-1d`. */
+const DAYS = /^-?\d+d?$/i;
+const daysIn = (text: string) => Number(text.replace(/d$/i, ""));
+
+function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: string, today: string, history: readonly TaskHistory[] = [], facts?: Facts): boolean {
   const lower = value.toLowerCase();
   switch (field.type) {
+    case "days": {
+      const actual = field.name === "slack" ? facts?.schedule().get(task.key)?.slack : facts?.slip(task.key);
+      if (actual === undefined) {
+        return false;
+      }
+      const [from = lower, to] = lower.split("..");
+      return to === undefined ? compare(op === ":" ? "=" : op, actual, daysIn(from)) : actual >= daysIn(from) && actual <= daysIn(to);
+    }
+    case "baseline":
+      return facts?.inBaseline(task.key, value) ?? false;
     case "was":
     case "changed":
     case "changed-by":
       return matchesHistory(task, field, op, value, today, history);
     case "is":
+      if (lower === "critical") {
+        return facts?.schedule().get(task.key)?.critical ?? false;
+      }
       if (lower === "unscheduled") {
         return task.start_date === undefined && task.due_date === undefined;
       }
@@ -945,14 +987,14 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
   }
 }
 
-function matches(node: Node, task: ListedTask, today: string, history?: QueryNames["history"]): boolean {
+function matches(node: Node, task: ListedTask, today: string, history?: QueryNames["history"], facts?: Facts): boolean {
   switch (node.kind) {
     case "and":
-      return node.items.every((item) => matches(item, task, today, history));
+      return node.items.every((item) => matches(item, task, today, history, facts));
     case "or":
-      return node.items.some((item) => matches(item, task, today, history));
+      return node.items.some((item) => matches(item, task, today, history, facts));
     case "not":
-      return !matches(node.item, task, today, history);
+      return !matches(node.item, task, today, history, facts);
     case "text": {
       const haystack = task.title.toLowerCase();
       return node.words.every((word) => haystack.includes(word.toLowerCase()));
@@ -960,11 +1002,28 @@ function matches(node: Node, task: ListedTask, today: string, history?: QueryNam
     case "cond": {
       const recorded = history?.(task.key) ?? [];
       if (node.op === "!=") {
-        return !node.values.some((value) => matchesValue(task, node.field, ":", value, today, recorded));
+        return !node.values.some((value) => matchesValue(task, node.field, ":", value, today, recorded, facts));
       }
-      return node.values.some((value) => matchesValue(task, node.field, node.op, value, today, recorded));
+      return node.values.some((value) => matchesValue(task, node.field, node.op, value, today, recorded, facts));
     }
   }
+}
+
+/**
+ * The facts conditions on the critical path and baselines need; `slip`
+ * compares with the baseline the query's one `baseline:` names, as the
+ * engine does.
+ */
+function factsOf(root: Node | null, names: QueryNames): Facts {
+  const items = root === null ? [] : root.kind === "and" ? root.items : [root];
+  const named = [...new Set(items.flatMap((item) => (item.kind === "cond" && item.field.type === "baseline" && item.values.length === 1 ? [(item.values[0] ?? "").toLowerCase()] : [])))];
+  const baseline = named.length === 1 ? named[0] : undefined;
+  let schedule: ReadonlyMap<string, { slack: number; critical: boolean }> | undefined;
+  return {
+    schedule: () => (schedule ??= names.schedule?.() ?? new Map()),
+    slip: (key) => names.slip?.(key, baseline),
+    inBaseline: (key, name) => names.inBaseline?.(key, name) ?? false,
+  };
 }
 
 /** Whether a query names projects in a positive condition: archived projects' tasks then count. */
@@ -1010,7 +1069,8 @@ function findTasks(
 ): { found: ListedTask[]; order: string[] } {
   const reading = read(input.query ?? "", names, []);
   const withArchived = options.scoped || namesProject(reading.root);
-  const found = all.filter((task) => (withArchived || !options.archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history)));
+  const facts = factsOf(reading.root, names);
+  const found = all.filter((task) => (withArchived || !options.archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history, facts)));
   const keys = reading.sort.length > 0 ? reading.sort : (input.sort ?? "").split(",").filter((key) => key !== "");
   const order = keys.length > 0 ? keys : ["status", "rank"];
   found.sort((a, b) => {
@@ -1169,8 +1229,9 @@ export function searchTasks(
 export function matchingKeys(all: readonly ListedTask[], text: string, names: QueryNames, archived: ReadonlySet<string>): string[] {
   const reading = read(text, names, []);
   const withArchived = namesProject(reading.root);
+  const facts = factsOf(reading.root, names);
   return all
-    .filter((task) => (withArchived || !archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history)))
+    .filter((task) => (withArchived || !archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history, facts)))
     .map((task) => task.key);
 }
 

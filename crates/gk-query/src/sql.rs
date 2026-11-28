@@ -102,6 +102,8 @@ pub struct Compiled {
     order: Sql,
     /// The sort keys used, `-` for descending.
     sort: Vec<String>,
+    /// Where the critical path's facts go among the filter's parameters.
+    schedule_slots: Vec<usize>,
 }
 
 const FROM: &str = "tasks t JOIN projects p ON p.id = t.project_id \
@@ -141,6 +143,13 @@ impl Compiled {
         if let Some(f) = &checked.filter {
             filter.push(" AND ");
             filter.append(cond_tree(f, today, env.now));
+        }
+        let mut schedule_slots = Vec::new();
+        for (i, p) in filter.params.iter_mut().enumerate() {
+            if matches!(p, Param::Text(t) if t == SCHEDULE_SLOT) {
+                *p = Param::Text("[]".to_owned());
+                schedule_slots.push(i);
+            }
         }
 
         let terms = checked.text_terms();
@@ -219,6 +228,18 @@ impl Compiled {
             filter,
             order,
             sort: names,
+            schedule_slots,
+        }
+    }
+
+    /// Hands over the critical path's facts for `is:critical` and `slack`:
+    /// a JSON list of `[task ID in upper-case hex, slack in working days,
+    /// 1 when critical else 0]`. Without them those terms match nothing.
+    pub fn provide_schedule(&mut self, facts: &str) {
+        for &i in &self.schedule_slots {
+            if let Some(p) = self.filter.params.get_mut(i) {
+                *p = Param::Text(facts.to_owned());
+            }
         }
     }
 
@@ -553,6 +574,15 @@ fn names_in(column: &str, names: &[crate::check::NameRef]) -> Sql {
     sql.push(")");
     sql
 }
+
+/// Stands in for the critical path's facts until the engine provides them
+/// ([`Compiled::provide_schedule`]); replaced by an empty list when it
+/// doesn't.
+const SCHEDULE_SLOT: &str = "\u{1}gk-schedule\u{1}";
+/// How many days later a baseline task ends now than then, over
+/// `baseline_tasks bt` and `tasks x` (the task now).
+const SLIP: &str = "CAST(julianday(coalesce(x.due_date, x.start_date)) \
+- julianday(coalesce(bt.due_date, bt.start_date)) AS INTEGER)";
 
 const OPEN: &str = "s.category IN ('todo', 'in_progress')";
 const BLOCKED: &str = "EXISTS (SELECT 1 FROM task_relations r JOIN tasks o ON o.id = r.from_task \
@@ -1120,6 +1150,41 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             sql.append(with_none(none_col, bounds_on(col, bounds, false), *none));
         }
         Cond::Progress(b) => sql.append(any(bounds_on(PROGRESS, b, false))),
+        Cond::Slack(b) => {
+            sql.push("hex(t.id) IN (SELECT value ->> 0 FROM json_each(");
+            sql.str(SCHEDULE_SLOT);
+            sql.push(") WHERE ");
+            sql.append(any(bounds_on("CAST(value ->> 1 AS INTEGER)", b, false)));
+            sql.push(")");
+        }
+        Cond::Slip { bounds, baseline } => {
+            sql.push(
+                "t.id IN (SELECT bt.task_id FROM baseline_tasks bt \
+                 JOIN baselines b ON b.id = bt.baseline_id JOIN tasks x ON x.id = bt.task_id \
+                 WHERE b.project_id = x.project_id AND ",
+            );
+            match baseline {
+                Some(name) => {
+                    sql.push("b.name_fold = ");
+                    sql.str(name);
+                }
+                None => sql.push(
+                    "b.id = (SELECT n.id FROM baselines n WHERE n.project_id = x.project_id \
+                     ORDER BY n.created_at DESC, n.id DESC LIMIT 1)",
+                ),
+            }
+            sql.push(" AND ");
+            sql.append(any(bounds_on(SLIP, bounds, false)));
+            sql.push(")");
+        }
+        Cond::Baselines(names) => {
+            sql.push(
+                "t.id IN (SELECT bt.task_id FROM baseline_tasks bt \
+                 JOIN baselines b ON b.id = bt.baseline_id WHERE b.project_id = t.project_id AND ",
+            );
+            sql.append(names_in("b.name_fold", names));
+            sql.push(")");
+        }
         Cond::Count(of, b) => sql.append(any(bounds_on(count_expr(*of), b, false))),
         Cond::Author(who) => {
             let parts = who
@@ -1171,6 +1236,11 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
                         "milestone" => p.push("y.glyph = 'milestone'"),
                         "over-estimate" => {
                             p.push("t.estimate_min IS NOT NULL AND t.spent_min > t.estimate_min");
+                        }
+                        "critical" => {
+                            p.push("hex(t.id) IN (SELECT value ->> 0 FROM json_each(");
+                            p.str(SCHEDULE_SLOT);
+                            p.push(") WHERE value ->> 2 = 1)");
                         }
                         _ => p.push("0"),
                     }
@@ -1409,7 +1479,10 @@ fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
             | FieldType::Was
             | FieldType::Changed
             | FieldType::ChangedBy
-            | FieldType::In => Vec::new(),
+            | FieldType::In
+            | FieldType::Slack
+            | FieldType::Slip
+            | FieldType::Baseline => Vec::new(),
         },
     })
 }

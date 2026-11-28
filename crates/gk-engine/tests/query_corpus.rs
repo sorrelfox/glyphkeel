@@ -232,6 +232,19 @@ fn every_field_of_the_registry_filters_data_set_s() {
             "sprint.start",
             json!({ "project": "TM", "sprint": "Sprint 1" }),
         ),
+        // Nor baselines: one, then a task that ends later.
+        (
+            "task.update",
+            json!({ "key": "TM-1", "start_date": null, "due_date": "2026-03-20" }),
+        ),
+        (
+            "baseline.create",
+            json!({ "project": "TM", "name": "Plan" }),
+        ),
+        (
+            "task.update",
+            json!({ "key": "TM-1", "due_date": "2026-03-25" }),
+        ),
     ] {
         e.call(&Context::user(Via::App), op, input).unwrap();
     }
@@ -270,6 +283,9 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::ChangedBy => format!("{name}:me"),
             // Where the words are looked for: here, everywhere but files.
             FieldType::In => format!("the -{name}:files"),
+            FieldType::Slack => format!("{name}>=0"),
+            FieldType::Slip => format!("{name}>2d"),
+            FieldType::Baseline => format!("{name}:Plan"),
         };
         let found = run(&e, &query).len();
         assert!(

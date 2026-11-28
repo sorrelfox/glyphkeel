@@ -39,6 +39,7 @@ query-equals-text = "=" doesn't apply to { $field }. Use { $field }:word.
 query-bad-date = Dates are written 2026-12-31, or as today, +7d, this-week.
 query-bad-duration = "{ $value }" is not a duration. Write it as 90m, 1.5h, 1h30m or 2d.
 query-bad-number = "{ $value }" is not a whole number.
+query-bad-days = "{ $value }" is not a number of days, such as 3d or -1d.
 query-bad-decimal = "{ $value }" is not a number: write it with a point, for example 2.5.
 query-bad-percent = "{ $value }" is not a percentage from 0 to 100.
 query-bad-key = "{ $value }" is not a task key such as TM-41.
@@ -111,6 +112,9 @@ query-values-estimate = a duration such as { $examples }, or { $none }
 query-values-spent = a duration
 query-values-remaining = a duration: estimate minus logged time
 query-values-progress = a percentage, { $plain } or { $percent }
+query-values-slack = working days of slack on the critical path, such as { $example }; negative when late
+query-values-slip = days later than in the newest baseline, or the one { $baseline } names, such as { $late } or { $early }
+query-values-baseline = a baseline name of the task's project
 query-values-author = { $me }, { $agent }, or an agent's name
 query-values-claimed = an agent's name, or { $any }
 query-values-comments = a number

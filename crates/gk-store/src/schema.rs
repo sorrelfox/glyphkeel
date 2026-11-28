@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -130,6 +130,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 25,
         sql: include_str!("../migrations/0025_attachment_text.sql"),
+    },
+    Migration {
+        version: 26,
+        sql: include_str!("../migrations/0026_baselines.sql"),
     },
 ];
 
@@ -1184,6 +1188,50 @@ mod tests {
         );
         assert!(board(6, None, "Other", "{}").is_err(), "widgets are a list");
         assert!(board(7, None, "Bad", "not json").is_err());
+    }
+
+    #[test]
+    fn baselines_have_names_unique_per_project_and_go_with_it() {
+        let mut conn = memory();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'PF', 'PF', 'pf', 'blue', '{}',
+                     0, 0);",
+        )
+        .unwrap();
+        let baseline = |id: u8, name: &str| {
+            conn.execute(
+                "INSERT INTO baselines (id, project_id, name, name_fold, created_at,
+                                        created_by_kind, created_by_name, updated_at)
+                 VALUES (?1, x'01010101010101010101010101010101', ?2, lower(?2), 0, 'user',
+                         'You', 0)",
+                rusqlite::params![vec![id; 16], name],
+            )
+        };
+        baseline(2, "Plan").unwrap();
+        assert!(
+            baseline(3, "PLAN").is_err(),
+            "names are unique in the project"
+        );
+        assert!(baseline(4, "").is_err(), "a baseline has a name");
+        let entry = |start: Option<&str>, due: Option<&str>| {
+            conn.execute(
+                "INSERT INTO baseline_tasks (baseline_id, task_id, task_key, title, start_date,
+                                             due_date)
+                 VALUES (x'02020202020202020202020202020202', randomblob(16), 'PF-1', 'A', ?1, ?2)",
+                rusqlite::params![start, due],
+            )
+        };
+        entry(Some("2026-12-01"), None).unwrap();
+        assert!(entry(None, None).is_err(), "an entry has a date");
+        conn.execute_batch("DELETE FROM projects").unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM baseline_tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "a project's baselines go with it");
     }
 
     #[test]
