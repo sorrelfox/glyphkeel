@@ -13,6 +13,22 @@ const lanes: LaneOrder[] = [
 ];
 
 describe("step", () => {
+  it("with swimlanes, stays in its lane's row sideways and crosses into the lane above or below", () => {
+    const cells: LaneOrder[] = [
+      { id: "high/todo", cards: ["A", "B"], closed: false, row: 0, column: "todo" },
+      { id: "high/doing", cards: ["C"], closed: false, row: 0, column: "doing" },
+      { id: "low/todo", cards: ["D"], closed: true, row: 1, column: "todo" },
+      { id: "low/doing", cards: [], closed: false, row: 1, column: "doing" },
+      { id: "none/todo", cards: ["E", "F"], closed: false, row: 2, column: "todo" },
+      { id: "none/doing", cards: [], closed: false, row: 2, column: "doing" },
+    ];
+    expect(step(cells, "C", "C", "ArrowRight")).toBeNull();
+    expect(step(cells, "B", "B", "ArrowDown")).toEqual({ lane: "none/todo", index: 0, target: "E" });
+    expect(step(cells, "E", "E", "ArrowUp")).toEqual({ lane: "high/todo", index: 1, target: "B" });
+    expect(step(cells, "C", "C", "ArrowDown")).toEqual({ lane: "low/doing", index: 0, target: "low/doing" });
+    expect(step(cells, "A", "A", "ArrowUp")).toBeNull();
+  });
+
   it("steps one index up or down inside a lane", () => {
     expect(step(lanes, "B", "B", "ArrowDown")).toEqual({ lane: "todo", index: 2, target: "C" });
     expect(step(lanes, "B", "B", "ArrowUp")).toEqual({ lane: "todo", index: 0, target: "A" });

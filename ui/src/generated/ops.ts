@@ -633,6 +633,8 @@ export type Board = {
   hidden_columns: number;
   /** Tasks in hidden columns. */
   hidden_tasks: number;
+  /** The swimlanes in order, the lane without a value last; empty without swimlanes. Each card names its lane. */
+  lanes?: Swimlane[];
   /** The layout the board was built with. */
   layout: BoardLayout;
   /** The project's key. */
@@ -643,6 +645,10 @@ export type Board = {
 export type BoardGetInput = {
   /** Show the sub-projects' tasks too; default: as the layout says. */
   include_subprojects?: boolean | null;
+  /** With `lanes: field`, the select custom field (name or `cf.<query name>`); default: the layout's. */
+  lane_field?: string | null;
+  /** Group the cards into swimlanes by this; default: as the layout says. */
+  lanes?: LaneBy | null;
   /** The project: its key (current or old) or ID. */
   project: string;
   /** Show every closed card, however old. */
@@ -669,6 +675,10 @@ export type BoardLayout = {
   hide_done_after_days: number;
   /** Whether the sub-projects' tasks are on the board too. */
   include_subprojects: boolean;
+  /** With `lanes: field`, the select custom field, as `cf.<query name>`; empty otherwise. */
+  lane_field: string;
+  /** What the swimlanes group the cards by. */
+  lanes: LaneBy;
   /** The column order, as status IDs. Statuses not listed keep their project position between their neighbours. */
   order: string[];
   /** The sort mode of every column without its own. */
@@ -826,6 +836,8 @@ export type Card = {
   key: string;
   /** Its labels. */
   labels: LabelRef[];
+  /** The ID of the swimlane it is in; left out without swimlanes. */
+  lane?: string;
   /** The parent task's key, for a subtask. */
   parent?: string;
   /** Its priority. */
@@ -2608,6 +2620,9 @@ export type LabelUpdateInput = {
   project: string;
 };
 
+/** What the board's swimlanes group the cards by. */
+export type LaneBy = "none" | "parent" | "priority" | "label" | "sprint" | "type" | "field";
+
 /** A layout after a change. */
 export type LayoutChange = {
   /** The history group; left out when nothing changed. */
@@ -2646,6 +2661,10 @@ export type LayoutUpdateInput = {
   hide_done_after_days?: number | null;
   /** Show the sub-projects' tasks too. */
   include_subprojects?: boolean | null;
+  /** The select custom field the lanes group by, by name or as `cf.<query name>`. */
+  lane_field?: string | null;
+  /** What the swimlanes group the cards by: `none`, `parent`, `priority`, `label`, `sprint`, `type` or `field` (with `lane_field`). */
+  lanes?: LaneBy | null;
   /** The column order, by status name or ID; columns left out follow in project order. */
   order?: string[] | null;
   /** The project: its key (current or old) or ID. */
@@ -2839,6 +2858,26 @@ export type ModulesPatch = {
   time?: boolean | null;
   /** The wiki. */
   wiki?: boolean | null;
+};
+
+/** The fields a move changes with the status, as a board swimlane sets them; fields left out keep their value. */
+export type MoveChanges = {
+  /** Labels to add. */
+  add_labels?: string[];
+  /** Fields to clear: `parent`, `sprint` or `labels`. */
+  clear?: TaskField[];
+  /** Custom field values to set, by field name, query name or ID; `null` clears one. */
+  fields?: Record<string, unknown>;
+  /** A new parent task (same project, at most 5 levels, no loops). */
+  parent?: string | null;
+  /** A new priority. */
+  priority?: Priority | null;
+  /** Labels to take off. */
+  remove_labels?: string[];
+  /** Put it in this sprint (name or ID): a planned or active sprint of its project. */
+  sprint?: string | null;
+  /** A new type. */
+  type?: string | null;
 };
 
 /** What moving tasks to another project would do: their new keys, and how their statuses, types and labels would be matched there. */
@@ -4514,6 +4553,28 @@ export type SubtaskReorderInput = {
   override_claim?: boolean;
 };
 
+/** One swimlane: a band across the columns for one value of the field the layout's `lanes` chooses. */
+export type Swimlane = {
+  /** The cards it holds on the board, closed cards behind "Show older" and hidden columns aside. */
+  count: number;
+  /** Those cards by column ID. */
+  counts: Record<string, number>;
+  /** The lane of the cards without a value; it comes last. */
+  empty: boolean;
+  /** Its colour, for a type or label. */
+  hue?: Hue;
+  /** The lane's ID: the priority, the option, or the ID of the type, label, sprint or parent task; `none` for the lane of the cards without a value. */
+  id: string;
+  /** The parent task's key, for a lane of a parent. */
+  key?: string;
+  /** Its name: the priority, the type's, label's, sprint's or option's name, or the parent's title; empty for the lane without a value. */
+  name: string;
+  /** Whether cards can be dropped into it to take its value; a completed sprint can't take tasks. */
+  settable: boolean;
+  /** What a card dropped into the lane gets, as `task.move`'s `changes` take it: the priority, the type's or label's name, the sprint's or parent's ID, or the option; left out for the lane without a value. */
+  value?: string;
+};
+
 /** One task. */
 export type Task = {
   /** The wiki pages, other tasks and comments that mention it, when asked for with `include`. */
@@ -4777,6 +4838,8 @@ export type TaskMoveInput = {
   at?: Edge | null;
   /** Place it before this task of the target status. */
   before?: string | null;
+  /** Changes to the task's own fields made with the move, in the same change, as `task.update` makes them: what a card dropped into a board swimlane takes from it. Not with `project`. */
+  changes?: MoveChanges;
   /** When the move closes the task: `true` closes the open tasks marked as its duplicates too, in the same change (each into the status of the same name in its project, else the first one of the same category); `false` leaves them open without a warning. Left out, they stay open and a warning names them. */
   close_duplicates?: boolean | null;
   /** Refuse the move unless the task still has this version. */
@@ -6927,7 +6990,7 @@ export function makeOps(call: Call) {
       folderUpdate: (input: OpMap["backup.folder.update"]["input"] = {}) => call("backup.folder.update", input),
     },
     board: {
-      /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. (read) */
+      /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts. (read) */
       get: (input: OpMap["board.get"]["input"]) => call("board.get", input),
     },
     checklist: {
@@ -7061,9 +7124,9 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["label.delete"]["input"]) => call("label.delete", input),
     },
     layout: {
-      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers. (read) */
+      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes. (read) */
       get: (input: OpMap["layout.get"]["input"]) => call("layout.get", input),
-      /** Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout. (write) */
+      /** Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers, swimlanes and older closed cards, or reset to the project's layout. (write) */
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
     },
     list: {

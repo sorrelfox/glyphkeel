@@ -50,6 +50,7 @@ import {
   type Link,
   type LinkKind,
   type LabelRef,
+  type LaneBy,
   type MoveCheck,
   type MoveMapping,
   type MoveMatch,
@@ -89,7 +90,7 @@ import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { BUILT_IN_PRESETS, planCsv } from "./csv";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
-import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, followField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, queryName, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
+import { type FakeField, applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, followField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, queryName, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeStatus, type FakeTask, type FakeTimeEntry, type FakeWikiPage, type FakeWorkKind } from "./state";
@@ -108,6 +109,7 @@ import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { FakeDigest } from "./digest";
 import { createFolder, deleteFolder, find as findFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
 import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
+import { assignLanes } from "./swimlanes";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, renameInQuery, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
@@ -171,6 +173,8 @@ const DEFAULT_LAYOUT: Readonly<BoardLayout> = {
   colour_by: "none",
   colour_rules: [],
   covers: "off",
+  lanes: "none",
+  lane_field: "",
 };
 
 /** The colour of each priority's edge; none has none. */
@@ -1077,9 +1081,35 @@ export class FakeWorkspace {
     };
   }
 
-  private board(ref: string, includeInput: boolean | null | undefined, showOlder: boolean): Board {
+  /** The select field of `project` that swimlanes group by. */
+  private laneField(project: FakeProject, ref: string) {
+    const bare = ref.trim().replace(/^cf\./i, "");
+    const field = fieldsFor(this.state, project.id).find((each) => each.kind === "select" && (each.id === ref.trim() || fold(each.name) === fold(bare) || queryName(each.name) === fold(bare)));
+    if (!field) {
+      fail("invalid", `${project.key} has no select field "${ref.trim()}" to group swimlanes by.`, { details: { path: "lane_field", message_id: "board-lane-field-unknown" } });
+    }
+    return field;
+  }
+
+  private board(ref: string, includeInput: boolean | null | undefined, showOlder: boolean, lanesInput?: LaneBy, laneFieldInput?: string): Board {
     const root = this.project(ref);
     const layout = this.layout(root);
+    let laneBy: LaneBy = lanesInput ?? layout.lanes;
+    let laneField: FakeField | undefined;
+    if (laneBy === "field") {
+      if (laneFieldInput !== undefined) {
+        laneField = this.laneField(root, laneFieldInput);
+      } else if (layout.lane_field !== "") {
+        const bare = layout.lane_field.replace(/^cf\./, "");
+        laneField = fieldsFor(this.state, root.id).find((each) => each.kind === "select" && queryName(each.name) === bare);
+      } else {
+        fail("invalid", "Swimlanes by a custom field need `lane_field`: one of the project's select fields.", { details: { path: "lane_field", message_id: "board-lane-field-needed" } });
+      }
+      // A field deleted since the layout named it: no lanes.
+      if (!laneField) {
+        laneBy = "none";
+      }
+    }
     const include = includeInput ?? layout.include_subprojects;
     const onBoard = [root, ...(include ? this.descendants(root).filter((project) => project.state === "active") : [])];
     const base = (status: FakeProject["statuses"][number], project: FakeProject): Column => ({
@@ -1137,12 +1167,21 @@ export class FakeWorkspace {
         column.cards = shown.map((task) => this.boardCard(task, cardFields, edgeOf, layout.covers));
       }
     }
+    const lanes = assignLanes(ordered, {
+      by: laneBy,
+      projects: onBoard,
+      sprints: this.state.sprints ?? [],
+      field: laneField,
+      taskOf: (id) => this.state.tasks.find((task) => task.id === id),
+      keyOf: (task) => this.keyOf(task),
+    });
     return {
       project: root.key,
       columns: ordered,
-      layout: { ...layout, include_subprojects: include },
+      layout: { ...layout, include_subprojects: include, lanes: laneBy, lane_field: laneField ? `cf.${queryName(laneField.name)}` : "" },
       hidden_columns: hiddenColumns,
       hidden_tasks: hiddenTasks,
+      ...(lanes.length === 0 ? {} : { lanes }),
     };
   }
 
@@ -1663,7 +1702,8 @@ export class FakeWorkspace {
   }
 
   private layout(project: FakeProject): BoardLayout {
-    return structuredClone(this.state.layouts[project.id] ?? DEFAULT_LAYOUT);
+    // Layouts saved before swimlanes take their defaults for them.
+    return structuredClone({ ...DEFAULT_LAYOUT, ...this.state.layouts[project.id] });
   }
 
   private typeIn(project: FakeProject, ref: string, path = "type") {
@@ -3299,7 +3339,7 @@ export class FakeWorkspace {
       const removed = deleteField(this.state, field);
       return this.fieldChange(field, ["deleted"], removed);
     },
-    "board.get": ({ project, include_subprojects, show_older }) => this.board(project, include_subprojects, show_older === true),
+    "board.get": ({ project, include_subprojects, show_older, lanes, lane_field }) => this.board(project, include_subprojects, show_older === true, lanes ?? undefined, lane_field ?? undefined),
     "layout.get": ({ project: ref }) => {
       const project = this.project(ref);
       return { project: project.key, layout: this.layout(project) };
@@ -3377,6 +3417,21 @@ export class FakeWorkspace {
       }
       if (input.covers !== null && input.covers !== undefined) {
         next.covers = input.covers;
+      }
+      if (input.lane_field !== null && input.lane_field !== undefined) {
+        if (input.lane_field.trim() === "") {
+          next.lane_field = "";
+        } else {
+          next.lane_field = `cf.${queryName(this.laneField(project, input.lane_field).name)}`;
+        }
+      }
+      if (input.lanes !== null && input.lanes !== undefined) {
+        next.lanes = input.lanes;
+      }
+      if (next.lanes !== "field") {
+        next.lane_field = "";
+      } else if (next.lane_field === "") {
+        fail("invalid", "Swimlanes by a custom field need `lane_field`: one of the project's select fields.", { details: { path: "lane_field", message_id: "board-lane-field-needed" } });
       }
       this.state.layouts[project.id] = next;
       return {
@@ -4984,13 +5039,34 @@ export class FakeWorkspace {
       this.touch(sub, false);
       return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [{ entity: "task", id: sub.id, fields: ["subtask_rank"], project: this.projectOf(sub).key }] };
     },
-    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at, close_duplicates, fields: values }) => {
+    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at, close_duplicates, fields: values, changes }) => {
       const task = this.task(key);
       const from = this.writable(this.projectOf(task).key);
       if (expected_version !== null && expected_version !== undefined && expected_version !== task.version) {
         fail("conflict", `${this.keyOf(task)} changed since you read it.`, { details: { current_version: task.version } });
       }
       const fields: string[] = [];
+      // The fields a swimlane sets go first, so the status's entry rules see them; one change with the move.
+      const laneChanges: EntityChange[] = [];
+      if (changes && Object.keys(changes).length > 0) {
+        if (toProject !== null && toProject !== undefined && this.project(toProject).id !== from.id) {
+          fail("invalid", "A move to another project can't change the task's fields as well; move it first, then change them.", { details: { path: "changes", message_id: "task-move-changes-with-project" } });
+        }
+        const updated = this.handlers["task.update"]?.({
+          key,
+          ...some("type", changes.type),
+          ...some("priority", changes.priority),
+          ...some("sprint", changes.sprint),
+          ...some("parent", changes.parent),
+          ...(changes.add_labels && changes.add_labels.length > 0 ? { add_labels: changes.add_labels } : {}),
+          ...(changes.remove_labels && changes.remove_labels.length > 0 ? { remove_labels: changes.remove_labels } : {}),
+          ...(changes.clear && changes.clear.length > 0 ? { clear: changes.clear } : {}),
+          ...(changes.fields && Object.keys(changes.fields).length > 0 ? { fields: changes.fields } : {}),
+        });
+        if (isResult(updated)) {
+          laneChanges.push(...updated.changes);
+        }
+      }
       const warnings: string[] = [];
       const to = toProject === null || toProject === undefined ? from : this.writable(toProject);
       // A move refused for a required field changes nothing, as in the engine.
@@ -5030,6 +5106,7 @@ export class FakeWorkspace {
       }
       this.touch(task, fields.includes("status"));
       const change = this.taskChange(task, fields);
+      change.changes.push(...laneChanges);
       for (const sub of moved.filter((other) => other !== task)) {
         change.changes.push({ entity: "task", id: sub.id, fields: ["project", "number", "status", "type", "labels", "rank"], project: to.key });
       }

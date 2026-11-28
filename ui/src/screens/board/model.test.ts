@@ -32,6 +32,8 @@ const LAYOUT: BoardLayout = {
   colour_by: "none",
   colour_rules: [],
   covers: "off",
+  lanes: "none",
+  lane_field: "",
 };
 
 function card(key: string, overrides: Partial<Card> = {}): Card {

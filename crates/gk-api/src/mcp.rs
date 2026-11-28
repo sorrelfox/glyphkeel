@@ -908,7 +908,9 @@ name and kind; others are left off, with a warning. A required custom field of t
 task would lack takes its default, else the move is refused unless `fields` ({name: value}) gives \
 it. Entering a done or cancelled status closes the task; \
 `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left \
-out, a warning names them). \
+out, a warning names them). `changes` ({type, priority, add_labels, remove_labels, sprint, \
+parent, fields, clear}) changes those fields in the same change, as dropping a card into a board \
+swimlane does: a lane's `value` is what it sets. \
 Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
         main: "task.move",
         covers: &["task.move"],
@@ -1403,8 +1405,10 @@ hidden ones flagged (and their cards left out), WIP limits and whether a column 
 compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by \
 status name. Closed cards older than the layout's limit are counted, not listed, unless \
 `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and \
-their `cover` image when the layout sets them. \
-Example: get_board {\"project\": \"TM\"}",
+their `cover` image when the layout sets them. With swimlanes (the layout's, or `lanes`: parent, \
+priority, label, sprint, type, or field with `lane_field`), `lanes` lists each lane with its \
+`counts` per column ID and total, the lane without a value last, and each card names its `lane`. \
+Example: get_board {\"project\": \"TM\", \"lanes\": \"priority\"}",
         main: "board.get",
         covers: &["board.get", "layout.get"],
         idempotent: true,
@@ -1418,7 +1422,9 @@ Example: get_board {\"project\": \"TM\"}",
 priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, \
 `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, \
 or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), \
-`covers` (off, chosen, first_image), or `reset` to the project's layout. It never changes the \
+`covers` (off, chosen, first_image), the swimlanes (`lanes`: none, parent, priority, label, \
+sprint, type, or field with `lane_field`, a select field; which lanes are collapsed is the \
+person's own setting in the app), or `reset` to the project's layout. It never changes the \
 project's statuses. Only change the layout when the person asked. \
 Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
         main: "layout.update",

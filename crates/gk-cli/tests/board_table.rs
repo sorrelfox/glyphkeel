@@ -82,3 +82,64 @@ fn the_board_lists_columns_and_cards_with_their_edge_and_cover() {
     assert_eq!(json["columns"][0]["cards"][0]["edge"]["name"], "Bugs");
     assert_eq!(json["columns"][0]["cards"][1]["cover"]["name"], "shot.png");
 }
+
+#[test]
+fn the_board_shows_swimlanes_by_priority_and_keeps_them_in_the_layout() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    for (title, priority) in [("Crash on start", "urgent"), ("Write notes", "low")] {
+        ws.ok(&[
+            "-q",
+            "task",
+            "create",
+            "--project",
+            "GK",
+            "--title",
+            title,
+            "--priority",
+            priority,
+        ]);
+    }
+    ws.ok(&["-q", "task", "create", "--project", "GK", "--title", "Tidy"]);
+
+    let text = ws.ok(&["board", "GK", "--lanes", "priority"]);
+    assert!(text.contains("\nColumns\n  Backlog (3 tasks)\n"), "{text}");
+    assert!(
+        text.contains("\nLane: Urgent (1 task)\n  Backlog (1)\n    GK-1  Crash on start\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nLane: High (0 tasks)\n  no cards\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nLane: No priority (1 task)\n  Backlog (1)\n    GK-3  Tidy\n"),
+        "{text}"
+    );
+    // The lane without a value comes last.
+    assert!(text.trim_end().ends_with("GK-3  Tidy"), "{text}");
+
+    // The JSON carries the lanes, and each card its lane.
+    let json = ws.json(&["board", "GK", "--lanes", "priority"]);
+    assert_eq!(json["lanes"][0]["id"], "urgent");
+    assert_eq!(
+        json["lanes"][0]["counts"].as_object().unwrap().len(),
+        json["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["hidden"] == false)
+            .count()
+    );
+    assert_eq!(json["columns"][0]["cards"][0]["lane"], "urgent");
+
+    // Kept in the layout; the plain board then has them.
+    ws.ok(&["-q", "board", "layout", "set", "GK", "--lanes", "priority"]);
+    let text = ws.ok(&["board", "GK"]);
+    assert!(
+        text.contains("\nLane: Low (1 task)\n  Backlog (1)\n"),
+        "{text}"
+    );
+    let json = ws.json(&["board", "GK", "--lanes", "none"]);
+    assert!(json.get("lanes").is_none());
+}

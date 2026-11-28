@@ -47,7 +47,7 @@ interface SortableCardProps {
   dropDisabled: boolean;
 }
 
-function SortableCard({ card, handlers, sortable, dropDisabled }: SortableCardProps) {
+export function SortableCard({ card, handlers, sortable, dropDisabled }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.key,
     data: { kind: "card" },
@@ -123,7 +123,7 @@ interface LaneProps {
 }
 
 /** The count in a column's header: alone, against the WIP limit, or against the minimum and the limit. */
-function laneCount(t: ReturnType<typeof useT>, count: number, limit: number | undefined, min: number | undefined): string | number {
+export function laneCount(t: ReturnType<typeof useT>, count: number, limit: number | undefined, min: number | undefined): string | number {
   if (min !== undefined && limit !== undefined) {
     return t("lane-wip-range", { count, min, limit });
   }
@@ -134,7 +134,7 @@ function laneCount(t: ReturnType<typeof useT>, count: number, limit: number | un
 }
 
 /** The column's accessible name, with its WIP limit and minimum. */
-function laneLabel(t: ReturnType<typeof useT>, name: string, count: number, limit: number | undefined, min: number | undefined, under: boolean): string {
+export function laneLabel(t: ReturnType<typeof useT>, name: string, count: number, limit: number | undefined, min: number | undefined, under: boolean): string {
   if (under && min !== undefined) {
     return t("lane-label-under", { name, count, min });
   }
@@ -244,7 +244,7 @@ const NO_TEMPLATE = "none";
  * Escape closes. With task templates, a choice of one to start from; the
  * title may then stay empty for the template's own.
  */
-function AddTaskField({ name, templates, onCreate, onStop }: { name: string; templates: readonly TemplateSummary[]; onCreate: (title: string, template: string | null) => void; onStop: () => void }) {
+export function AddTaskField({ name, templates, onCreate, onStop }: { name: string; templates: readonly TemplateSummary[]; onCreate: (title: string, template: string | null) => void; onStop: () => void }) {
   const t = useT();
   const [title, setTitle] = useState("");
   const [template, setTemplate] = useState(NO_TEMPLATE);
@@ -306,11 +306,11 @@ interface VirtualBodyProps {
   closed: boolean;
   setDroppable: (element: HTMLElement | null) => void;
   onScroller: (scroller: { run: (index: number) => void } | null) => void;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 /** A long lane draws only the cards in view, plus the dragged one, which stays mounted while it scrolls away. */
-function VirtualBody({ keys, cards, handlers, active, sortable, closed, setDroppable, onScroller, children }: VirtualBodyProps) {
+export function VirtualBody({ keys, cards, handlers, active, sortable, closed, setDroppable, onScroller, children }: VirtualBodyProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragged = active === null ? -1 : keys.indexOf(active);
   // eslint-disable-next-line react-hooks/incompatible-library -- the virtualizer returns new functions each render, so React Compiler rightly leaves this component unmemoized

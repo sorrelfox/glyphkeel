@@ -181,6 +181,12 @@
       "ports": { "ui": 5334 }
     },
     {
+      "name": "swimlanes",
+      "config": "playwright.swimlanes.config.ts",
+      "about": "board swimlanes against the engine: drops across lanes, Undo, collapsed lanes after a reload",
+      "ports": { "ui": 5310, "bridge": 5320 }
+    },
+    {
       "name": "pseudo",
       "config": "playwright.pseudo.config.ts",
       "about": "screenshots in a pseudo-locale, on the development server (the pseudo suite)",

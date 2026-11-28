@@ -7,7 +7,8 @@ import { ACCENTS, DEFAULT_APPEARANCE, DENSITIES, THEMES, type Appearance } from 
 
 /**
  * Personal settings of this window that aren't workspace data: the
- * appearance, the sidebar's closed projects and the board's card size. The
+ * appearance, the sidebar's closed projects, the board's card size and its
+ * collapsed swimlanes. The
  * web view keeps nothing between starts, so in the app they live in the
  * app's settings file: the app hands them over before the page's first
  * frame (so the theme doesn't flash) and keeps every change. A plain
@@ -120,4 +121,18 @@ export function loadCardSize(project: string): CardSize {
 
 export function saveCardSize(project: string, size: CardSize): void {
   writePref(`board.cardSize.${project}`, size);
+}
+
+/**
+ * The swimlanes (by lane ID) collapsed on a project's board (by project ID),
+ * for one grouping: a lane's ID means something only within its grouping
+ * (`priority`, `label`, `field:cf.area`…).
+ */
+export function loadCollapsedLanes(project: string, grouping: string): string[] {
+  const stored = readPref(`board.collapsedLanes.${project}.${grouping}`);
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
+}
+
+export function saveCollapsedLanes(project: string, grouping: string, ids: readonly string[]): void {
+  writePref(`board.collapsedLanes.${project}.${grouping}`, ids);
 }

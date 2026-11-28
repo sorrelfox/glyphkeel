@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, IterationCw, Network, SlidersHorizontal, Tag } from "lucide-react";
+import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, IterationCw, Network, Rows3, SlidersHorizontal, Tag } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, type Selection } from "react-aria-components";
 
@@ -15,6 +15,7 @@ import { useT } from "../../i18n/I18n";
 import { joinable, useSprints } from "../../data/sprints";
 import { ColourRulesDialog } from "./ColourRules";
 import { BACKLOG, DUE_FILTERS, type BoardView, type Filters } from "./model";
+import { LANE_KINDS } from "./swimlanes";
 import styles from "./Board.module.css";
 
 interface ToolbarProps {
@@ -116,6 +117,9 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
   const hiddenTasks = view.hidden.reduce((sum, hidden) => sum + hidden.count, 0);
   const sorted = layout.sort_mode !== "manual";
   const [editingRules, setEditingRules] = useState(false);
+  const selectFields = customFields.filter((field) => field.kind === "select");
+  const laneField = selectFields.find((field) => field.query_name === layout.lane_field);
+  const lanesName = layout.lanes === "field" ? (laneField?.name ?? t("lanes-by-fields")) : t(`lanes-by-${layout.lanes}`);
 
   return (
     <div className={classes("toolbar", styles.toolbar)} role="toolbar" aria-label={t("board-toolbar")}>
@@ -227,6 +231,43 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
           <ChevronDown className="ic s" />
         </MenuButton>
       )}
+      <MenuButton
+        label={t("board-lanes-label", { by: lanesName })}
+        on={layout.lanes !== "none"}
+        entries={[
+          ...LANE_KINDS.map(
+            (by): MenuEntry => ({
+              id: `lanes-${by}`,
+              label: t(`lanes-by-${by}`),
+              checked: layout.lanes === by,
+              run: () => {
+                onLayout({ lanes: by });
+              },
+            }),
+          ),
+          ...(selectFields.length === 0
+            ? []
+            : [
+                {
+                  id: "lanes-fields",
+                  section: t("lanes-by-fields"),
+                  // Their names are the person's own words.
+                  items: selectFields.map((field) => ({
+                    id: `lanes-${field.query_name}`,
+                    label: field.name,
+                    checked: layout.lanes === "field" && layout.lane_field === field.query_name,
+                    run: () => {
+                      onLayout({ lanes: "field", lane_field: field.query_name });
+                    },
+                  })),
+                } satisfies MenuEntry,
+              ]),
+        ]}
+      >
+        <Rows3 className="ic" />
+        <span className="hide-narrow">{layout.lanes === "none" ? t("board-lanes") : lanesName}</span>
+        <ChevronDown className="ic s muted" />
+      </MenuButton>
       <MenuButton
         label={t("board-sort-label", { mode: t(`sort-${layout.sort_mode}`) })}
         on={sorted}

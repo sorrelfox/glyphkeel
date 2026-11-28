@@ -593,6 +593,52 @@ pub struct TaskMoveInput {
     /// would otherwise have no value of.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Changes to the task's own fields made with the move, in the same
+    /// change, as `task.update` makes them: what a card dropped into a
+    /// board swimlane takes from it. Not with `project`.
+    #[serde(default, skip_serializing_if = "MoveChanges::is_empty")]
+    pub changes: MoveChanges,
+}
+
+/// The fields a move changes with the status, as a board swimlane sets
+/// them; fields left out keep their value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveChanges {
+    /// A new type.
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub task_type: Option<String>,
+    /// A new priority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
+    /// Labels to add.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub add_labels: Vec<String>,
+    /// Labels to take off.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remove_labels: Vec<String>,
+    /// Put it in this sprint (name or ID): a planned or active sprint of
+    /// its project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<String>,
+    /// A new parent task (same project, at most 5 levels, no loops).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Custom field values to set, by field name, query name or ID; `null`
+    /// clears one.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
+    /// Fields to clear: `parent`, `sprint` or `labels`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear: Vec<TaskField>,
+}
+
+impl MoveChanges {
+    /// Whether it changes nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
 }
 
 /// What tasks moving to another project take there in place of the

@@ -262,3 +262,107 @@
   font-size: var(--fs-small);
   color: var(--fg-muted);
 }
+
+/* ---------- swimlanes ---------- */
+
+/* The board with swimlanes scrolls on its own, both ways; the page never sideways. */
+.swimBoard {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px 12px 12px;
+  overflow: auto;
+  overscroll-behavior: none;
+}
+
+/* The column headers stay in view while the lanes scroll under them. */
+.swimHead,
+.swimCells {
+  display: grid;
+  column-gap: 10px;
+  inline-size: max-content;
+  min-inline-size: 100%;
+}
+
+.swimHead {
+  position: sticky;
+  z-index: 1;
+  inset-block-start: 0;
+  align-items: start;
+  background: var(--bg);
+}
+
+.swimColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.swimAdd {
+  padding: 0 6px 6px;
+}
+
+.swimlane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The lane's name stays at the inline start while the board scrolls sideways. */
+.swimHeader {
+  position: sticky;
+  inset-inline-start: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  inline-size: max-content;
+  max-inline-size: 100%;
+}
+
+.swimName {
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--fs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swimGap {
+  min-block-size: 36px;
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-block-size: 52px;
+
+  /* A long cell scrolls within the lane. */
+  max-block-size: 70vh;
+  border-radius: var(--r-l);
+  background: var(--sunken);
+  contain: content;
+}
+
+.cellCount {
+  align-self: flex-end;
+  margin-block: 4px 2px;
+  margin-inline-end: 8px;
+}
+
+.cellBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-block-size: 24px;
+  padding: 1px 6px 6px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
