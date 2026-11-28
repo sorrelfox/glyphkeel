@@ -67,6 +67,30 @@ Projects) and by **Project**.
 
 From the command line: `glyphkeel search "release notes"`.
 
+### Text inside attached files
+
+Search also reads the text inside attached files: plain text, Markdown, CSV,
+JSON and source code in any common encoding, the text of PDF documents, and
+Word, Excel and PowerPoint (`.docx`, `.xlsx`, `.pptx`) and OpenDocument
+(`.odt`, `.ods`, `.odp`) files. A result shows the file, its task and the
+words around the match, such as *In file contract.pdf of TM-12: …*.
+
+- A scanned PDF holds only pictures of its pages, so it is found by its name
+  only: Glyphkeel doesn't recognise text in images.
+- Files are read in the background a few seconds after they are attached,
+  without other programs and without going online. Every file is treated as
+  untrusted: at most 1 MB of text is kept per file, reading a file stops after
+  10 seconds, and archives that would unpack to far more than their size (ZIP
+  bombs) are refused.
+- Files attached before the update are read once, in the background.
+  **Preferences → Data → Search inside files** shows how far that has come, and
+  **Read again** reads every file again.
+- In an encrypted workspace the text is kept only inside the encrypted
+  database.
+
+In the list, `in:files` and `-in:files` choose whether the words of a query
+are looked for inside files (see the [query language](../query-language.md)).
+
 Search finds text. To filter tasks by their fields, use a
 [query](../query-language.md) in the list.
 

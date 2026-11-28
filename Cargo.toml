@@ -26,6 +26,7 @@ publish = false
 gk-api = { path = "crates/gk-api" }
 gk-core = { path = "crates/gk-core" }
 gk-engine = { path = "crates/gk-engine" }
+gk-extract = { path = "crates/gk-extract" }
 gk-markdown = { path = "crates/gk-markdown" }
 gk-mcp = { path = "crates/gk-mcp" }
 gk-query = { path = "crates/gk-query" }
@@ -199,6 +200,15 @@ futures-util = { version = "0.3.34", default-features = false, features = ["sink
 # Export archives: reading and writing `.zip` files. Only the deflate method
 # (through flate2, already in the lock), no encryption or other codecs.
 zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2"] }
+# Search inside attached files (gk-extract): the text layer of PDFs, pure
+# Rust, without its optional features (no image decoding, no async); the
+# XML of Office Open XML and OpenDocument files, read as events without
+# DTDs or entity expansion (already in the lock); and the encoding of text
+# files, guessed by chardetng and decoded by encoding_rs.
+lopdf = { version = "0.47.0", default-features = false }
+quick-xml = "0.42.0"
+chardetng = "1.0.0"
+encoding_rs = "0.8.35"
 # IDs: UUIDv7.
 uuid = { version = "1.29.3", features = ["v7"] }
 

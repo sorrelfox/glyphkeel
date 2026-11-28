@@ -55,11 +55,22 @@ project:TM/* NOT category:done
 
 ## Words
 
-Words without a field search the title, the description and the comments:
+Words without a field search the title, the description, the comments and
+the text inside the files attached to the task or its comments (text, PDF and
+Office documents; see [Search](guide/search.md#text-inside-attached-files)):
 
 ```text
 login timeout is:open
 "release notes"
+```
+
+`in:files` looks for the query's words only inside attached files, and
+`-in:files` leaves the files out. Either applies to all the words of the
+query, so it can't be one side of `OR`:
+
+```text
+invoice in:files
+login -in:files
 ```
 
 ## Sorting
@@ -117,8 +128,11 @@ is:unscheduled     is:milestone        is:over-estimate
 has:due            has:estimate        has:description    has:labels
 has:version        has:sprint          has:files          has:comments
 has:subtasks       has:parent          has:links          has:time
-has:reminder
+has:reminder       has:attachment-text
 ```
+
+`has:attachment-text` finds tasks with an attached file whose text search
+reads.
 
 Combine them with `-`: `is:open -has:labels` finds open tasks without labels.
 

@@ -1,0 +1,15 @@
+---
+source: crates/gk-query/tests/sql.rs
+expression: "golden(&[\"invoice in:files\", \"invoice -in:files description:draft\",\n\"has:attachment-text -has:attachment-text\",], None,)"
+---
+-- invoice in:files
+WITH m(docid, score) AS MATERIALIZED (SELECT rowid, bm25(fts_words) FROM fts_words WHERE fts_words MATCH ?), rel(task_id, score) AS (SELECT d.task_id, min(m.score) FROM m JOIN search_docs d ON d.docid = m.docid WHERE d.kind IN ('file') GROUP BY d.task_id) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('file'))), 0) ORDER BY rel.score ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "\"invoice\"*", "body : \"invoice\"*", 50, 0
+
+-- invoice -in:files description:draft
+WITH m(docid, score) AS MATERIALIZED (SELECT rowid, bm25(fts_words) FROM fts_words WHERE fts_words MATCH ?), rel(task_id, score) AS (SELECT d.task_id, min(m.score) FROM m JOIN search_docs d ON d.docid = m.docid WHERE d.kind IN ('task', 'comment') GROUP BY d.task_id) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task', 'comment'))), 0) AND coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task'))), 0)) ORDER BY rel.score ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "\"invoice\"* OR \"draft\"*", "\"invoice\"*", "body : \"draft\"*", 50, 0
+
+-- has:attachment-text -has:attachment-text
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((EXISTS (SELECT 1 FROM search_docs d WHERE d.task_id = t.id AND d.kind = 'file' AND d.body <> '')), 0) AND NOT coalesce((EXISTS (SELECT 1 FROM search_docs d WHERE d.task_id = t.id AND d.kind = 'file' AND d.body <> '')), 0)) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: 50, 0

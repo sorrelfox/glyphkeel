@@ -24,6 +24,9 @@ export function sniff(bytes: Uint8Array, name: string): { kind: FileKind; mime: 
   if (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45) {
     return { kind: "image", mime: "image/webp" };
   }
+  if (starts(0x25, 0x50, 0x44, 0x46, 0x2d)) {
+    return { kind: "other", mime: "application/pdf" };
+  }
   if (/\.(html?|sh|bat|cmd|exe|ps1|js|py)$/i.test(name) || starts(0x7f, 0x45, 0x4c, 0x46) || starts(0x4d, 0x5a)) {
     return { kind: "executable", mime: "application/octet-stream" };
   }
@@ -33,6 +36,23 @@ export function sniff(bytes: Uint8Array, name: string): { kind: FileKind; mime: 
   } catch {
     return { kind: "other", mime: "application/octet-stream" };
   }
+}
+
+/**
+ * The text search reads inside a file, plainer than the engine's: a text
+ * file's text, and the strings a PDF's pages show with `Tj`. Nothing for
+ * other kinds.
+ */
+export function textInside(bytes: Uint8Array, mime: string): string | undefined {
+  if (mime.startsWith("text/")) {
+    return new TextDecoder().decode(bytes);
+  }
+  if (mime === "application/pdf") {
+    const raw = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    const shown = Array.from(raw.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g), (match) => (match[1] ?? "").replace(/\\(.)/g, "$1"));
+    return shown.length > 0 ? shown.join(" ") : undefined;
+  }
+  return undefined;
 }
 
 export function decodeBase64(text: string): Uint8Array | null {

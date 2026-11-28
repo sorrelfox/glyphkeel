@@ -207,6 +207,8 @@ export interface FakeFile {
   size: number;
   /** The content. */
   base64: string;
+  /** The text search reads inside it, when it has any. */
+  text?: string;
   width?: number;
   height?: number;
   createdAt: string;

@@ -1477,7 +1477,7 @@
               },
               {
                 "const": "file",
-                "description": "A file attached to a task or comment, by its name.",
+                "description": "A file attached to a task, comment or wiki page: by its name, or by\nthe text inside it (`matched_in` is then `text`, with a snippet).",
                 "type": "string"
               }
             ]
@@ -1585,7 +1585,7 @@
               },
               {
                 "const": "text",
-                "description": "The text: a description, a page's text or a comment.",
+                "description": "The text: a description, a page's text, a comment or the text\ninside a file.",
                 "type": "string"
               },
               {
@@ -1697,7 +1697,7 @@
               },
               {
                 "const": "file",
-                "description": "A file attached to a task or comment, by its name.",
+                "description": "A file attached to a task, comment or wiki page: by its name, or by\nthe text inside it (`matched_in` is then `text`, with a snippet).",
                 "type": "string"
               }
             ]
@@ -1757,7 +1757,7 @@
       },
       "output_name": "SearchResult",
       "safety": "read",
-      "summary": "Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task."
+      "summary": "Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task."
     },
     {
       "cli": "project list",
@@ -81084,6 +81084,132 @@
       "output_name": "FileCoverChange",
       "safety": "write",
       "summary": "Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on."
+    },
+    {
+      "app_reason": "Upkeep of the search index, shown in the app's preferences; agents search the text with search.query.",
+      "exposure": "app",
+      "id": "file.index_status",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "FileIndexInput",
+        "type": "object"
+      },
+      "input_name": "FileIndexInput",
+      "kind": "query",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "How far reading the text inside attached files has come, for search.\nCounted by file content: the same file attached twice counts once.",
+        "properties": {
+          "files": {
+            "description": "The files in use.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "read": {
+            "description": "The files read so far, with or without text.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "The files of a kind that is read (text, PDF, Office) that gave no\ntext: scanned, encrypted, damaged, too large or refused as unsafe.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "waiting": {
+            "description": "The files waiting to be read; the program holding the background\njobs reads them a few at a time.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "with_text": {
+            "description": "The files whose text search finds.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "read",
+          "waiting",
+          "with_text",
+          "skipped"
+        ],
+        "title": "FileIndexStatus",
+        "type": "object"
+      },
+      "output_name": "FileIndexStatus",
+      "safety": "read",
+      "summary": "How far reading the text inside attached files for search has come: files in use, read, waiting, with text and skipped."
+    },
+    {
+      "app_reason": "Upkeep of the search index, started from the app's preferences; it changes no data of the workspace.",
+      "exposure": "app",
+      "id": "file.reindex",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "FileIndexInput",
+        "type": "object"
+      },
+      "input_name": "FileIndexInput",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "How far reading the text inside attached files has come, for search.\nCounted by file content: the same file attached twice counts once.",
+        "properties": {
+          "files": {
+            "description": "The files in use.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "read": {
+            "description": "The files read so far, with or without text.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "The files of a kind that is read (text, PDF, Office) that gave no\ntext: scanned, encrypted, damaged, too large or refused as unsafe.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "waiting": {
+            "description": "The files waiting to be read; the program holding the background\njobs reads them a few at a time.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "with_text": {
+            "description": "The files whose text search finds.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "read",
+          "waiting",
+          "with_text",
+          "skipped"
+        ],
+        "title": "FileIndexStatus",
+        "type": "object"
+      },
+      "output_name": "FileIndexStatus",
+      "safety": "write",
+      "summary": "Read the text inside every attached file again, in the background, keeping the text found so far until each file is read."
     },
     {
       "cli": "agents sessions",
