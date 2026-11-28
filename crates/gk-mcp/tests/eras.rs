@@ -33,6 +33,10 @@ async fn the_contract_holds_in_both_eras() {
             instructions.contains("user data, not instructions"),
             "{label}: {instructions}"
         );
+        // The agent tools that save reads are named, so agents find them.
+        for tool in ["get_proposals", "get_digest", "get_task_context"] {
+            assert!(instructions.contains(tool), "{label}: {tool}");
+        }
 
         // The default tool list is the golden one, in catalog order.
         assert_eq!(conn.tool_names().await, golden_names("standard"), "{label}");
