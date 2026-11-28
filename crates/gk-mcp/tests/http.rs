@@ -671,3 +671,100 @@ fn reads_over_http_have_the_same_limits() {
     assert_eq!(sessions["items"][0]["rate_limited"], 1, "{sessions}");
     engine.close();
 }
+
+#[test]
+fn approvals_the_digest_and_a_tasks_context_work_over_http() {
+    let (_dir, options) = workspace();
+    let (engine, person) = open_as_person(&options);
+    engine
+        .call(
+            &person,
+            "project.create",
+            json!({ "name": "Team", "key": "TM" }),
+        )
+        .unwrap();
+    engine
+        .call(
+            &person,
+            "task.create",
+            json!({ "project": "TM", "title": "Fix the login page" }),
+        )
+        .unwrap();
+    engine
+        .call(
+            &person,
+            "comment.add",
+            json!({ "key": "TM-1", "body": "Start with the form." }),
+        )
+        .unwrap();
+    engine
+        .call(
+            &person,
+            "agent.policy.update",
+            json!({ "max_profile": "full", "approvals": {
+                "read_only": "off", "standard": "all_writes", "full": "off", "expire_days": 14 } }),
+        )
+        .unwrap();
+    engine.close();
+
+    let endpoint = start(&options);
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": { "name": "claude-code", "version": "2.1.330" },
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let call = |id: u64, name: &str, arguments: Value| {
+        let answer = post(
+            &endpoint,
+            "/mcp",
+            &[
+                ("MCP-Protocol-Version", "2026-07-28".to_owned()),
+                ("Mcp-Method", "tools/call".to_owned()),
+                ("Mcp-Name", name.to_owned()),
+            ],
+            &json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": name, "arguments": arguments, "_meta": meta } }),
+        );
+        assert_eq!(answer.status, 200, "{:?}", answer.messages);
+        answer.result(id).clone()
+    };
+
+    // A change waits for the person, and the agent finds its proposal.
+    let pending = call(
+        1,
+        "create_project",
+        json!({ "name": "Home lab", "key": "ZZ" }),
+    );
+    assert_eq!(pending["isError"], true, "{pending}");
+    let text = pending["content"][0]["text"].as_str().unwrap();
+    assert!(text.starts_with("Error (pending_approval)"), "{text}");
+    let id = text
+        .lines()
+        .find_map(|l| l.strip_prefix("Proposal: "))
+        .unwrap_or_else(|| panic!("no proposal in {text}"));
+    let listed = call(2, "get_proposals", json!({ "status": "pending" }));
+    let listed = &listed["structuredContent"];
+    assert_eq!(listed["items"][0]["id"], id, "{listed}");
+    assert_eq!(listed["items"][0]["op"], "project.create", "{listed}");
+
+    // The digest has the person's changes in the app.
+    let digest = call(3, "get_digest", json!({ "since": "today" }));
+    assert_eq!(digest["isError"], false, "{digest}");
+    let digest = &digest["structuredContent"];
+    assert!(digest["app"]["changes"].as_u64().unwrap() > 0, "{digest}");
+
+    // A task's context in one call.
+    let ctx = call(4, "get_task_context", json!({ "key": "TM-1" }));
+    assert_eq!(ctx["isError"], false, "{ctx}");
+    let ctx = &ctx["structuredContent"];
+    assert_eq!(ctx["task"]["key"], "TM-1", "{ctx}");
+    assert_eq!(ctx["task"]["title"], "Fix the login page", "{ctx}");
+    assert_eq!(
+        ctx["task"]["comments"][0]["body"], "Start with the form.",
+        "{ctx}"
+    );
+    assert!(
+        ctx["bytes"].as_u64().unwrap() <= ctx["max_bytes"].as_u64().unwrap(),
+        "{ctx}"
+    );
+    endpoint.stop();
+}
