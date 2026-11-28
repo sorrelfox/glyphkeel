@@ -81,6 +81,80 @@ pub(crate) fn show(value: &Value) -> String {
     out
 }
 
+/// `board.get_across`: the board across projects, a column for each
+/// status category, each card with its real status.
+#[must_use]
+pub(crate) fn across(value: &Value) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "{}", text("cli-board-across-heading", &[]));
+    let query = str_of(value, "query");
+    if !query.is_empty() {
+        let _ = writeln!(
+            out,
+            "{}",
+            text("cli-board-across-query", &[("query", query.to_owned())])
+        );
+    }
+    if let Some(folder) = value["folder"].as_str() {
+        let _ = writeln!(
+            out,
+            "{}",
+            text("cli-board-across-folder", &[("folder", folder.to_owned())])
+        );
+    }
+    // The columns are categories: their names are the program's.
+    let mut columns: Vec<Value> = value["columns"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice)
+        .to_vec();
+    for column in &mut columns {
+        let name = text(
+            "cli-board-category",
+            &[("category", str_of(column, "category").to_owned())],
+        );
+        column["name"] = Value::String(name);
+        if let Some(cards) = column["cards"].as_array_mut() {
+            for card in cards {
+                let status = str_of(&card["status"], "name").to_owned();
+                if !status.is_empty() {
+                    let title = format!(
+                        "{}  {}",
+                        str_of(card, "title"),
+                        text("cli-board-status", &[("status", status)])
+                    );
+                    card["title"] = Value::String(title);
+                }
+            }
+        }
+    }
+    let shown: Vec<&Value> = columns.iter().collect();
+    let key_width = shown
+        .iter()
+        .flat_map(|c| c["cards"].as_array().map_or(&[][..], Vec::as_slice))
+        .map(|card| str_of(card, "key").chars().count())
+        .max()
+        .unwrap_or(0);
+    let lanes = value["lanes"].as_array().map_or(&[][..], Vec::as_slice);
+    if lanes.is_empty() {
+        for column in shown {
+            out.push('\n');
+            column_text(&mut out, column, key_width);
+        }
+    } else {
+        out.push('\n');
+        let _ = writeln!(out, "{}", text("cli-board-columns", &[]));
+        for column in &shown {
+            let _ = writeln!(out, "  {}", heading(column));
+        }
+        let by = str_of(value, "lanes_by");
+        for lane in lanes {
+            out.push('\n');
+            lane_text(&mut out, lane, by, &shown, key_width);
+        }
+    }
+    out
+}
+
 /// A lane: its heading, then each column holding its cards, with them.
 fn lane_text(out: &mut String, lane: &Value, by: &str, columns: &[&Value], key_width: usize) {
     let name = if lane["empty"].as_bool().unwrap_or(false) {
@@ -217,6 +291,49 @@ mod tests {
     use serde_json::json;
 
     use super::show;
+
+    #[test]
+    fn the_board_across_projects_names_its_categories_and_the_real_statuses() {
+        let board = json!({
+            "query": "is:open",
+            "folder": "Work",
+            "columns": [
+                { "id": "todo", "name": "todo", "category": "todo", "count": 1, "older": 0,
+                  "cards": [{ "key": "ACM-1", "title": "Order parts", "lane": "ACM",
+                              "status": { "id": "s", "name": "Queued", "hue": "grey" } }] },
+                { "id": "in_progress", "name": "in_progress", "category": "in_progress",
+                  "count": 1, "older": 0,
+                  "cards": [{ "key": "TM-2", "title": "Review the plan", "lane": "TM",
+                              "status": { "id": "r", "name": "Review", "hue": "blue" } }] },
+                { "id": "done", "name": "done", "category": "done", "count": 4, "older": 4,
+                  "cards": [] },
+            ],
+            "lanes_by": "project",
+            "lanes": [
+                { "id": "ACM", "name": "Acme", "count": 1 },
+                { "id": "TM", "name": "Team", "count": 1 },
+            ],
+        });
+        assert_eq!(
+            super::across(&board),
+            "My work\n\
+             Query: is:open\n\
+             Folder: Work\n\
+             \n\
+             Columns\n\
+             \x20 To do (1 task)\n\
+             \x20 In progress (1 task)\n\
+             \x20 Done (4 tasks)\n\
+             \n\
+             Lane: Acme (1 task)\n\
+             \x20 To do (1)\n\
+             \x20   ACM-1  Order parts  [Queued]\n\
+             \n\
+             Lane: Team (1 task)\n\
+             \x20 In progress (1)\n\
+             \x20   TM-2   Review the plan  [Review]\n"
+        );
+    }
 
     #[test]
     fn columns_list_their_cards_with_the_edge_and_the_cover() {

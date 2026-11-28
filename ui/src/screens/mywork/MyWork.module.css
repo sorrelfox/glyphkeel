@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* My work's toolbar: the views, the query (which takes the room left), the
+   toggles, the folder and the swimlanes; it wraps on narrow windows. */
+.toolbar {
+  row-gap: 6px;
+}
+
+.query {
+  flex: 1 1 260px;
+  min-inline-size: 180px;
+  max-inline-size: 640px;
+}
+
+.older {
+  flex: none;
+  padding-block: 0 4px;
+  padding-inline: 12px;
+}

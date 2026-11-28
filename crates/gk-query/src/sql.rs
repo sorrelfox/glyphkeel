@@ -260,6 +260,15 @@ impl Compiled {
         sql
     }
 
+    /// Adds `cond`, a condition over the tables `t`, `p`, `s` and `y`
+    /// without parameters, to the query's own: what a screen narrows the
+    /// query to.
+    pub fn and(&mut self, cond: &str) {
+        self.filter.push(" AND (");
+        self.filter.push(cond);
+        self.filter.push(")");
+    }
+
     /// Keeps groups of rows together: `order` (an `ORDER BY` list over the
     /// tables `t`, `p`, `s` and `y`) comes before the query's own order.
     pub fn group_first(&mut self, order: &str) {

@@ -62805,6 +62805,11 @@
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
                 "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
               }
             ]
           }
@@ -63071,6 +63076,10 @@
                 "description": "The start date.",
                 "type": "string"
               },
+              "status": {
+                "$ref": "#/$defs/CardStatus",
+                "description": "Its status, on the board across projects, where a column holds\nseveral statuses; left out on a project's board."
+              },
               "status_entered_at": {
                 "description": "When it entered its status.",
                 "type": "string"
@@ -63206,6 +63215,30 @@
               "hue",
               "by",
               "name"
+            ],
+            "type": "object"
+          },
+          "CardStatus": {
+            "additionalProperties": false,
+            "description": "The status a card is in, as the board across projects shows it.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
             ],
             "type": "object"
           },
@@ -63567,6 +63600,11 @@
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
                 "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
               }
             ]
           },
@@ -63702,10 +63740,10 @@
               },
               "hue": {
                 "$ref": "#/$defs/Hue",
-                "description": "Its colour, for a type or label."
+                "description": "Its colour, for a type, label or project."
               },
               "id": {
-                "description": "The lane's ID: the priority, the option, or the ID of the type,\nlabel, sprint or parent task; `none` for the lane of the cards\nwithout a value.",
+                "description": "The lane's ID: the priority, the option, the project's key, or the\nID of the type, label, sprint or parent task; `none` for the lane of\nthe cards without a value.",
                 "type": "string"
               },
               "key": {
@@ -63713,11 +63751,11 @@
                 "type": "string"
               },
               "name": {
-                "description": "Its name: the priority, the type's, label's, sprint's or option's\nname, or the parent's title; empty for the lane without a value.",
+                "description": "Its name: the priority, the type's, label's, sprint's, project's or\noption's name, or the parent's title; empty for the lane without a\nvalue.",
                 "type": "string"
               },
               "settable": {
-                "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks.",
+                "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks, and a card never changes project this way.",
                 "type": "boolean"
               },
               "value": {
@@ -63812,6 +63850,1023 @@
       "output_name": "Board",
       "safety": "read",
       "summary": "A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts."
+    },
+    {
+      "cli": "board all",
+      "exposure": "data",
+      "id": "board.get_across",
+      "input": {
+        "$defs": {
+          "LaneBy": {
+            "description": "What the board's swimlanes group the cards by.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which board across projects to read: the open work of every active\nproject (the caller's own project and those below it, for a caller\nlimited to one), with closed work of the last days.",
+        "properties": {
+          "folder": {
+            "description": "Only the projects of this folder (ID or name), with their\nsub-projects.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lanes": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LaneBy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Group the cards into swimlanes by this; default: `project`."
+          },
+          "query": {
+            "description": "Only the tasks this query matches, such as `label:bug due<+7d`;\nempty: every task.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "show_older": {
+            "default": false,
+            "description": "Show every closed card, however old.",
+            "type": "boolean"
+          },
+          "view": {
+            "description": "A saved view of the board across projects (ID or name): its query,\nfolder and swimlanes, which the fields below override.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "BoardAcrossInput",
+        "type": "object"
+      },
+      "input_name": "BoardAcrossInput",
+      "kind": "query",
+      "mcp_tool": "get_board_across",
+      "output": {
+        "$defs": {
+          "AcrossProject": {
+            "additionalProperties": false,
+            "description": "A project with cards on the board across projects.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "statuses": {
+                "description": "Its statuses in order. A card dropped into a column moves to the\nfirst of them in that column's category; when there are several,\npeople choose.",
+                "items": {
+                  "$ref": "#/$defs/AcrossStatus"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "hue",
+              "statuses"
+            ],
+            "type": "object"
+          },
+          "AcrossStatus": {
+            "additionalProperties": false,
+            "description": "A status a card can move to on the board across projects.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category: the column it shows in."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "Card": {
+            "additionalProperties": false,
+            "description": "One card.",
+            "properties": {
+              "blocked": {
+                "description": "Whether a task that blocks it is still open.",
+                "type": "boolean"
+              },
+              "checklist": {
+                "$ref": "#/$defs/Checklist",
+                "description": "The description's checklist."
+              },
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent that claimed it, while the claim lasts."
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while open.",
+                "type": "string"
+              },
+              "comment_count": {
+                "description": "How many comments it has.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cover": {
+                "$ref": "#/$defs/CardCover",
+                "description": "Its cover image, as the layout's `covers` chooses; left out when it\nhas none."
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "edge": {
+                "$ref": "#/$defs/CardEdge",
+                "description": "Its coloured edge, as the layout's `colour_by` chooses; left out\nwhen it has none."
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its values of the custom fields the layout shows on cards, by query\nname (without `cf.`); left out when it has none of them.",
+                "type": "object"
+              },
+              "file_count": {
+                "description": "How many files are attached to it and to its comments.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
+              "lane": {
+                "description": "The ID of the swimlane it is in; left out without swimlanes.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "progress_percent": {
+                "description": "Its progress in percent, as tasks show it.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key (differs from the board's for sub-project tasks).",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in the column.",
+                "type": "string"
+              },
+              "recurring": {
+                "description": "Whether it is the open occurrence of a recurring task.",
+                "type": "boolean"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/CardStatus",
+                "description": "Its status, on the board across projects, where a column holds\nseveral statuses; left out on a project's board."
+              },
+              "status_entered_at": {
+                "description": "When it entered its status.",
+                "type": "string"
+              },
+              "subtasks": {
+                "$ref": "#/$defs/Checklist",
+                "description": "Its subtasks: closed and all."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "$ref": "#/$defs/TypeRef",
+                "description": "Its type."
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Its version, for `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "type",
+              "priority",
+              "labels",
+              "checklist",
+              "progress_percent",
+              "subtasks",
+              "blocked",
+              "comment_count",
+              "file_count",
+              "spent_minutes",
+              "rank",
+              "status_entered_at",
+              "updated_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "CardColourBy": {
+            "description": "What colours the edge of a card.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "CardCover": {
+            "additionalProperties": false,
+            "description": "The image a card shows as its cover.",
+            "properties": {
+              "attachment": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "height": {
+                "description": "Its height in pixels, when known.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mime": {
+                "description": "Its media type.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its file name, for the image's text.",
+                "type": "string"
+              },
+              "width": {
+                "description": "Its width in pixels, when known.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "attachment",
+              "name",
+              "mime"
+            ],
+            "type": "object"
+          },
+          "CardEdge": {
+            "additionalProperties": false,
+            "description": "The coloured edge of a card and the rule that gave it.",
+            "properties": {
+              "by": {
+                "$ref": "#/$defs/CardColourBy",
+                "description": "What chose it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour."
+              },
+              "name": {
+                "description": "What it stands for: the type's or label's name, the priority, or the\nrule's name (its query when it has none).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "hue",
+              "by",
+              "name"
+            ],
+            "type": "object"
+          },
+          "CardStatus": {
+            "additionalProperties": false,
+            "description": "The status a card is in, as the board across projects shows it.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Checklist": {
+            "additionalProperties": false,
+            "description": "Ticked and all checklist items.",
+            "properties": {
+              "done": {
+                "description": "Ticked items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "description": "All items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ],
+            "type": "object"
+          },
+          "Claim": {
+            "additionalProperties": false,
+            "description": "An agent's claim on a task.",
+            "properties": {
+              "agent": {
+                "description": "The agent's name.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The agent session holding it.",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent",
+              "session",
+              "until"
+            ],
+            "type": "object"
+          },
+          "Column": {
+            "additionalProperties": false,
+            "description": "One column: a status, or with sub-projects, every status of that name.",
+            "properties": {
+              "cards": {
+                "description": "The cards, in order.",
+                "items": {
+                  "$ref": "#/$defs/Card"
+                },
+                "type": "array"
+              },
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "collapsed": {
+                "description": "Collapsed by the layout.",
+                "type": "boolean"
+              },
+              "count": {
+                "description": "Tasks in the column, including hidden older ones.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hidden": {
+                "description": "Hidden by the layout; its cards are left out.",
+                "type": "boolean"
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The status's ID in the board's own project; a status that exists\nonly in sub-projects has the first sub-project's.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The status name.",
+                "type": "string"
+              },
+              "older": {
+                "description": "Closed cards hidden behind \"Show older\".",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "over_limit": {
+                "description": "Whether the column holds more tasks than its WIP limit.",
+                "type": "boolean"
+              },
+              "sort_mode": {
+                "$ref": "#/$defs/SortMode",
+                "description": "How its cards are ordered."
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Every status shown in this column, by project key: one, or more when\nsub-projects are included.",
+                "type": "object"
+              },
+              "under_minimum": {
+                "default": false,
+                "description": "Whether the column holds fewer tasks than its WIP minimum.",
+                "type": "boolean"
+              },
+              "wip_limit": {
+                "description": "The WIP limit, if the status has one.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "The WIP minimum, if the status has one.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category",
+              "hue",
+              "statuses",
+              "over_limit",
+              "under_minimum",
+              "count",
+              "older",
+              "hidden",
+              "collapsed",
+              "sort_mode",
+              "cards"
+            ],
+            "type": "object"
+          },
+          "Glyph": {
+            "description": "The shape that shows a task's type.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A plain task.",
+                "type": "string"
+              },
+              {
+                "const": "bug",
+                "description": "A bug.",
+                "type": "string"
+              },
+              {
+                "const": "feature",
+                "description": "A feature.",
+                "type": "string"
+              },
+              {
+                "const": "milestone",
+                "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "LabelRef": {
+            "additionalProperties": false,
+            "description": "A label on a task.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "LaneBy": {
+            "description": "What the board's swimlanes group the cards by.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "SortMode": {
+            "description": "How a column's cards are ordered.",
+            "oneOf": [
+              {
+                "const": "manual",
+                "description": "By hand, by dragging (the default).",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "Highest priority first.",
+                "type": "string"
+              },
+              {
+                "const": "due",
+                "description": "Soonest due date first; no due date last.",
+                "type": "string"
+              },
+              {
+                "const": "updated",
+                "description": "Most recently changed first.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "Swimlane": {
+            "additionalProperties": false,
+            "description": "One swimlane: a band across the columns for one value of the field the\nlayout's `lanes` chooses.",
+            "properties": {
+              "count": {
+                "description": "The cards it holds on the board, closed cards behind \"Show older\"\nand hidden columns aside.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "counts": {
+                "additionalProperties": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "description": "Those cards by column ID.",
+                "type": "object"
+              },
+              "empty": {
+                "description": "The lane of the cards without a value; it comes last.",
+                "type": "boolean"
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, for a type, label or project."
+              },
+              "id": {
+                "description": "The lane's ID: the priority, the option, the project's key, or the\nID of the type, label, sprint or parent task; `none` for the lane of\nthe cards without a value.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The parent task's key, for a lane of a parent.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name: the priority, the type's, label's, sprint's, project's or\noption's name, or the parent's title; empty for the lane without a\nvalue.",
+                "type": "string"
+              },
+              "settable": {
+                "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks, and a card never changes project this way.",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "What a card dropped into the lane gets, as `task.move`'s `changes`\ntake it: the priority, the type's or label's name, the sprint's or\nparent's ID, or the option; left out for the lane without a value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "empty",
+              "settable",
+              "count",
+              "counts"
+            ],
+            "type": "object"
+          },
+          "TypeRef": {
+            "additionalProperties": false,
+            "description": "A task's type, as tasks carry it.",
+            "properties": {
+              "glyph": {
+                "$ref": "#/$defs/Glyph",
+                "description": "Its shape."
+              },
+              "id": {
+                "description": "The type's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "glyph"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The board across projects: one column for each status category (to do,\nin progress, done), whatever the projects call their statuses.",
+        "properties": {
+          "columns": {
+            "description": "The columns: to do, in progress and done. A column's `id` is its\ncategory; its `statuses` give each project's first status of that\ncategory, where a dropped card goes. Cards carry their `status`.",
+            "items": {
+              "$ref": "#/$defs/Column"
+            },
+            "type": "array"
+          },
+          "folder": {
+            "description": "The folder the board is limited to, by name.",
+            "type": "string"
+          },
+          "hide_done_after_days": {
+            "description": "Closed cards older than this many days are counted in `older`, not\nlisted, unless `show_older`.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lanes": {
+            "description": "The swimlanes in order, the lane without a value last; empty\nwithout swimlanes. Each card names its lane.",
+            "items": {
+              "$ref": "#/$defs/Swimlane"
+            },
+            "type": "array"
+          },
+          "lanes_by": {
+            "$ref": "#/$defs/LaneBy",
+            "description": "What the swimlanes group by."
+          },
+          "projects": {
+            "description": "The projects of the cards, with their statuses.",
+            "items": {
+              "$ref": "#/$defs/AcrossProject"
+            },
+            "type": "array"
+          },
+          "query": {
+            "description": "The query, in its normal form; empty for every task.",
+            "type": "string"
+          },
+          "view": {
+            "description": "The saved view it was read from, by ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "columns",
+          "lanes_by",
+          "projects",
+          "hide_done_after_days"
+        ],
+        "title": "BoardAcross",
+        "type": "object"
+      },
+      "output_name": "BoardAcross",
+      "safety": "read",
+      "summary": "The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default."
     },
     {
       "cli": "board layout show <project>",
@@ -64097,6 +65152,11 @@
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
                 "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
               }
             ]
           },
@@ -64320,6 +65380,11 @@
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
                 "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
               }
             ]
           },
@@ -64458,7 +65523,7 @@
                 "type": "null"
               }
             ],
-            "description": "What the swimlanes group the cards by: `none`, `parent`, `priority`,\n`label`, `sprint`, `type` or `field` (with `lane_field`)."
+            "description": "What the swimlanes group the cards by: `none`, `parent`, `priority`,\n`label`, `sprint`, `type`, `project` or `field` (with `lane_field`)."
           },
           "order": {
             "description": "The column order, by status name or ID; columns left out follow in\nproject order.",
@@ -64768,6 +65833,11 @@
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
                 "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
               }
             ]
           },
@@ -64853,6 +65923,11 @@
                 "const": "calendar",
                 "description": "The calendar.",
                 "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
+                "type": "string"
               }
             ]
           }
@@ -64912,8 +65987,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -64994,6 +66073,11 @@
                 "const": "calendar",
                 "description": "The calendar.",
                 "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
+                "type": "string"
               }
             ]
           }
@@ -65055,6 +66139,11 @@
                 "const": "calendar",
                 "description": "The calendar.",
                 "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
+                "type": "string"
               }
             ]
           }
@@ -65077,8 +66166,15 @@
               "null"
             ]
           },
+          "folder": {
+            "description": "For a board across projects: only the projects of this folder (ID\nor name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "group_by": {
-            "description": "The field rows are grouped by.",
+            "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by (`project`, `priority`, `label`, `sprint`,\n`type`, `parent` or `none`).",
             "type": [
               "string",
               "null"
@@ -65161,8 +66257,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -65243,6 +66343,11 @@
                 "const": "calendar",
                 "description": "The calendar.",
                 "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
+                "type": "string"
               }
             ]
           }
@@ -65307,6 +66412,11 @@
                 "const": "totals",
                 "description": "The totals.",
                 "type": "string"
+              },
+              {
+                "const": "folder",
+                "description": "The folder of a board across projects.",
+                "type": "string"
               }
             ]
           }
@@ -65334,6 +66444,13 @@
           },
           "description": {
             "description": "A new description.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folder": {
+            "description": "For a board across projects: another folder (ID or name).",
             "type": [
               "string",
               "null"
@@ -65426,8 +66543,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -65507,6 +66628,11 @@
               {
                 "const": "calendar",
                 "description": "The calendar.",
+                "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                 "type": "string"
               }
             ]
@@ -65590,8 +66716,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -65671,6 +66801,11 @@
               {
                 "const": "calendar",
                 "description": "The calendar.",
+                "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                 "type": "string"
               }
             ]

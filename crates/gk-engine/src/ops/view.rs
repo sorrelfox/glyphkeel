@@ -63,6 +63,9 @@ struct Record {
     group_by: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     totals: Vec<String>,
+    /// A board across projects' folder, by ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    folder: Option<String>,
     is_default: bool,
     rank: String,
     created_at: i64,
@@ -73,10 +76,22 @@ impl Record {
     fn project_id(&self) -> Option<Id> {
         self.project.as_deref().and_then(|p| p.parse().ok())
     }
+
+    fn folder_id(&self) -> Option<Id> {
+        self.folder.as_deref().and_then(|f| f.parse().ok())
+    }
+}
+
+/// What a view keeps in `options`: today only a board across projects'
+/// folder.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Options {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    folder: Option<String>,
 }
 
 const COLUMNS: &str = "id, project_id, view_kind, name, description, query, columns, sort, \
-                       group_by, totals, is_default, rank, created_at, updated_at";
+                       group_by, totals, is_default, rank, created_at, updated_at, options";
 
 fn json_list(text: Option<String>) -> Vec<String> {
     text.and_then(|t| serde_json::from_str(&t).ok())
@@ -89,16 +104,25 @@ fn json_text(text: Option<String>) -> Option<String> {
 
 fn read_row(r: &gk_store::rusqlite::Row<'_>) -> gk_store::rusqlite::Result<(Id, Record)> {
     let kind: String = r.get(2)?;
+    let project = opt_id_at(r, 1)?;
+    let options: Options = r
+        .get::<_, Option<String>>(14)?
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
     Ok((
         id_at(r, 0)?,
         Record {
-            project: opt_id_at(r, 1)?.map(|p| p.to_string()),
+            project: project.map(|p| p.to_string()),
+            // A board view of the whole workspace is the board across
+            // projects.
             kind: match kind.as_str() {
+                "board" if project.is_none() => ViewKind::BoardAcross,
                 "board" => ViewKind::Board,
                 "gantt" => ViewKind::Gantt,
                 "calendar" => ViewKind::Calendar,
                 _ => ViewKind::List,
             },
+            folder: options.folder,
             name: r.get(3)?,
             description: r.get(4)?,
             query: r.get(5)?,
@@ -146,15 +170,27 @@ pub(crate) fn write_raw(w: &WriteCtx<'_>, id: Id, value: Option<&Value>) -> Resu
         (!v.is_empty()).then(|| serde_json::to_string(v).unwrap_or_else(|_| "[]".to_owned()))
     };
     let text = |v: &Option<String>| v.as_ref().map(|s| Value::from(s.as_str()).to_string());
+    let options = r.folder.as_ref().map(|f| {
+        serde_json::to_string(&Options {
+            folder: Some(f.clone()),
+        })
+        .unwrap_or_else(|_| "{}".to_owned())
+    });
+    // The schema knows four screens: the board across projects is the
+    // board of the whole workspace.
+    let kind = match r.kind {
+        ViewKind::BoardAcross => ViewKind::Board,
+        k => k,
+    };
     w.tx().execute(
         &format!(
             "INSERT INTO saved_views ({COLUMNS})
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"
         ),
         params![
             b(id),
             r.project_id().map(b),
-            r.kind.as_str(),
+            kind.as_str(),
             r.name,
             r.description,
             r.query,
@@ -166,6 +202,7 @@ pub(crate) fn write_raw(w: &WriteCtx<'_>, id: Id, value: Option<&Value>) -> Resu
             r.rank,
             r.created_at,
             r.updated_at,
+            options,
         ],
     )?;
     Ok(())
@@ -215,6 +252,16 @@ fn output(tx: &Transaction<'_>, id: Id, r: &Record) -> Result<SavedView, Failure
         sort: r.sort.clone(),
         group_by: r.group_by.clone(),
         totals: r.totals.clone(),
+        folder: match r.folder_id() {
+            Some(f) => tx
+                .query_row(
+                    "SELECT name FROM project_folders WHERE id = ?1",
+                    [b(f)],
+                    |r| r.get(0),
+                )
+                .optional()?,
+            None => None,
+        },
         is_default: r.is_default,
         rank: r.rank.clone(),
         created_at: rfc3339(r.created_at),
@@ -320,6 +367,42 @@ fn single_default(w: &mut WriteCtx<'_>, id: Id, r: &Record) -> Result<(), Failur
     Ok(())
 }
 
+/// The folder ID of a board across projects' folder `text`; a folder for
+/// any other view is refused.
+fn across_folder(
+    tx: &Transaction<'_>,
+    kind: ViewKind,
+    text: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {
+        return Ok(None);
+    };
+    if kind != ViewKind::BoardAcross {
+        return Err(messages::invalid("folder", "view-folder-across-only", &[]));
+    }
+    Ok(Some(super::folder::find(tx, "folder", text)?.0.to_string()))
+}
+
+/// A board across projects groups its swimlanes by one of the kinds its
+/// board offers; `group_by` names it.
+fn check_lanes(r: &Record) -> Result<(), Failure> {
+    if r.kind != ViewKind::BoardAcross {
+        return Ok(());
+    }
+    if let Some(by) = &r.group_by
+        && super::across::lane_kind(by).is_none()
+    {
+        return Err(messages::invalid_at(
+            "group_by",
+            "view-across-lanes",
+            &[("lanes", by.clone())],
+        )
+        .with_detail("choices", super::across::LANE_KINDS)
+        .into());
+    }
+    Ok(())
+}
+
 fn create(w: &mut WriteCtx<'_>, input: ViewCreateInput) -> Result<ViewChange, Failure> {
     let name =
         gk_core::check_line("name", &input.name, NAME_MAX).map_err(|e| invalid("name", e))?;
@@ -343,7 +426,14 @@ fn create(w: &mut WriteCtx<'_>, input: ViewCreateInput) -> Result<ViewChange, Fa
             .map_err(|e| invalid("description", e))?,
         _ => String::new(),
     };
-    let kind = input.kind.unwrap_or_default();
+    let mut kind = input.kind.unwrap_or_default();
+    if kind == ViewKind::Board && project.is_none() {
+        kind = ViewKind::BoardAcross;
+    }
+    if kind == ViewKind::BoardAcross && project.is_some() {
+        return Err(messages::invalid("project", "view-across-project", &[]));
+    }
+    let folder = across_folder(w.tx(), kind, input.folder.as_deref())?;
     let last = rows(w.tx(), Some(project))?
         .into_iter()
         .filter(|(_, r)| r.kind == kind)
@@ -366,11 +456,13 @@ fn create(w: &mut WriteCtx<'_>, input: ViewCreateInput) -> Result<ViewChange, Fa
             .filter(|g| !g.is_empty())
             .map(str::to_owned),
         totals: clean_list("totals", &input.totals)?,
+        folder,
         is_default: input.is_default,
         rank: rank.as_str().to_owned(),
         created_at: w.now(),
         updated_at: w.now(),
     };
+    check_lanes(&record)?;
     check_unique(w.tx(), id, &record)?;
     single_default(w, id, &record)?;
     set(w, id, Some(&record))?;
@@ -566,6 +658,44 @@ fn find(
     }
 }
 
+/// What the board across projects reads from one of its saved views.
+pub(crate) struct AcrossView {
+    pub(crate) id: Id,
+    pub(crate) query: String,
+    /// The folder, while it exists: its ID and name.
+    pub(crate) folder: Option<(Id, String)>,
+    pub(crate) lanes: Option<String>,
+}
+
+/// The saved view of the board across projects `text` names (ID or name).
+pub(crate) fn across_view(tx: &Transaction<'_>, text: &str) -> Result<AcrossView, Failure> {
+    let (id, r) = find(tx, text, None)?;
+    if r.kind != ViewKind::BoardAcross {
+        return Err(messages::invalid(
+            "view",
+            "board-across-view-kind",
+            &[("view", r.name.clone())],
+        ));
+    }
+    let folder = match r.folder_id() {
+        Some(f) => tx
+            .query_row(
+                "SELECT name FROM project_folders WHERE id = ?1",
+                [b(f)],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .map(|name| (f, name)),
+        None => None,
+    };
+    Ok(AcrossView {
+        id,
+        query: r.query,
+        folder,
+        lanes: r.group_by,
+    })
+}
+
 fn update(w: &mut WriteCtx<'_>, input: ViewUpdateInput) -> Result<ViewChange, Failure> {
     let (id, old) = find(w.tx(), &input.view, input.project.as_ref())?;
     let clears = |f: ViewField| input.clear.contains(&f);
@@ -579,6 +709,7 @@ fn update(w: &mut WriteCtx<'_>, input: ViewUpdateInput) -> Result<ViewChange, Fa
         (input.sort.is_some(), ViewField::Sort, "sort"),
         (input.group_by.is_some(), ViewField::GroupBy, "group_by"),
         (input.totals.is_some(), ViewField::Totals, "totals"),
+        (input.folder.is_some(), ViewField::Folder, "folder"),
     ] {
         if given && clears(field) {
             return Err(messages::invalid(
@@ -620,6 +751,9 @@ fn update(w: &mut WriteCtx<'_>, input: ViewUpdateInput) -> Result<ViewChange, Fa
     if let Some(t) = &input.totals {
         r.totals = clean_list("totals", t)?;
     }
+    if let Some(f) = &input.folder {
+        r.folder = across_folder(w.tx(), r.kind, Some(f))?;
+    }
     if let Some(d) = input.is_default {
         r.is_default = d;
     }
@@ -638,7 +772,11 @@ fn update(w: &mut WriteCtx<'_>, input: ViewUpdateInput) -> Result<ViewChange, Fa
     if clears(ViewField::Totals) {
         r.totals.clear();
     }
+    if clears(ViewField::Folder) {
+        r.folder = None;
+    }
     if r != old {
+        check_lanes(&r)?;
         r.updated_at = w.now();
         check_unique(w.tx(), id, &r)?;
         single_default(w, id, &r)?;

@@ -27,6 +27,8 @@ import {
   type ListedTask,
   type Attachment,
   type Board,
+  type BoardAcross,
+  type BoardAcrossInput,
   type BoardLayout,
   type GanttLayout,
   type ListLayout,
@@ -1356,6 +1358,118 @@ export class FakeWorkspace {
     };
   }
 
+  /** The name of the folder `ref` names, by ID or name. */
+  private folderName(ref: string): string {
+    const found = (this.state.folders ?? []).find((each) => each.id === ref || fold(each.name) === fold(ref));
+    if (!found) {
+      fail("not_found", `There is no folder "${ref}".`, { details: { field: "folder", message_id: "folder-not-found" } });
+    }
+    return found.name;
+  }
+
+  /** The board across projects: a column per status category over the active projects. */
+  private boardAcross(input: BoardAcrossInput): BoardAcross {
+    const views = this.state.views ?? [];
+    const ref = input.view ?? undefined;
+    const saved = ref === undefined ? undefined : views.find((view) => view.id === ref || fold(view.name) === fold(ref));
+    if (ref !== undefined && !saved) {
+      fail("not_found", `There is no view "${ref}".`, { details: { field: "view", message_id: "view-not-found" } });
+    }
+    if (saved && saved.kind !== "board_across") {
+      fail("invalid", `"${saved.name}" is not a view of the board across projects.`, { details: { path: "view", message_id: "board-across-view-kind" } });
+    }
+    const query = input.query ?? saved?.query ?? "";
+    const folders = this.state.folders ?? [];
+    const folderRef = input.folder ?? saved?.folder;
+    const folder = folderRef === undefined || folderRef.trim() === "" ? undefined : folders.find((each) => each.id === folderRef || fold(each.name) === fold(folderRef));
+    if (input.folder !== undefined && input.folder !== null && input.folder.trim() !== "" && !folder) {
+      fail("not_found", `There is no folder "${input.folder}".`, { details: { field: "folder", message_id: "folder-not-found" } });
+    }
+    const lanesBy: LaneBy = input.lanes ?? (saved?.group_by as LaneBy | undefined) ?? "project";
+    if (lanesBy === "field") {
+      fail("invalid", "The board across projects can't group swimlanes by a custom field: projects have their own fields.", { details: { path: "lanes", message_id: "board-across-lanes-field" } });
+    }
+    const keys = new Set(this.runQuery(() => matchingKeys(this.listedTasks(), query, this.queryNames(), this.archivedKeys())));
+    const top = (project: FakeProject): FakeProject => {
+      const parent = this.state.projects.find((candidate) => candidate.id === project.parent);
+      return parent ? top(parent) : project;
+    };
+    const active = this.state.projects.filter((project) => project.state === "active" && (folder === undefined || top(project).folder === folder.id));
+    const cutoff = this.today().getTime() - 14 * 86_400_000;
+    const categories = ["todo", "in_progress", "done"] as const;
+    const hues = { todo: "grey", in_progress: "blue", done: "green" } as const;
+    const columns: Column[] = categories.map((category) => ({
+      id: category,
+      name: category,
+      category,
+      hue: hues[category],
+      statuses: {},
+      cards: [],
+      count: 0,
+      older: 0,
+      over_limit: false,
+      under_minimum: false,
+      hidden: false,
+      collapsed: false,
+      sort_mode: "manual",
+    }));
+    const rank = (priority: string) => ["none", "low", "normal", "high", "urgent"].indexOf(priority);
+    const shownProjects: FakeProject[] = [];
+    for (const project of active) {
+      for (const task of this.state.tasks) {
+        if (task.projectId !== project.id || !keys.has(this.keyOf(task))) {
+          continue;
+        }
+        const status = project.statuses.find((each) => each.id === task.statusId);
+        const column = columns.find((each) => each.category === status?.category);
+        if (!status || !column) {
+          continue;
+        }
+        if (status.category === "done" && input.show_older !== true && (task.closedAt === null || Date.parse(task.closedAt) < cutoff)) {
+          column.older += 1;
+          continue;
+        }
+        column.cards.push({ ...this.card(task), status: { id: status.id, name: status.name, hue: status.hue } });
+        if (!shownProjects.includes(project)) {
+          shownProjects.push(project);
+        }
+      }
+    }
+    shownProjects.sort((a, b) => (a.key < b.key ? -1 : 1));
+    for (const column of columns) {
+      column.cards.sort((a, b) => rank(b.priority) - rank(a.priority) || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999") || a.key.localeCompare(b.key));
+      column.count = column.cards.length + column.older;
+      for (const project of shownProjects) {
+        const first = project.statuses.find((status) => status.category === column.category);
+        if (first) {
+          column.statuses[project.key] = first.id;
+        }
+      }
+    }
+    const lanes = assignLanes(columns, {
+      by: lanesBy,
+      projects: shownProjects,
+      sprints: this.state.sprints ?? [],
+      field: undefined,
+      taskOf: (id) => this.state.tasks.find((task) => task.id === id),
+      keyOf: (task) => this.keyOf(task),
+    });
+    return {
+      query: query.trim().replace(/\s+/g, " "),
+      ...(folder ? { folder: folder.name } : {}),
+      ...(saved ? { view: saved.id } : {}),
+      columns,
+      lanes_by: lanesBy,
+      ...(lanes.length === 0 ? {} : { lanes }),
+      projects: shownProjects.map((project) => ({
+        key: project.key,
+        name: project.name,
+        hue: project.hue,
+        statuses: project.statuses.filter((status) => status.category !== "cancelled").map((status) => ({ id: status.id, name: status.name, category: status.category, hue: status.hue })),
+      })),
+      hide_done_after_days: 14,
+    };
+  }
 
   // ---------- task details ----------
 
@@ -3514,6 +3628,7 @@ export class FakeWorkspace {
       return this.fieldChange(field, ["deleted"], removed);
     },
     "board.get": ({ project, include_subprojects, show_older, lanes, lane_field }) => this.board(project, include_subprojects, show_older === true, lanes ?? undefined, lane_field ?? undefined),
+    "board.get_across": (input) => this.boardAcross(input),
     "layout.get": ({ project: ref }) => {
       const project = this.project(ref);
       return { project: project.key, layout: this.layout(project) };
@@ -4767,7 +4882,7 @@ export class FakeWorkspace {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
       }
       this.state.views ??= [];
-      const view = createView(this.state.views, { ...input, ...some("project", input.project && this.project(input.project).key) }, this.today().toISOString());
+      const view = createView(this.state.views, { ...input, ...some("project", input.project && this.project(input.project).key), ...some("folder", input.folder && this.folderName(input.folder)) }, this.today().toISOString());
       if ("code" in view) {
         fail(view.code, view.message);
       }
@@ -4775,7 +4890,7 @@ export class FakeWorkspace {
     },
     "view.update": (input) => {
       this.state.views ??= [];
-      const view = updateView(this.state.views, input, this.today().toISOString());
+      const view = updateView(this.state.views, { ...input, ...some("folder", input.folder && this.folderName(input.folder)) }, this.today().toISOString());
       if ("code" in view) {
         fail(view.code, view.message);
       }

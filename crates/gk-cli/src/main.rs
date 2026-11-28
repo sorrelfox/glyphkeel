@@ -40,6 +40,7 @@ use crate::commands::OpCommand;
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().collect();
+    let args = board_all(args);
     let pre = prescan(&args);
     if let Some(mcp_args) = pre.mcp {
         // The MCP server's text is for agents: it stays English.
@@ -334,6 +335,8 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
                 output::json(&value)
             } else if cmd.op.id == "board.get" {
                 board::show(&value)
+            } else if cmd.op.id == "board.get_across" {
+                board::across(&value)
             } else if cmd.op.id == "dashboard.show" {
                 dashboard::show(&value)
             } else if cmd.op.id == "dashboard.widget" {
@@ -494,6 +497,35 @@ fn prescan(args: &[OsString]) -> Prescan {
     pre
 }
 
+/// `board --all` is `board all`, the board across projects: the words
+/// people expect from `board <project>`. Global options may come first;
+/// arguments after `--` are values.
+fn board_all(mut args: Vec<OsString>) -> Vec<OsString> {
+    let mut i = 1;
+    while i < args.len() {
+        let arg = args[i].to_string_lossy();
+        match arg.as_ref() {
+            "--workspace" | "-w" | "--tz" | "--lang" => i += 2,
+            a if a.starts_with('-') => i += 1,
+            "board" => break,
+            _ => return args,
+        }
+    }
+    if i >= args.len() {
+        return args;
+    }
+    let board = i;
+    let end = args[board..]
+        .iter()
+        .position(|a| a == "--")
+        .map_or(args.len(), |p| board + p);
+    if let Some(at) = args[board + 1..end].iter().position(|a| a == "--all") {
+        args.remove(board + 1 + at);
+        args.insert(board + 1, OsString::from("all"));
+    }
+    args
+}
+
 /// The language `--lang` names, before the help is built in it: the
 /// option is global, so it may follow the command's words. Arguments after
 /// `--` are values.
@@ -646,6 +678,35 @@ mod tests {
 
     fn os(args: &[&str]) -> Vec<OsString> {
         args.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn board_all_reads_as_the_board_across_projects() {
+        let words = |args: &[&str]| -> Vec<String> {
+            board_all(os(args))
+                .into_iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(
+            words(&["gk", "board", "--all", "--query", "is:open"]),
+            ["gk", "board", "all", "--query", "is:open"]
+        );
+        assert_eq!(
+            words(&[
+                "gk", "-w", "Work", "--json", "board", "--query", "x", "--all"
+            ]),
+            ["gk", "-w", "Work", "--json", "board", "all", "--query", "x"]
+        );
+        assert_eq!(words(&["gk", "board", "TM"]), ["gk", "board", "TM"]);
+        assert_eq!(
+            words(&["gk", "task", "list", "--all"]),
+            ["gk", "task", "list", "--all"]
+        );
+        assert_eq!(
+            words(&["gk", "board", "--", "--all"]),
+            ["gk", "board", "--", "--all"]
+        );
     }
 
     #[test]

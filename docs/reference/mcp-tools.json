@@ -94,6 +94,7 @@
       "acknowledge_reminders",
       "get_today",
       "get_board",
+      "get_board_across",
       "set_board_layout",
       "list_views",
       "create_view",
@@ -158,6 +159,7 @@
       "get_reminders",
       "get_today",
       "get_board",
+      "get_board_across",
       "list_views",
       "list_dashboards",
       "get_dashboard",
@@ -262,6 +264,7 @@
       "acknowledge_reminders",
       "get_today",
       "get_board",
+      "get_board_across",
       "set_board_layout",
       "list_views",
       "create_view",
@@ -60713,7 +60716,7 @@
         "board.get",
         "layout.get"
       ],
-      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and their `cover` image when the layout sets them. With swimlanes (the layout's, or `lanes`: parent, priority, label, sprint, type, or field with `lane_field`), `lanes` lists each lane with its `counts` per column ID and total, the lane without a value last, and each card names its `lane`. Example: get_board {\"project\": \"TM\", \"lanes\": \"priority\"}",
+      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and their `cover` image when the layout sets them. With swimlanes (the layout's, or `lanes`: parent, priority, label, sprint, type, project, or field with `lane_field`), `lanes` lists each lane with its `counts` per column ID and total, the lane without a value last, and each card names its `lane`. Example: get_board {\"project\": \"TM\", \"lanes\": \"priority\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which board to read.",
@@ -60762,6 +60765,11 @@
               {
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
                 "type": "string"
               }
             ]
@@ -61199,6 +61207,76 @@
                         "description": "The start date.",
                         "type": "string"
                       },
+                      "status": {
+                        "additionalProperties": false,
+                        "description": "Its status, on the board across projects, where a column holds\nseveral statuses; left out on a project's board.",
+                        "properties": {
+                          "hue": {
+                            "description": "Its colour.",
+                            "oneOf": [
+                              {
+                                "const": "red",
+                                "description": "Red.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "orange",
+                                "description": "Orange.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "yellow",
+                                "description": "Yellow.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "green",
+                                "description": "Green.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "teal",
+                                "description": "Teal.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "blue",
+                                "description": "Blue.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "purple",
+                                "description": "Purple.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pink",
+                                "description": "Pink.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "grey",
+                                "description": "Grey.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The status's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "hue"
+                        ],
+                        "type": "object"
+                      },
                       "status_entered_at": {
                         "description": "When it entered its status.",
                         "type": "string"
@@ -61522,7 +61600,7 @@
                   "type": "boolean"
                 },
                 "hue": {
-                  "description": "Its colour, for a type or label.",
+                  "description": "Its colour, for a type, label or project.",
                   "oneOf": [
                     {
                       "const": "red",
@@ -61572,7 +61650,7 @@
                   ]
                 },
                 "id": {
-                  "description": "The lane's ID: the priority, the option, or the ID of the type,\nlabel, sprint or parent task; `none` for the lane of the cards\nwithout a value.",
+                  "description": "The lane's ID: the priority, the option, the project's key, or the\nID of the type, label, sprint or parent task; `none` for the lane of\nthe cards without a value.",
                   "type": "string"
                 },
                 "key": {
@@ -61580,11 +61658,11 @@
                   "type": "string"
                 },
                 "name": {
-                  "description": "Its name: the priority, the type's, label's, sprint's or option's\nname, or the parent's title; empty for the lane without a value.",
+                  "description": "Its name: the priority, the type's, label's, sprint's, project's or\noption's name, or the parent's title; empty for the lane without a\nvalue.",
                   "type": "string"
                 },
                 "settable": {
-                  "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks.",
+                  "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks, and a card never changes project this way.",
                   "type": "boolean"
                 },
                 "value": {
@@ -61836,6 +61914,11 @@
                     "const": "field",
                     "description": "A select custom field, named by `lane_field`.",
                     "type": "string"
+                  },
+                  {
+                    "const": "project",
+                    "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                    "type": "string"
                   }
                 ]
               },
@@ -61912,13 +61995,1228 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get the board across projects"
+      },
+      "covers": [
+        "board.get_across"
+      ],
+      "description": "Returns the open work of every active project on one board (the person's \"My work\"), with a column for each status category: `todo`, `in_progress` and `done` (closed in the last two weeks; older ones are counted in the column's `older` unless `show_older: true`). Each card has its `project` and its real `status`; each column's `statuses` gives every project's first status of that category, and `projects` lists the projects' statuses, so a card can be moved with move_task to the right status of its own project. Narrow it with a `query` (as for search_tasks), a sidebar `folder`, or a saved `view` of kind `board_across` (list_views). Swimlanes by project by default (`lanes`: project, priority, label, sprint, type, parent or none). Archived projects are left out. Example: get_board_across {\"query\": \"priority>=high\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which board across projects to read: the open work of every active\nproject (the caller's own project and those below it, for a caller\nlimited to one), with closed work of the last days.",
+        "properties": {
+          "folder": {
+            "description": "Only the projects of this folder (ID or name), with their\nsub-projects.",
+            "type": "string"
+          },
+          "lanes": {
+            "description": "Group the cards into swimlanes by this; default: `project`.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
+              }
+            ]
+          },
+          "query": {
+            "description": "Only the tasks this query matches, such as `label:bug due<+7d`;\nempty: every task.",
+            "type": "string"
+          },
+          "show_older": {
+            "default": false,
+            "description": "Show every closed card, however old.",
+            "type": "boolean"
+          },
+          "view": {
+            "description": "A saved view of the board across projects (ID or name): its query,\nfolder and swimlanes, which the fields below override.",
+            "type": "string"
+          }
+        },
+        "title": "BoardAcrossInput",
+        "type": "object"
+      },
+      "name": "get_board_across",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The board across projects: one column for each status category (to do,\nin progress, done), whatever the projects call their statuses.",
+        "properties": {
+          "columns": {
+            "description": "The columns: to do, in progress and done. A column's `id` is its\ncategory; its `statuses` give each project's first status of that\ncategory, where a dropped card goes. Cards carry their `status`.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One column: a status, or with sub-projects, every status of that name.",
+              "properties": {
+                "cards": {
+                  "description": "The cards, in order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "One card.",
+                    "properties": {
+                      "blocked": {
+                        "description": "Whether a task that blocks it is still open.",
+                        "type": "boolean"
+                      },
+                      "checklist": {
+                        "additionalProperties": false,
+                        "description": "The description's checklist.",
+                        "properties": {
+                          "done": {
+                            "description": "Ticked items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "total": {
+                            "description": "All items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "done",
+                          "total"
+                        ],
+                        "type": "object"
+                      },
+                      "claim": {
+                        "additionalProperties": false,
+                        "description": "The agent that claimed it, while the claim lasts.",
+                        "properties": {
+                          "agent": {
+                            "description": "The agent's name.",
+                            "type": "string"
+                          },
+                          "session": {
+                            "description": "The agent session holding it.",
+                            "type": "string"
+                          },
+                          "until": {
+                            "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "agent",
+                          "session",
+                          "until"
+                        ],
+                        "type": "object"
+                      },
+                      "closed_at": {
+                        "description": "When it was closed; left out while open.",
+                        "type": "string"
+                      },
+                      "comment_count": {
+                        "description": "How many comments it has.",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "cover": {
+                        "additionalProperties": false,
+                        "description": "Its cover image, as the layout's `covers` chooses; left out when it\nhas none.",
+                        "properties": {
+                          "attachment": {
+                            "description": "The attachment's ID.",
+                            "type": "string"
+                          },
+                          "height": {
+                            "description": "Its height in pixels, when known.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "mime": {
+                            "description": "Its media type.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its file name, for the image's text.",
+                            "type": "string"
+                          },
+                          "width": {
+                            "description": "Its width in pixels, when known.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "attachment",
+                          "name",
+                          "mime"
+                        ],
+                        "type": "object"
+                      },
+                      "due_date": {
+                        "description": "The due date.",
+                        "type": "string"
+                      },
+                      "edge": {
+                        "additionalProperties": false,
+                        "description": "Its coloured edge, as the layout's `colour_by` chooses; left out\nwhen it has none.",
+                        "properties": {
+                          "by": {
+                            "description": "What chose it.",
+                            "oneOf": [
+                              {
+                                "const": "none",
+                                "description": "No coloured edge (the default).",
+                                "type": "string"
+                              },
+                              {
+                                "const": "type",
+                                "description": "The colour of the task's type.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "priority",
+                                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "label",
+                                "description": "The colour of the task's first label.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "query",
+                                "description": "The first of the layout's colour rules whose query the task matches.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "hue": {
+                            "description": "The colour.",
+                            "oneOf": [
+                              {
+                                "const": "red",
+                                "description": "Red.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "orange",
+                                "description": "Orange.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "yellow",
+                                "description": "Yellow.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "green",
+                                "description": "Green.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "teal",
+                                "description": "Teal.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "blue",
+                                "description": "Blue.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "purple",
+                                "description": "Purple.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pink",
+                                "description": "Pink.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "grey",
+                                "description": "Grey.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "name": {
+                            "description": "What it stands for: the type's or label's name, the priority, or the\nrule's name (its query when it has none).",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "hue",
+                          "by",
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "estimate_minutes": {
+                        "description": "The estimate in minutes.",
+                        "type": "integer"
+                      },
+                      "fields": {
+                        "additionalProperties": true,
+                        "description": "Its values of the custom fields the layout shows on cards, by query\nname (without `cf.`); left out when it has none of them.",
+                        "type": "object"
+                      },
+                      "file_count": {
+                        "description": "How many files are attached to it and to its comments.",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "id": {
+                        "description": "The task's ID.",
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "The task's key.",
+                        "type": "string"
+                      },
+                      "labels": {
+                        "description": "Its labels.",
+                        "items": {
+                          "additionalProperties": false,
+                          "description": "A label on a task.",
+                          "properties": {
+                            "hue": {
+                              "description": "Its colour.",
+                              "oneOf": [
+                                {
+                                  "const": "red",
+                                  "description": "Red.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "orange",
+                                  "description": "Orange.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "yellow",
+                                  "description": "Yellow.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "green",
+                                  "description": "Green.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "teal",
+                                  "description": "Teal.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "blue",
+                                  "description": "Blue.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "purple",
+                                  "description": "Purple.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "pink",
+                                  "description": "Pink.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "grey",
+                                  "description": "Grey.",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "id": {
+                              "description": "The label's ID.",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "Its name.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "hue"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "lane": {
+                        "description": "The ID of the swimlane it is in; left out without swimlanes.",
+                        "type": "string"
+                      },
+                      "parent": {
+                        "description": "The parent task's key, for a subtask.",
+                        "type": "string"
+                      },
+                      "priority": {
+                        "description": "Its priority.",
+                        "oneOf": [
+                          {
+                            "const": "none",
+                            "description": "No priority (the default).",
+                            "type": "string"
+                          },
+                          {
+                            "const": "low",
+                            "description": "Low.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "normal",
+                            "description": "Normal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "high",
+                            "description": "High.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "urgent",
+                            "description": "Urgent.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "progress_percent": {
+                        "description": "Its progress in percent, as tasks show it.",
+                        "maximum": 255,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "project": {
+                        "description": "Its project's key (differs from the board's for sub-project tasks).",
+                        "type": "string"
+                      },
+                      "rank": {
+                        "description": "Its place in the column.",
+                        "type": "string"
+                      },
+                      "recurring": {
+                        "description": "Whether it is the open occurrence of a recurring task.",
+                        "type": "boolean"
+                      },
+                      "spent_minutes": {
+                        "description": "Logged time in minutes.",
+                        "type": "integer"
+                      },
+                      "sprint": {
+                        "additionalProperties": false,
+                        "description": "The sprint it is in.",
+                        "properties": {
+                          "end_date": {
+                            "description": "Its last day (`YYYY-MM-DD`).",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "Its ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          },
+                          "start_date": {
+                            "description": "Its first day (`YYYY-MM-DD`).",
+                            "type": "string"
+                          },
+                          "state": {
+                            "description": "Where it stands.",
+                            "oneOf": [
+                              {
+                                "const": "planned",
+                                "description": "Being planned; not started yet (the default).",
+                                "type": "string"
+                              },
+                              {
+                                "const": "active",
+                                "description": "Running: started and not completed. One per project at most.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "closed",
+                                "description": "Completed.",
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "start_date": {
+                        "description": "The start date.",
+                        "type": "string"
+                      },
+                      "status": {
+                        "additionalProperties": false,
+                        "description": "Its status, on the board across projects, where a column holds\nseveral statuses; left out on a project's board.",
+                        "properties": {
+                          "hue": {
+                            "description": "Its colour.",
+                            "oneOf": [
+                              {
+                                "const": "red",
+                                "description": "Red.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "orange",
+                                "description": "Orange.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "yellow",
+                                "description": "Yellow.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "green",
+                                "description": "Green.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "teal",
+                                "description": "Teal.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "blue",
+                                "description": "Blue.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "purple",
+                                "description": "Purple.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pink",
+                                "description": "Pink.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "grey",
+                                "description": "Grey.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The status's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "hue"
+                        ],
+                        "type": "object"
+                      },
+                      "status_entered_at": {
+                        "description": "When it entered its status.",
+                        "type": "string"
+                      },
+                      "subtasks": {
+                        "additionalProperties": false,
+                        "description": "Its subtasks: closed and all.",
+                        "properties": {
+                          "done": {
+                            "description": "Ticked items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "total": {
+                            "description": "All items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "done",
+                          "total"
+                        ],
+                        "type": "object"
+                      },
+                      "title": {
+                        "description": "Its title.",
+                        "type": "string"
+                      },
+                      "type": {
+                        "additionalProperties": false,
+                        "description": "Its type.",
+                        "properties": {
+                          "glyph": {
+                            "description": "Its shape.",
+                            "oneOf": [
+                              {
+                                "const": "task",
+                                "description": "A plain task.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "bug",
+                                "description": "A bug.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "feature",
+                                "description": "A feature.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "milestone",
+                                "description": "A milestone.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "epic",
+                                "description": "An epic: a large piece of work that holds stories.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "story",
+                                "description": "A story: a piece of work told from the user's side.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The type's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "glyph"
+                        ],
+                        "type": "object"
+                      },
+                      "updated_at": {
+                        "description": "When anything about it last changed.",
+                        "type": "string"
+                      },
+                      "version": {
+                        "description": "Its version, for `expected_version`.",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "title",
+                      "project",
+                      "type",
+                      "priority",
+                      "labels",
+                      "checklist",
+                      "progress_percent",
+                      "subtasks",
+                      "blocked",
+                      "comment_count",
+                      "file_count",
+                      "spent_minutes",
+                      "rank",
+                      "status_entered_at",
+                      "updated_at",
+                      "version",
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "category": {
+                  "description": "Its category.",
+                  "oneOf": [
+                    {
+                      "const": "todo",
+                      "description": "Not started.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "in_progress",
+                      "description": "Being worked on.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "description": "Finished; closes the task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cancelled",
+                      "description": "Dropped; closes the task.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "collapsed": {
+                  "description": "Collapsed by the layout.",
+                  "type": "boolean"
+                },
+                "count": {
+                  "description": "Tasks in the column, including hidden older ones.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "hidden": {
+                  "description": "Hidden by the layout; its cards are left out.",
+                  "type": "boolean"
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The status's ID in the board's own project; a status that exists\nonly in sub-projects has the first sub-project's.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The status name.",
+                  "type": "string"
+                },
+                "older": {
+                  "description": "Closed cards hidden behind \"Show older\".",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "over_limit": {
+                  "description": "Whether the column holds more tasks than its WIP limit.",
+                  "type": "boolean"
+                },
+                "sort_mode": {
+                  "description": "How its cards are ordered.",
+                  "oneOf": [
+                    {
+                      "const": "manual",
+                      "description": "By hand, by dragging (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "priority",
+                      "description": "Highest priority first.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "due",
+                      "description": "Soonest due date first; no due date last.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "updated",
+                      "description": "Most recently changed first.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "statuses": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Every status shown in this column, by project key: one, or more when\nsub-projects are included.",
+                  "type": "object"
+                },
+                "under_minimum": {
+                  "default": false,
+                  "description": "Whether the column holds fewer tasks than its WIP minimum.",
+                  "type": "boolean"
+                },
+                "wip_limit": {
+                  "description": "The WIP limit, if the status has one.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "wip_min": {
+                  "description": "The WIP minimum, if the status has one.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "category",
+                "hue",
+                "statuses",
+                "over_limit",
+                "under_minimum",
+                "count",
+                "older",
+                "hidden",
+                "collapsed",
+                "sort_mode",
+                "cards"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "folder": {
+            "description": "The folder the board is limited to, by name.",
+            "type": "string"
+          },
+          "hide_done_after_days": {
+            "description": "Closed cards older than this many days are counted in `older`, not\nlisted, unless `show_older`.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lanes": {
+            "description": "The swimlanes in order, the lane without a value last; empty\nwithout swimlanes. Each card names its lane.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One swimlane: a band across the columns for one value of the field the\nlayout's `lanes` chooses.",
+              "properties": {
+                "count": {
+                  "description": "The cards it holds on the board, closed cards behind \"Show older\"\nand hidden columns aside.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "counts": {
+                  "additionalProperties": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "description": "Those cards by column ID.",
+                  "type": "object"
+                },
+                "empty": {
+                  "description": "The lane of the cards without a value; it comes last.",
+                  "type": "boolean"
+                },
+                "hue": {
+                  "description": "Its colour, for a type, label or project.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The lane's ID: the priority, the option, the project's key, or the\nID of the type, label, sprint or parent task; `none` for the lane of\nthe cards without a value.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The parent task's key, for a lane of a parent.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name: the priority, the type's, label's, sprint's, project's or\noption's name, or the parent's title; empty for the lane without a\nvalue.",
+                  "type": "string"
+                },
+                "settable": {
+                  "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks, and a card never changes project this way.",
+                  "type": "boolean"
+                },
+                "value": {
+                  "description": "What a card dropped into the lane gets, as `task.move`'s `changes`\ntake it: the priority, the type's or label's name, the sprint's or\nparent's ID, or the option; left out for the lane without a value.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "empty",
+                "settable",
+                "count",
+                "counts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "lanes_by": {
+            "description": "What the swimlanes group by.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                "type": "string"
+              }
+            ]
+          },
+          "projects": {
+            "description": "The projects of the cards, with their statuses.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A project with cards on the board across projects.",
+              "properties": {
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "key": {
+                  "description": "Its key.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "statuses": {
+                  "description": "Its statuses in order. A card dropped into a column moves to the\nfirst of them in that column's category; when there are several,\npeople choose.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A status a card can move to on the board across projects.",
+                    "properties": {
+                      "category": {
+                        "description": "Its category: the column it shows in.",
+                        "oneOf": [
+                          {
+                            "const": "todo",
+                            "description": "Not started.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "in_progress",
+                            "description": "Being worked on.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "done",
+                            "description": "Finished; closes the task.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "cancelled",
+                            "description": "Dropped; closes the task.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "hue": {
+                        "description": "Its colour.",
+                        "oneOf": [
+                          {
+                            "const": "red",
+                            "description": "Red.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "orange",
+                            "description": "Orange.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "yellow",
+                            "description": "Yellow.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "green",
+                            "description": "Green.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "teal",
+                            "description": "Teal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "blue",
+                            "description": "Blue.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "purple",
+                            "description": "Purple.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "pink",
+                            "description": "Pink.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "grey",
+                            "description": "Grey.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "description": "The status's ID.",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "Its name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "category",
+                      "hue"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "hue",
+                "statuses"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "query": {
+            "description": "The query, in its normal form; empty for every task.",
+            "type": "string"
+          },
+          "view": {
+            "description": "The saved view it was read from, by ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "columns",
+          "lanes_by",
+          "projects",
+          "hide_done_after_days"
+        ],
+        "title": "BoardAcross",
+        "type": "object"
+      },
+      "title": "Get the board across projects",
+      "toolset": "views"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
         "readOnlyHint": false,
         "title": "Set the board layout"
       },
       "covers": [
         "layout.update"
       ],
-      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), `covers` (off, chosen, first_image), the swimlanes (`lanes`: none, parent, priority, label, sprint, type, or field with `lane_field`, a select field; which lanes are collapsed is the person's own setting in the app), or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
+      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), `covers` (off, chosen, first_image), the swimlanes (`lanes`: none, parent, priority, label, sprint, type, project, or field with `lane_field`, a select field; which lanes are collapsed is the person's own setting in the app), or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a board layout; fields left out keep their value.",
@@ -62117,7 +63415,7 @@
             "type": "string"
           },
           "lanes": {
-            "description": "What the swimlanes group the cards by: `none`, `parent`, `priority`,\n`label`, `sprint`, `type` or `field` (with `lane_field`).",
+            "description": "What the swimlanes group the cards by: `none`, `parent`, `priority`,\n`label`, `sprint`, `type`, `project` or `field` (with `lane_field`).",
             "oneOf": [
               {
                 "const": "none",
@@ -62152,6 +63450,11 @@
               {
                 "const": "field",
                 "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
                 "type": "string"
               }
             ]
@@ -62452,6 +63755,11 @@
                     "const": "field",
                     "description": "A select custom field, named by `lane_field`.",
                     "type": "string"
+                  },
+                  {
+                    "const": "project",
+                    "description": "The task's project: with sub-projects, or on the board across\nprojects. Cards can't be dropped into another project's lane.",
+                    "type": "string"
                   }
                 ]
               },
@@ -62563,6 +63871,11 @@
                 "const": "calendar",
                 "description": "The calendar.",
                 "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
+                "type": "string"
               }
             ]
           },
@@ -62600,8 +63913,12 @@
                   "description": "What it is for.",
                   "type": "string"
                 },
+                "folder": {
+                  "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                  "type": "string"
+                },
                 "group_by": {
-                  "description": "The field rows are grouped by.",
+                  "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                   "type": "string"
                 },
                 "id": {
@@ -62633,6 +63950,11 @@
                     {
                       "const": "calendar",
                       "description": "The calendar.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "board_across",
+                      "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                       "type": "string"
                     }
                   ]
@@ -62710,7 +64032,7 @@
       "covers": [
         "view.create"
       ],
-      "description": "Saves a query as a named view of a `project` or of the whole workspace, with optional `columns`, `sort`, `group_by`, `totals` and `is_default`. The query must be valid; relative dates in it are evaluated whenever the view is opened. Only save views the person asked for. Example: create_view {\"name\": \"Due this week\", \"project\": \"TM\", \"query\": \"is:open due:this-week\", \"sort\": \"due\"}",
+      "description": "Saves a query as a named view of a `project` or of the whole workspace, with optional `columns`, `sort`, `group_by`, `totals` and `is_default`. The query must be valid; relative dates in it are evaluated whenever the view is opened. A view of `kind: board_across` (the board across projects) belongs to the whole workspace, may keep to a `folder`, and its `group_by` is what its swimlanes group by. Only save views the person asked for. Example: create_view {\"name\": \"Due this week\", \"project\": \"TM\", \"query\": \"is:open due:this-week\", \"sort\": \"due\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A new saved view.",
@@ -62726,8 +64048,12 @@
             "description": "What it is for.",
             "type": "string"
           },
+          "folder": {
+            "description": "For a board across projects: only the projects of this folder (ID\nor name).",
+            "type": "string"
+          },
           "group_by": {
-            "description": "The field rows are grouped by.",
+            "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by (`project`, `priority`, `label`, `sprint`,\n`type`, `parent` or `none`).",
             "type": "string"
           },
           "is_default": {
@@ -62756,6 +64082,11 @@
               {
                 "const": "calendar",
                 "description": "The calendar.",
+                "type": "string"
+              },
+              {
+                "const": "board_across",
+                "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                 "type": "string"
               }
             ]
@@ -62823,8 +64154,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -62856,6 +64191,11 @@
                   {
                     "const": "calendar",
                     "description": "The calendar.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "board_across",
+                    "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                     "type": "string"
                   }
                 ]
@@ -62959,6 +64299,11 @@
                   "const": "totals",
                   "description": "The totals.",
                   "type": "string"
+                },
+                {
+                  "const": "folder",
+                  "description": "The folder of a board across projects.",
+                  "type": "string"
                 }
               ]
             },
@@ -62973,6 +64318,10 @@
           },
           "description": {
             "description": "A new description.",
+            "type": "string"
+          },
+          "folder": {
+            "description": "For a board across projects: another folder (ID or name).",
             "type": "string"
           },
           "group_by": {
@@ -63049,8 +64398,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -63082,6 +64435,11 @@
                   {
                     "const": "calendar",
                     "description": "The calendar.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "board_across",
+                    "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                     "type": "string"
                   }
                 ]
@@ -63203,8 +64561,12 @@
                 "description": "What it is for.",
                 "type": "string"
               },
+              "folder": {
+                "description": "For a board across projects: the folder whose projects it shows, by\nname.",
+                "type": "string"
+              },
               "group_by": {
-                "description": "The field rows are grouped by.",
+                "description": "The field rows are grouped by; for a board across projects, what\nits swimlanes group by.",
                 "type": "string"
               },
               "id": {
@@ -63236,6 +64598,11 @@
                   {
                     "const": "calendar",
                     "description": "The calendar.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "board_across",
+                    "description": "The board across projects (\"My work\"); always a view of the whole\nworkspace. Its `group_by` is what the swimlanes group by, and it can\nkeep to the projects of one `folder`.",
                     "type": "string"
                   }
                 ]

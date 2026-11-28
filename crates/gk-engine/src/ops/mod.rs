@@ -7,6 +7,7 @@ use gk_api::{OpDescriptor, Operation, descriptor};
 
 use crate::registry::Registry;
 
+pub(crate) mod across;
 pub(crate) mod agent;
 pub(crate) mod automation;
 pub(crate) mod backup;
@@ -84,6 +85,7 @@ pub(crate) fn register(r: &mut Registry) {
     description::register(r);
     draft::register(r);
     board::register(r);
+    across::register(r);
     file::register(r);
     time::register(r);
     work_kind::register(r);

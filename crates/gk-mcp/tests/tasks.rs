@@ -648,5 +648,54 @@ async fn an_agent_reads_and_sets_board_swimlanes_and_moves_a_card_between_lanes(
         .unwrap();
     assert_eq!(low["count"], 1);
     assert_eq!(board["lanes"][4]["empty"], true);
+
+    // The board across projects: a column per category, lanes by project,
+    // each card with its real status; a move goes to the column's status.
+    output(
+        &c.call("create_project", json!({ "name": "Other", "key": "OT" }))
+            .await,
+    );
+    output(
+        &c.call(
+            "create_task",
+            json!({ "project": "OT", "title": "Elsewhere" }),
+        )
+        .await,
+    );
+    let across = output(&c.call("get_board_across", json!({})).await);
+    let ids: Vec<&str> = across["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|col| col["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["todo", "in_progress", "done"]);
+    let lanes: Vec<&str> = across["lanes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(lanes, ["LN", "OT"]);
+    assert_eq!(across["columns"][1]["cards"][0]["key"], "LN-1");
+    assert_eq!(
+        across["columns"][1]["cards"][0]["status"]["name"],
+        "In progress"
+    );
+    let status = across["columns"][1]["statuses"]["OT"].clone();
+    let moved = output(
+        &c.call("move_task", json!({ "key": "OT-1", "status": status }))
+            .await,
+    );
+    assert_eq!(moved["task"]["status"]["name"], "In progress");
+    let mine = output(
+        &c.call(
+            "get_board_across",
+            json!({ "query": "project:OT", "lanes": "none" }),
+        )
+        .await,
+    );
+    assert_eq!(mine["columns"][1]["cards"][0]["key"], "OT-1");
+    assert!(mine.get("lanes").is_none());
     c.close().await;
 }

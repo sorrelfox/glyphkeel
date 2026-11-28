@@ -28,6 +28,8 @@ interface ViewCommandsInput {
   active: SavedView | undefined;
   /** What the list shows now, saved by Save and Save as. */
   setup: ListSetup;
+  /** A board across projects' folder, by name; none for every project. */
+  folder?: string | undefined;
   onChoose: (view: SavedView | undefined) => void;
   /** After a view was created, renamed or deleted: the one to show (none after a deletion). */
   onSaved: (view: SavedView | undefined) => void;
@@ -50,7 +52,7 @@ export interface ViewCommands {
  * The saved views' commands: choose, save, save as, rename, make default,
  * delete. Each change is one Undo step, offered in its toast.
  */
-export function useViewCommands({ project, kind = "list", views, active, setup, onChoose, onSaved }: ViewCommandsInput): ViewCommands {
+export function useViewCommands({ project, kind = "list", views, active, setup, folder, onChoose, onSaved }: ViewCommandsInput): ViewCommands {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -95,6 +97,8 @@ export function useViewCommands({ project, kind = "list", views, active, setup, 
     if (!active) {
       return;
     }
+    const across = kind === "board_across";
+    const clear = [...(setup.sort === "" ? (["sort"] as const) : []), ...(setup.groupBy === "" ? (["group_by"] as const) : []), ...(across && folder === undefined ? (["folder"] as const) : [])];
     runToasting(
       () =>
         call("view.update", {
@@ -103,7 +107,8 @@ export function useViewCommands({ project, kind = "list", views, active, setup, 
           columns: [...setup.columns],
           ...(setup.sort === "" ? {} : { sort: setup.sort }),
           ...(setup.groupBy === "" ? {} : { group_by: setup.groupBy }),
-          ...(setup.sort === "" || setup.groupBy === "" ? { clear: [...(setup.sort === "" ? (["sort"] as const) : []), ...(setup.groupBy === "" ? (["group_by"] as const) : [])] } : {}),
+          ...(across && folder !== undefined ? { folder } : {}),
+          ...(clear.length > 0 ? { clear } : {}),
         }),
       t("list-view-saved", { name: active.name }),
     );
@@ -165,6 +170,7 @@ export function useViewCommands({ project, kind = "list", views, active, setup, 
                   ...(forProject && project !== undefined ? { project } : {}),
                   ...(setup.sort === "" ? {} : { sort: setup.sort }),
                   ...(setup.groupBy === "" ? {} : { group_by: setup.groupBy }),
+                  ...(kind === "board_across" && folder !== undefined ? { folder } : {}),
                 }),
               t("list-view-created", { name }),
             )
@@ -183,13 +189,14 @@ export function useViewCommands({ project, kind = "list", views, active, setup, 
 }
 
 /** The saved view picker: the view's name, a filled star for the default. */
-export function ViewPicker({ active, entries }: { active: SavedView | undefined; entries: readonly MenuEntry[] }) {
+export function ViewPicker({ active, entries, none }: { active: SavedView | undefined; entries: readonly MenuEntry[]; /** The name of no view; the list's "All tasks" unless said. */ none?: string }) {
   const t = useT();
+  const nothing = none ?? t("list-view-none");
   return (
     <MenuTrigger>
-      <Button className={classes("btn", styles.viewButton)} aria-label={t("list-view-button", { name: active?.name ?? t("list-view-none") })}>
+      <Button className={classes("btn", styles.viewButton)} aria-label={t("list-view-button", { name: active?.name ?? nothing })}>
         <Star className={classes("ic", active?.is_default === true ? styles.starOn : "muted")} aria-hidden="true" />
-        <span className="truncate">{active?.name ?? t("list-view-none")}</span>
+        <span className="truncate">{active?.name ?? nothing}</span>
         <ChevronDown className="ic s muted" aria-hidden="true" />
       </Button>
       <Popover className="pop menuPopover" placement="bottom start" offset={4}>
@@ -308,7 +315,7 @@ function ViewDialog({ editing, project, kind, onClose, onSubmit }: ViewDialogPro
         )}
         {editing.kind === "create" && (
           <Switch isSelected={isDefault} onChange={setDefault}>
-            {t(kind === "gantt" ? "gantt-view-default" : "list-view-default")}
+            {t(kind === "gantt" ? "gantt-view-default" : kind === "board_across" ? "my-work-view-default" : "list-view-default")}
           </Switch>
         )}
         {error !== null && (

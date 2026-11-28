@@ -6,6 +6,8 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::path::Path;
+
 use gk_api::ops::common::Via;
 use gk_api::ops::history::{HistoryRevert, RevertInput};
 use gk_api::ops::settings::{SettingKey, SettingsPatch, SettingsUpdate};
@@ -883,9 +885,13 @@ fn settings_can_be_set_back_to_their_default() {
         .unwrap();
 }
 
-/// Takes a workspace back from schema version 4 to 3: the timer without
-/// pausing, reminders as version 3 had them.
+/// Takes a workspace back from the current schema version to 3: the timer
+/// without pausing, reminders as version 3 had them. Newest first; every
+/// migration after version 3 must be undone here, which
+/// `going_back_to_3_drops_everything_later_migrations_made` checks.
 const BACK_TO_3: &str = "
+    DROP TABLE proposals;
+    DROP TABLE personal_marks; DROP INDEX activity_at;
     DROP INDEX projects_folder; ALTER TABLE projects DROP COLUMN folder_id;
     DROP TABLE project_folders;
     ALTER TABLE agent_sessions DROP COLUMN rate_limited;
@@ -906,6 +912,7 @@ const BACK_TO_3: &str = "
     ALTER TABLE wiki_pages DROP COLUMN is_template;
     DROP INDEX wiki_pages_one_home; ALTER TABLE wiki_pages DROP COLUMN is_home;
     DROP TABLE text_links;
+    DROP INDEX drafts_owner; DROP INDEX drafts_updated;
     ALTER TABLE wiki_revisions DROP COLUMN resolved_at;
     ALTER TABLE timer DROP COLUMN running_since; ALTER TABLE timer DROP COLUMN elapsed_ms;
     ALTER TABLE timer DROP COLUMN note; ALTER TABLE timer DROP COLUMN reminded_at;
@@ -916,6 +923,110 @@ const BACK_TO_3: &str = "
     CREATE INDEX reminders_task ON reminders (task_id);
     CREATE INDEX reminders_due ON reminders (remind_at)
       WHERE fired_at IS NULL AND dismissed_at IS NULL;";
+
+/// The tables, indexes, views and triggers a migration script creates, by
+/// name.
+fn created_by(sql: &str) -> Vec<String> {
+    let text: String = sql
+        .lines()
+        .map(|line| line.split("--").next().unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let words: Vec<String> = text
+        .split(|c: char| c.is_whitespace() || c == '(' || c == ';')
+        .filter(|w| !w.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        if words[i].eq_ignore_ascii_case("CREATE") {
+            let mut j = i + 1;
+            while words.get(j).is_some_and(|w| {
+                ["UNIQUE", "VIRTUAL", "TEMP"]
+                    .iter()
+                    .any(|k| w.eq_ignore_ascii_case(k))
+            }) {
+                j += 1;
+            }
+            if words.get(j).is_some_and(|w| {
+                ["TABLE", "INDEX", "VIEW", "TRIGGER"]
+                    .iter()
+                    .any(|k| w.eq_ignore_ascii_case(k))
+            }) {
+                j += 1;
+                if words.get(j).is_some_and(|w| w.eq_ignore_ascii_case("IF")) {
+                    j += 3;
+                }
+                if let Some(name) = words.get(j) {
+                    out.push(name.to_lowercase());
+                }
+            }
+            i = j;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// `BACK_TO_3` reaches version 3: nothing a later migration created is
+/// left. A new migration that adds a table or an index fails here until
+/// `BACK_TO_3` drops it too.
+#[test]
+fn going_back_to_3_drops_everything_later_migrations_made() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../gk-store/migrations");
+    let mut files: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "sql"))
+        .collect();
+    files.sort();
+    let number = |p: &Path| -> u32 {
+        p.file_name().unwrap().to_string_lossy()[..4]
+            .parse()
+            .unwrap()
+    };
+    let early: Vec<String> = files
+        .iter()
+        .filter(|p| number(p) <= 3)
+        .flat_map(|p| created_by(&std::fs::read_to_string(p).unwrap()))
+        .collect();
+    let later: Vec<(String, String)> = files
+        .iter()
+        .filter(|p| number(p) > 3)
+        .flat_map(|p| {
+            let file = p.file_name().unwrap().to_string_lossy().into_owned();
+            created_by(&std::fs::read_to_string(p).unwrap())
+                .into_iter()
+                .map(move |name| (file.clone(), name))
+        })
+        .filter(|(_, name)| !early.contains(name))
+        .collect();
+    assert!(later.iter().any(|(_, n)| n == "proposals"), "{later:?}");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let layout = WorkspaceLayout::new(tmp.path().join("Personal"));
+    open(&tmp).close();
+    let conn = gk_store::open_raw(&layout.database()).unwrap();
+    conn.execute_batch(BACK_TO_3).unwrap();
+    let mut stmt = conn
+        .prepare("SELECT lower(name) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'")
+        .unwrap();
+    let left: Vec<String> = stmt
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let missed: Vec<String> = later
+        .iter()
+        .filter(|(_, name)| left.contains(name))
+        .map(|(file, name)| format!("{name} (from {file})"))
+        .collect();
+    assert!(
+        missed.is_empty(),
+        "BACK_TO_3 must drop what later migrations create; add these to it: {missed:?}"
+    );
+}
 
 #[test]
 fn the_app_backs_up_an_older_workspace_before_upgrading_it() {

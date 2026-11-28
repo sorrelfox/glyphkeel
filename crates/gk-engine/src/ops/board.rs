@@ -495,6 +495,76 @@ fn older_of(tx: &Transaction<'_>, status: Id, cutoff: Option<i64>) -> Result<u64
     Ok(u64::try_from(n).unwrap_or(0))
 }
 
+/// The columns a card is read from, over `tasks t`, `projects p` and
+/// `task_types y`; [`card_row`] reads them.
+pub(crate) fn card_columns() -> String {
+    use super::recurrence::RECURRING_SQL;
+    format!(
+        "t.id, p.key, t.number, t.title, y.id, y.name, y.glyph, t.priority, t.parent_id,
+         t.start_date, t.due_date, t.estimate_min, t.checklist_done, t.checklist_total,
+         t.rank, t.status_entered_at, t.updated_at, t.closed_at, t.version,
+         {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
+         t.spent_min, t.claim_session, t.claim_name, t.claim_until, {RECURRING_SQL}"
+    )
+}
+
+/// The number of columns [`card_columns`] reads.
+pub(crate) const CARD_COLUMN_COUNT: usize = 29;
+
+/// A card as [`card_columns`] read it, and when it was closed.
+pub(crate) fn card_row(
+    r: &gk_store::rusqlite::Row<'_>,
+    now: i64,
+) -> gk_store::rusqlite::Result<(Card, Option<i64>)> {
+    let closed: Option<i64> = r.get(17)?;
+    Ok((
+        Card {
+            key: format!("{}-{}", r.get::<_, String>(1)?, r.get::<_, i64>(2)?),
+            title: r.get(3)?,
+            project: r.get(1)?,
+            task_type: TypeRef {
+                id: id_at(r, 4)?.to_string(),
+                name: r.get(5)?,
+                glyph: parse_enum(&r.get::<_, String>(6)?).unwrap_or(Glyph::Task),
+            },
+            priority: parse_enum(priority_name(r.get(7)?)).unwrap_or(Priority::None),
+            labels: Vec::new(),
+            parent: opt_id_at(r, 8)?.map(|id| id.to_string()),
+            sprint: None,
+            start_date: r.get(9)?,
+            due_date: r.get(10)?,
+            estimate_minutes: r.get(11)?,
+            checklist: Checklist {
+                done: u32::try_from(r.get::<_, i64>(12)?).unwrap_or(0),
+                total: u32::try_from(r.get::<_, i64>(13)?).unwrap_or(0),
+            },
+            progress_percent: 0,
+            subtasks: Checklist {
+                done: u32::try_from(r.get::<_, i64>(20)?).unwrap_or(0),
+                total: u32::try_from(r.get::<_, i64>(19)?).unwrap_or(0),
+            },
+            blocked: r.get(21)?,
+            comment_count: u32::try_from(r.get::<_, i64>(22)?).unwrap_or(0),
+            file_count: u32::try_from(r.get::<_, i64>(23)?).unwrap_or(0),
+            spent_minutes: r.get(24)?,
+            claim: live_claim(opt_id_at(r, 25)?, r.get(26)?, r.get(27)?, now),
+            recurring: r.get(28)?,
+            rank: r.get(14)?,
+            status_entered_at: rfc3339(r.get(15)?),
+            updated_at: rfc3339(r.get(16)?),
+            closed_at: closed.map(rfc3339),
+            version: r.get(18)?,
+            id: id_at(r, 0)?.to_string(),
+            fields: BTreeMap::new(),
+            edge: None,
+            cover: None,
+            lane: None,
+            status: None,
+        },
+        closed,
+    ))
+}
+
 /// The live cards of `status`, without those closed before `cutoff`, in
 /// rank order. A status belongs to one project; naming it lets the board
 /// index find the column's tasks without reading the others.
@@ -504,76 +574,25 @@ fn cards_of(
     now: i64,
     cutoff: Option<i64>,
 ) -> Result<Vec<(Card, Option<i64>)>, Failure> {
-    use super::recurrence::RECURRING_SQL;
     let mut stmt = tx.prepare_cached(&format!(
-        "SELECT t.id, p.key, t.number, t.title, y.id, y.name, y.glyph, t.priority, t.parent_id,
-                t.start_date, t.due_date, t.estimate_min, t.checklist_done, t.checklist_total,
-                t.rank, t.status_entered_at, t.updated_at, t.closed_at, t.version,
-                {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
-                t.spent_min, t.claim_session, t.claim_name, t.claim_until, {RECURRING_SQL}
+        "SELECT {}
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN task_types y ON y.id = t.type_id
           WHERE t.project_id = (SELECT project_id FROM statuses WHERE id = ?1)
             AND t.status_id = ?1 AND t.deleted_at IS NULL
             AND (?2 IS NULL OR t.closed_at IS NULL OR t.closed_at >= ?2)
-          ORDER BY t.rank, t.id"
+          ORDER BY t.rank, t.id",
+        card_columns()
     ))?;
     let rows = stmt
-        .query_map(params![b(status), cutoff], |r| {
-            let closed: Option<i64> = r.get(17)?;
-            Ok((
-                Card {
-                    key: format!("{}-{}", r.get::<_, String>(1)?, r.get::<_, i64>(2)?),
-                    title: r.get(3)?,
-                    project: r.get(1)?,
-                    task_type: TypeRef {
-                        id: id_at(r, 4)?.to_string(),
-                        name: r.get(5)?,
-                        glyph: parse_enum(&r.get::<_, String>(6)?).unwrap_or(Glyph::Task),
-                    },
-                    priority: parse_enum(priority_name(r.get(7)?)).unwrap_or(Priority::None),
-                    labels: Vec::new(),
-                    parent: opt_id_at(r, 8)?.map(|id| id.to_string()),
-                    sprint: None,
-                    start_date: r.get(9)?,
-                    due_date: r.get(10)?,
-                    estimate_minutes: r.get(11)?,
-                    checklist: Checklist {
-                        done: u32::try_from(r.get::<_, i64>(12)?).unwrap_or(0),
-                        total: u32::try_from(r.get::<_, i64>(13)?).unwrap_or(0),
-                    },
-                    progress_percent: 0,
-                    subtasks: Checklist {
-                        done: u32::try_from(r.get::<_, i64>(20)?).unwrap_or(0),
-                        total: u32::try_from(r.get::<_, i64>(19)?).unwrap_or(0),
-                    },
-                    blocked: r.get(21)?,
-                    comment_count: u32::try_from(r.get::<_, i64>(22)?).unwrap_or(0),
-                    file_count: u32::try_from(r.get::<_, i64>(23)?).unwrap_or(0),
-                    spent_minutes: r.get(24)?,
-                    claim: live_claim(opt_id_at(r, 25)?, r.get(26)?, r.get(27)?, now),
-                    recurring: r.get(28)?,
-                    rank: r.get(14)?,
-                    status_entered_at: rfc3339(r.get(15)?),
-                    updated_at: rfc3339(r.get(16)?),
-                    closed_at: closed.map(rfc3339),
-                    version: r.get(18)?,
-                    id: id_at(r, 0)?.to_string(),
-                    fields: BTreeMap::new(),
-                    edge: None,
-                    cover: None,
-                    lane: None,
-                },
-                closed,
-            ))
-        })?
+        .query_map(params![b(status), cutoff], |r| card_row(r, now))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
 /// Gives a card read by [`cards_of`] its labels, its progress and its
 /// parent's key (in place of the parent's ID).
-fn finish_card(tx: &Transaction<'_>, card: &mut Card) -> Result<(), Failure> {
+pub(crate) fn finish_card(tx: &Transaction<'_>, card: &mut Card) -> Result<(), Failure> {
     let id: Id = card
         .id
         .parse()

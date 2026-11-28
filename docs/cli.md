@@ -41,6 +41,7 @@ Dates take `2026-12-31` or words such as `today`, `fri`, `next mon`, `+3d` or
 
 ```sh
 glyphkeel today
+glyphkeel board --all --query "priority>=high"   # My work: every project's board by category
 glyphkeel search "domain renewal"
 glyphkeel task list --query "is:overdue"
 ```

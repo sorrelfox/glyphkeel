@@ -95,6 +95,9 @@ pub enum LaneBy {
     Type,
     /// A select custom field, named by `lane_field`.
     Field,
+    /// The task's project: with sub-projects, or on the board across
+    /// projects. Cards can't be dropped into another project's lane.
+    Project,
 }
 
 /// The person's layout of one project's board.
@@ -271,6 +274,22 @@ pub struct Card {
     /// The ID of the swimlane it is in; left out without swimlanes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<String>,
+    /// Its status, on the board across projects, where a column holds
+    /// several statuses; left out on a project's board.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<CardStatus>,
+}
+
+/// The status a card is in, as the board across projects shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CardStatus {
+    /// The status's ID.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// Its colour.
+    pub hue: Hue,
 }
 
 /// The ID of the swimlane of the cards without a value.
@@ -281,12 +300,13 @@ pub const EMPTY_LANE: &str = "none";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Swimlane {
-    /// The lane's ID: the priority, the option, or the ID of the type,
-    /// label, sprint or parent task; `none` for the lane of the cards
-    /// without a value.
+    /// The lane's ID: the priority, the option, the project's key, or the
+    /// ID of the type, label, sprint or parent task; `none` for the lane of
+    /// the cards without a value.
     pub id: String,
-    /// Its name: the priority, the type's, label's, sprint's or option's
-    /// name, or the parent's title; empty for the lane without a value.
+    /// Its name: the priority, the type's, label's, sprint's, project's or
+    /// option's name, or the parent's title; empty for the lane without a
+    /// value.
     pub name: String,
     /// The parent task's key, for a lane of a parent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -298,11 +318,11 @@ pub struct Swimlane {
     pub value: Option<String>,
     /// The lane of the cards without a value; it comes last.
     pub empty: bool,
-    /// Its colour, for a type or label.
+    /// Its colour, for a type, label or project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,
     /// Whether cards can be dropped into it to take its value; a completed
-    /// sprint can't take tasks.
+    /// sprint can't take tasks, and a card never changes project this way.
     pub settable: bool,
     /// The cards it holds on the board, closed cards behind "Show older"
     /// and hidden columns aside.
@@ -394,6 +414,92 @@ pub struct Board {
     pub lanes: Vec<Swimlane>,
 }
 
+/// Which board across projects to read: the open work of every active
+/// project (the caller's own project and those below it, for a caller
+/// limited to one), with closed work of the last days.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BoardAcrossInput {
+    /// A saved view of the board across projects (ID or name): its query,
+    /// folder and swimlanes, which the fields below override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
+    /// Only the tasks this query matches, such as `label:bug due<+7d`;
+    /// empty: every task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    /// Only the projects of this folder (ID or name), with their
+    /// sub-projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    /// Group the cards into swimlanes by this; default: `project`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lanes: Option<LaneBy>,
+    /// Show every closed card, however old.
+    #[serde(default)]
+    pub show_older: bool,
+}
+
+/// A status a card can move to on the board across projects.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AcrossStatus {
+    /// The status's ID.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// Its category: the column it shows in.
+    pub category: Category,
+    /// Its colour.
+    pub hue: Hue,
+}
+
+/// A project with cards on the board across projects.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AcrossProject {
+    /// Its key.
+    pub key: String,
+    /// Its name.
+    pub name: String,
+    /// Its colour.
+    pub hue: Hue,
+    /// Its statuses in order. A card dropped into a column moves to the
+    /// first of them in that column's category; when there are several,
+    /// people choose.
+    pub statuses: Vec<AcrossStatus>,
+}
+
+/// The board across projects: one column for each status category (to do,
+/// in progress, done), whatever the projects call their statuses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BoardAcross {
+    /// The query, in its normal form; empty for every task.
+    pub query: String,
+    /// The folder the board is limited to, by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    /// The saved view it was read from, by ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
+    /// The columns: to do, in progress and done. A column's `id` is its
+    /// category; its `statuses` give each project's first status of that
+    /// category, where a dropped card goes. Cards carry their `status`.
+    pub columns: Vec<Column>,
+    /// What the swimlanes group by.
+    pub lanes_by: LaneBy,
+    /// The swimlanes in order, the lane without a value last; empty
+    /// without swimlanes. Each card names its lane.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lanes: Vec<Swimlane>,
+    /// The projects of the cards, with their statuses.
+    pub projects: Vec<AcrossProject>,
+    /// Closed cards older than this many days are counted in `older`, not
+    /// listed, unless `show_older`.
+    pub hide_done_after_days: u32,
+}
+
 /// Changes to a board layout; fields left out keep their value.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -452,7 +558,7 @@ pub struct LayoutUpdateInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub covers: Option<CoverMode>,
     /// What the swimlanes group the cards by: `none`, `parent`, `priority`,
-    /// `label`, `sprint`, `type` or `field` (with `lane_field`).
+    /// `label`, `sprint`, `type`, `project` or `field` (with `lane_field`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lanes: Option<LaneBy>,
     /// The select custom field the lanes group by, by name or as
@@ -490,6 +596,13 @@ op!(
     Board
 );
 op!(
+    /// The board across projects.
+    BoardGetAcross,
+    "board.get_across",
+    BoardAcrossInput,
+    BoardAcross
+);
+op!(
     /// The person's layout of a board.
     LayoutGet,
     "layout.get",
@@ -512,6 +625,16 @@ pub(crate) const BOARD_GET: OpDescriptor = OpDescriptor::of::<BoardGet>(Meta {
     cli: Some("board <project>"),
     input_name: "BoardGetInput",
     output_name: "Board",
+});
+
+pub(crate) const BOARD_GET_ACROSS: OpDescriptor = OpDescriptor::of::<BoardGetAcross>(Meta {
+    summary: "The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::Data,
+    cli: Some("board all"),
+    input_name: "BoardAcrossInput",
+    output_name: "BoardAcross",
 });
 
 pub(crate) const LAYOUT_GET: OpDescriptor = OpDescriptor::of::<LayoutGet>(Meta {

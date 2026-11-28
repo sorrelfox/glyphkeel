@@ -74,12 +74,16 @@ export function viewOf(pathname: string): View {
   if (pathname.startsWith("/approvals")) {
     return "approvals";
   }
+  if (pathname.startsWith("/my-work")) {
+    return "my-work";
+  }
   return pathname.startsWith("/all") ? "all-tasks" : "today";
 }
 
 /** The header's title of each view but a project's. */
 const VIEW_TITLES: Record<Exclude<View, "project">, string> = {
   today: "view-today",
+  "my-work": "view-my-work",
   "all-tasks": "view-all-tasks",
   time: "view-time-report",
   reports: "view-reports",
@@ -158,7 +162,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
         }
       : null,
     setView: (next) => {
-      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "reports" ? "/reports" : next === "dashboards" ? "/dashboards" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : next === "approvals" ? "/approvals" : "/" });
+      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "reports" ? "/reports" : next === "dashboards" ? "/dashboards" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : next === "approvals" ? "/approvals" : next === "my-work" ? "/my-work" : "/" });
     },
     projectView:
       view === "project" && projectKey !== undefined

@@ -478,6 +478,11 @@ view-not-found = There is no view "{ $view }".
 view-not-found-hint = Name a view of the project given with `project`, or use its ID.
 view-name-ambiguous = Several views are named "{ $view }", for different screens.
 view-name-ambiguous-hint = Use the view's ID from view.list.
+view-across-project = A view of the board across projects belongs to the whole workspace: leave out `project`.
+view-folder-across-only = Only a view of the board across projects keeps to a folder.
+view-across-lanes = The board across projects can't group its swimlanes by "{ $lanes }".
+board-across-lanes-field = The board across projects can't group swimlanes by a custom field: projects have their own fields.
+board-across-view-kind = "{ $view }" is not a view of the board across projects.
 
 ## Versions
 

@@ -102,6 +102,16 @@ async fn an_agent_limited_to_a_project_sees_and_changes_only_that_project() {
     assert_eq!(found["total"], 2, "{found}");
     let today = output(&c.call("get_today", json!({})).await);
     assert!(!today.to_string().contains("PRV-1"), "{today}");
+    // The board across projects is the limit's project and those below it.
+    let across = output(&c.call("get_board_across", json!({})).await);
+    let todo: Vec<&str> = across["columns"][0]["cards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|card| card["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(todo, ["DOC-1", "TM-1"], "{across}");
+    assert!(!across.to_string().contains("PRV"), "{across}");
     let feed = output(&c.call("get_activity", json!({})).await);
     assert!(
         !feed["items"].as_array().unwrap().is_empty() && !feed.to_string().contains("Private"),

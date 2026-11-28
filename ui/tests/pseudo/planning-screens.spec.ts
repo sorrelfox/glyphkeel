@@ -3,9 +3,9 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-// The board with swimlanes, the project settings' Fields, Rules and
-// Templates tabs, the CSV import dialog, the roadmap and the reports, on the
-// sample data:
+// The board with swimlanes, My work, the project settings' Fields, Rules
+// and Templates tabs, the CSV import dialog, the roadmap and the reports, on
+// the sample data:
 //
 // - in the pseudo-locale, no English is left in their text, labels,
 //   placeholders and titles, apart from the sample data's own words;
@@ -69,6 +69,18 @@ const SCREENS: Screen[] = [
     },
     // The cards and the status names are the sample data's own.
     data: ["[data-card]", "[data-column] h2"],
+  },
+  {
+    name: "my work",
+    open: async (page) => {
+      await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+      await page.goto("/");
+      await page.locator("nav button").filter({ has: page.locator("svg.lucide-square-kanban") }).click();
+      await expect(page.locator("section[data-swimlane]").first()).toBeVisible();
+      return page.locator("main");
+    },
+    // The cards and the lanes' project names are the sample data's own.
+    data: ["[data-card]", "section[data-swimlane] h3"],
   },
   { name: "fields tab", open: settingsTab(4), data: [] },
   // The status names are the project's own.

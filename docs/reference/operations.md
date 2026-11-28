@@ -126,6 +126,7 @@ The safety class decides who may run an operation:
 | `digest.get` | read | app, command line, MCP | `get_digest` | `glyphkeel digest show` |
 | `digest.dismiss` | app | app, command line | — | `glyphkeel digest dismiss` |
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
+| `board.get_across` | read | app, command line, MCP | `get_board_across` | `glyphkeel board all` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
 | `view.list` | read | app, command line, MCP | `list_views` | `glyphkeel view list` |
@@ -884,6 +885,12 @@ Not available to agents: It moves the person's own marker of what they have seen
 A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts.
 
 Input: `BoardGetInput`. Output: `Board`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `board.get_across`
+
+The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default.
+
+Input: `BoardAcrossInput`. Output: `BoardAcross`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `layout.get`
 

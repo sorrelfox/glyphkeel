@@ -884,6 +884,10 @@ mod tests {
         // name in the workspace, never opened on disk.
         ("project.create", "folder"),
         ("template.apply", "folder"),
+        // The project folder a board across projects keeps to.
+        ("board.get_across", "folder"),
+        ("view.create", "folder"),
+        ("view.update", "folder"),
     ];
 
     /// The top-level fields of an input schema, also those of each variant.
