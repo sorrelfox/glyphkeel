@@ -3567,9 +3567,9 @@ export type ProjectSummary = {
   key: string;
   /** Its name. */
   name: string;
-  /** Open tasks in this project alone. */
+  /** Open tasks in this project alone: tasks in a done or cancelled status and tasks in the trash are left out. */
   open_tasks: number;
-  /** Open tasks in this project and all its sub-projects. */
+  /** Open tasks in this project and its sub-projects; under an active project, archived sub-projects are left out. */
   open_tasks_with_subprojects: number;
   /** The parent's key; left out for a top-level project. */
   parent?: string;

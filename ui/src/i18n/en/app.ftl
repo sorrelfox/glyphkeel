@@ -22,6 +22,16 @@ sidebar-search = Search
 sidebar-projects = Projects
 sidebar-new-project = New project
 sidebar-no-projects = No projects yet
+# The count beside a project in the sidebar: its open tasks, done, cancelled and trashed ones left out.
+sidebar-project-open-tasks = { $count ->
+    [one] { $count } open task
+   *[other] { $count } open tasks
+}
+# The count beside a closed project row whose sub-projects are hidden: they are added in.
+sidebar-project-open-tasks-with-subprojects = { $count ->
+    [one] { $count } open task, sub-projects included
+   *[other] { $count } open tasks, sub-projects included
+}
 sidebar-trash = Trash
 sidebar-preferences = Preferences
 sidebar-resize = Sidebar width

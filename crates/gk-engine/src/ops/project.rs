@@ -548,13 +548,19 @@ fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failur
             }
         }
     }
+    /// Open tasks of `id` and its sub-projects. Below an active project an
+    /// archived sub-project is left out with everything under it, as the
+    /// tree shows it apart and folder totals skip it.
     fn subtree_open(rows: &[TreeRow], id: Id) -> u64 {
-        let own = rows.iter().find(|r| r.id == id).map_or(0, |r| r.open);
-        own + rows
-            .iter()
-            .filter(|r| r.parent == Some(id))
-            .map(|r| subtree_open(rows, r.id))
-            .sum::<u64>()
+        fn below(rows: &[TreeRow], id: Id, skip_archived: bool) -> u64 {
+            rows.iter()
+                .filter(|r| r.parent == Some(id) && !(skip_archived && r.archived))
+                .map(|r| r.open + below(rows, r.id, skip_archived))
+                .sum()
+        }
+        rows.iter()
+            .find(|r| r.id == id)
+            .map_or(0, |r| r.open + below(rows, id, !r.archived))
     }
     fn walk(
         rows: &[TreeRow],

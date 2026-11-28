@@ -1024,6 +1024,15 @@ export class FakeWorkspace {
     return this.state.tasks.filter((task) => task.projectId === project.id && task.closedAt === null).length;
   }
 
+  /** Open tasks of a project and its sub-projects; under an active project, archived ones are left out with what is below them. */
+  private openWithSubprojects(project: FakeProject): number {
+    const below = (parent: FakeProject, skipArchived: boolean): number =>
+      this.children(parent)
+        .filter((child) => !(skipArchived && child.state === "archived"))
+        .reduce((sum, child) => sum + this.open(child) + below(child, skipArchived), 0);
+    return this.open(project) + below(project, project.state === "active");
+  }
+
   private path(project: FakeProject): string {
     const parent = this.state.projects.find((candidate) => candidate.id === project.parent);
     return parent ? `${this.path(parent)} / ${project.name}` : project.name;
@@ -1042,7 +1051,7 @@ export class FakeWorkspace {
       path: this.path(project),
       state: project.state,
       open_tasks: this.open(project),
-      open_tasks_with_subprojects: [project, ...this.descendants(project)].reduce((sum, item) => sum + this.open(item), 0),
+      open_tasks_with_subprojects: this.openWithSubprojects(project),
       ...some("folder", project.parent === null ? project.folder : undefined),
     };
   }

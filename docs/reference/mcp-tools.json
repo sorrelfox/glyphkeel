@@ -3193,12 +3193,12 @@
                   "type": "string"
                 },
                 "open_tasks": {
-                  "description": "Open tasks in this project alone.",
+                  "description": "Open tasks in this project alone: tasks in a done or cancelled\nstatus and tasks in the trash are left out.",
                   "minimum": 0,
                   "type": "integer"
                 },
                 "open_tasks_with_subprojects": {
-                  "description": "Open tasks in this project and all its sub-projects.",
+                  "description": "Open tasks in this project and its sub-projects; under an active\nproject, archived sub-projects are left out.",
                   "minimum": 0,
                   "type": "integer"
                 },

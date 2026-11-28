@@ -203,7 +203,10 @@ export function ProjectTree({ current, selectedFolder, onSelectFolder, onNewProj
         ];
 
   const row = (project: ProjectSummary, hasChildren: boolean, isExpanded: boolean, isDropTarget: boolean): ReactNode => {
-    const count = hasChildren && !isExpanded ? project.open_tasks_with_subprojects : project.open_tasks;
+    // Open tasks only: the engine leaves out done, cancelled and trashed ones.
+    const withSubprojects = hasChildren && !isExpanded;
+    const count = withSubprojects ? project.open_tasks_with_subprojects : project.open_tasks;
+    const countName = t(withSubprojects ? "sidebar-project-open-tasks-with-subprojects" : "sidebar-project-open-tasks", { count });
     return (
       <div
         className={classes("nav", styles.treeRow, project.key === current && selectedFolder === undefined && "on", isDropTarget && styles.dropTarget)}
@@ -220,7 +223,9 @@ export function ProjectTree({ current, selectedFolder, onSelectFolder, onNewProj
         )}
         <ProjectMark hue={project.hue} icon={project.icon} />
         <span className="truncate">{project.name}</span>
-        <span className="count">{count}</span>
+        <span className="count" data-count="project" aria-label={countName} title={countName}>
+          {count}
+        </span>
       </div>
     );
   };
@@ -261,7 +266,12 @@ export function ProjectTree({ current, selectedFolder, onSelectFolder, onNewProj
               )}
               <Icon className={classes("ic s mark", folder.hue !== undefined && `hue-${folder.hue}`)} aria-hidden="true" />
               <span className="truncate">{folder.name}</span>
-              <span className="count" aria-label={t("folder-open-tasks", { count: folder.open_tasks })}>
+              <span
+                className="count"
+                data-count="folder"
+                aria-label={t("folder-open-tasks", { count: folder.open_tasks })}
+                title={t("folder-open-tasks", { count: folder.open_tasks })}
+              >
                 {folder.open_tasks}
               </span>
             </div>
