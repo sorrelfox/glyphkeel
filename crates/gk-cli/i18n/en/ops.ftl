@@ -31,7 +31,7 @@ op-settings-update--week-start = First day of the week.
 
 ## glyphkeel search <text>
 
-op-search-query = Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task.
+op-search-query = Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task.
 op-search-query--cursor = The `next_cursor` of the page before.
 op-search-query--include-subprojects = With `project`: its sub-projects too.
 op-search-query--kinds = Only these kinds; default: all.

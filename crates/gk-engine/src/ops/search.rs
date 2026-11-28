@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! Global search over the full-text index (`search_docs` with its two FTS5
-//! tables): task titles and descriptions, comments, wiki pages and file
-//! names.
+//! tables): task titles and descriptions, comments, wiki pages, and file
+//! names with the text read from inside the files.
 //!
 //! Matching: every word must occur, as a whole word or a word's beginning
 //! (`fts_words`, with English word forms); a "quoted phrase" as written.
@@ -13,7 +13,7 @@
 //!
 //! Ranking, best first, in groups: a task key or project key typed in
 //! full; titles of tasks and pages holding every word; the text of tasks and
-//! pages; comments and file names; fragments only. Within a group the
+//! pages; comments, file names and the text inside files; fragments only. Within a group the
 //! better BM25 score (titles weigh ten times the text), then the newer
 //! change, then the older document.
 
@@ -733,6 +733,8 @@ fn hit(tx: &Transaction<'_>, entry: &Entry, terms: &[Term]) -> Result<SearchHit,
                 kind,
                 matched_in: match (f.tier, kind) {
                     (3, _) => MatchedIn::Fragment,
+                    // A file's text is its body: the snippet shows where.
+                    (_, SearchKind::File) if snippet.is_some() => MatchedIn::Text,
                     (0, _) | (_, SearchKind::File) => MatchedIn::Title,
                     _ => MatchedIn::Text,
                 },

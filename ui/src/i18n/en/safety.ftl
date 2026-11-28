@@ -126,6 +126,24 @@ activity-entity-series = Recurring series
 activity-entity-template = Template
 activity-entity-other = Item
 
+## Search inside files
+
+file-index-title = Search inside files
+file-index-about = Search reads the text inside attached text, PDF and Office files, in the background and without other programs. Scanned PDFs are found by their names only.
+file-index-progress = Files read
+file-index-read = { $read } of { $files }
+file-index-waiting = { $count ->
+    [one] { $count } file waiting to be read
+   *[other] { $count } files waiting to be read
+  }
+file-index-done = All files read
+file-index-with-text = With text
+file-index-skipped = No text found
+file-index-skipped-about = Scanned, encrypted, damaged or too large to read safely; found by their names only.
+file-index-again = Read again
+file-index-again-about = Reads every attached file again in the background. Search keeps finding what it found until each file is read.
+file-index-again-started = Reading the attached files again.
+
 ## Backups
 
 backups-title = Backups

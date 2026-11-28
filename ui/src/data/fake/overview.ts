@@ -49,7 +49,7 @@ const holdsAll = (text: string, words: readonly string[]) => words.every((word) 
 export interface SearchCorpus {
   tasks: readonly { task: ListedTask; description: string; projectActive: boolean }[];
   comments: readonly { id: string; task: ListedTask; body: string; updatedAt: string }[];
-  files: readonly { id: string; task: ListedTask; name: string; createdAt: string }[];
+  files: readonly { id: string; task: ListedTask; name: string; text: string; createdAt: string }[];
   pages: readonly { page: FakeWikiPage; project: string }[];
   projects: readonly { id: string; key: string; name: string; active: boolean }[];
   /** Whether a project key is the one asked for (or below it). */
@@ -100,8 +100,14 @@ export function searchAll(corpus: SearchCorpus, input: SearchInput): SearchResul
     }
   }
   for (const file of corpus.files) {
-    if (kinds.has("file") && corpus.inScope(file.task.project) && holdsAll(file.name, words)) {
+    if (!kinds.has("file") || !corpus.inScope(file.task.project)) {
+      continue;
+    }
+    if (holdsAll(file.name, words)) {
       found.push({ group: 2, hit: { kind: "file", id: file.id, matched_in: "title", title: file.name, title_matches: matchRanges(file.name, words), updated_at: file.createdAt, ...taskFields(file.task) } });
+    } else if (holdsAll(file.text, words)) {
+      // The text read from inside the file, with the words around the match.
+      found.push({ group: 2, hit: { kind: "file", id: file.id, matched_in: "text", title: file.name, ...snippetOf(file.text, words), updated_at: file.createdAt, ...taskFields(file.task) } });
     }
   }
   for (const project of corpus.projects) {

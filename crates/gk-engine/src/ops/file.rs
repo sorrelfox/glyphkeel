@@ -105,6 +105,7 @@ pub(super) fn register(r: &mut Registry) {
             .ok_or_else(|| OpError::storage("file.attach is not in the catalog"))?;
         let output = engine.execute_command(ctx, op, f, value)?;
         make_thumbnail(engine, &prepared);
+        engine.index_file_now(&prepared.sha256);
         serde_json::from_value(output)
             .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))
     });
@@ -122,6 +123,7 @@ pub(super) fn register(r: &mut Registry) {
         changed(w, id)
     });
     r.command::<FileCover, _>(desc::<FileCover>(), cover);
+    crate::file_text::register(r);
 }
 
 /// Sets or clears the cover of a task.
@@ -848,7 +850,8 @@ fn changed(w: &WriteCtx<'_>, id: Id) -> Result<FileChange, Failure> {
     })
 }
 
-/// Keeps the file name's search entry in step: indexed while live,
+/// Keeps the file's search entry in step: its name and the text read from
+/// it (once the background extraction has read it), indexed while live,
 /// removed while trashed.
 fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
     let row: Option<(String, bool)> = w
@@ -866,9 +869,12 @@ fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
             w.tx().execute(
                 "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
                                           updated_at)
-                 VALUES ('file', ?1, ?2, ?3, ?4, '', ?5)
+                 VALUES ('file', ?1, ?2, ?3, ?4,
+                         coalesce((SELECT x.text FROM attachments a
+                                     JOIN file_texts x ON x.sha256 = a.sha256
+                                    WHERE a.id = ?1), ''), ?5)
                  ON CONFLICT (kind, entity_id) DO UPDATE SET title = excluded.title,
-                   updated_at = excluded.updated_at",
+                   body = excluded.body, updated_at = excluded.updated_at",
                 params![b(id), task, b(project), name, w.now()],
             )?;
         }

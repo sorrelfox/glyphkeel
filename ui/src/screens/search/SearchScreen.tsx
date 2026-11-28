@@ -286,6 +286,9 @@ function HitRow({ hit, open, onActivate }: { hit: SearchHit; open: boolean; onAc
       {hit.snippet !== undefined && (
         <span className={styles.snippet}>
           {hit.kind === "comment" && <span className="faint">{t("search-in-comment")} </span>}
+          {hit.kind === "file" && (
+            <span className="faint">{hit.task === undefined ? t("search-in-page-file", { file: hit.title }) : t("search-in-file", { file: hit.title, task: hit.task })} </span>
+          )}
           <Marked text={hit.snippet} ranges={hit.snippet_matches} />
         </span>
       )}

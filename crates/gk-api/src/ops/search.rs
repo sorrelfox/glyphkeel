@@ -2,11 +2,13 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! Global search: words and fragments across task titles and descriptions,
-//! comments, wiki pages and file names, ranked, with the matches marked.
+//! comments, wiki pages, and file names and the text inside the files
+//! (text, PDF and Office documents), ranked, with the matches marked.
 //!
 //! Ranking: a match in a title comes before one in a task's description or
-//! a page's text, which comes before one in a comment or a file name;
-//! matches only on fragments of words (`CONN` in `ERR_CONN`) come last.
+//! a page's text, which comes before one in a comment, a file name or a
+//! file's text; matches only on fragments of words (`CONN` in `ERR_CONN`)
+//! come last.
 //! Within each group, better matches first, then newer ones. A task key
 //! (`TM-41`) puts that task first; a project key alone offers the project.
 
@@ -29,7 +31,8 @@ pub enum SearchKind {
     Comment,
     /// A wiki page: its title or text.
     Wiki,
-    /// A file attached to a task or comment, by its name.
+    /// A file attached to a task, comment or wiki page: by its name, or by
+    /// the text inside it (`matched_in` is then `text`, with a snippet).
     File,
 }
 
@@ -70,7 +73,8 @@ pub enum MatchedIn {
     Key,
     /// The title (a file's name).
     Title,
-    /// The text: a description, a page's text or a comment.
+    /// The text: a description, a page's text, a comment or the text
+    /// inside a file.
     Text,
     /// Only fragments of words, anywhere.
     Fragment,
@@ -142,7 +146,7 @@ op!(
 );
 
 pub(crate) const SEARCH_QUERY: OpDescriptor = OpDescriptor::of::<SearchQuery>(Meta {
-    summary: "Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task.",
+    summary: "Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

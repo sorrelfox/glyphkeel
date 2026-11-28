@@ -2155,6 +2155,17 @@ fn write(
         imported.push(id);
     }
     search.finish(tx)?;
+    // Files whose content this workspace has read already are found by
+    // their text at once; the others when the background job reads them.
+    tx.execute(
+        "UPDATE search_docs SET body = (SELECT x.text FROM attachments a
+                                          JOIN file_texts x ON x.sha256 = a.sha256
+                                         WHERE a.id = search_docs.entity_id)
+          WHERE kind = 'file' AND body = ''
+            AND EXISTS (SELECT 1 FROM attachments a JOIN file_texts x ON x.sha256 = a.sha256
+                         WHERE a.id = search_docs.entity_id AND x.text <> '')",
+        [],
+    )?;
 
     // Tasks' versions, once every project's versions are in: a version
     // that isn't in the archive is left off.

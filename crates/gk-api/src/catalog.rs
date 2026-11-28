@@ -313,6 +313,8 @@ pub static CATALOG: &[OpDescriptor] = &[
     file::FILE_ATTACH,
     file::FILE_DELETE,
     file::FILE_COVER,
+    file::FILE_INDEX_STATUS,
+    file::FILE_REINDEX,
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
     agent::AGENT_LIMITS_UPDATE,

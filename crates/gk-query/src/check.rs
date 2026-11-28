@@ -16,7 +16,7 @@ use crate::dates::{Calendar, Days, parse_query_date};
 use crate::error::{QueryError, closest};
 use crate::fields::{
     self, CATEGORIES, CountOf, CustomField, DateColumn, DurationColumn, Field, FieldType,
-    HAS_PARTS, History, IS_FLAGS, LinkField, MomentColumn, PRIORITIES, TextScope,
+    HAS_PARTS, History, IN_PLACES, IS_FLAGS, LinkField, MomentColumn, PRIORITIES, TextScope,
 };
 use crate::syntax::{Expr, Op, Predicate, Query, Span, Value, ValueKind};
 
@@ -224,6 +224,9 @@ pub enum Cond {
     },
     /// Any of these changed the task's fields after it was created.
     ChangedBy(Vec<AuthorRef>),
+    /// `in:files`, where it is written. It never stays in a checked
+    /// filter: checking turns it into the scope of the text terms.
+    InFiles(Span),
 }
 
 /// What `was:` looks for.
@@ -526,6 +529,10 @@ impl std::fmt::Debug for CheckEnv<'_> {
 /// The first field, operator or value that doesn't fit.
 pub fn check(query: &Query, env: CheckEnv<'_>) -> Result<Checked, QueryError> {
     let filter = query.filter.as_ref().map(|e| expr(e, env)).transpose()?;
+    let filter = match filter {
+        Some(f) => scope_files(f)?,
+        None => None,
+    };
     let mut sort = Vec::new();
     if let Some(clause) = &query.sort {
         for key in &clause.keys {
@@ -582,6 +589,93 @@ pub fn check(query: &Query, env: CheckEnv<'_>) -> Result<Checked, QueryError> {
         return Err(QueryError::new("query-sort-relevance", key.span));
     }
     Ok(checked)
+}
+
+/// Where `in:files` and `-in:files` send the query's words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FilesIn {
+    Only,
+    Never,
+}
+
+/// Takes `in:files` and `-in:files` out of `f` and applies them to every
+/// plain word and phrase: they say where the whole query's words are
+/// looked for, so they can't be one side of an `OR`. Only the `-` written
+/// on it counts: `-(word -in:files)` is the tasks without `word` outside
+/// files. Returns `None` when nothing else is left.
+fn scope_files(f: Filter) -> Result<Option<Filter>, QueryError> {
+    let mut found = None;
+    let f = take_in(f, false, &mut found)?;
+    let Some(place) = found else {
+        return Ok(f);
+    };
+    let scope = match place {
+        FilesIn::Only => TextScope::Files,
+        FilesIn::Never => TextScope::NoFiles,
+    };
+    Ok(f.map(|f| rescope(f, scope)))
+}
+
+fn take_in(
+    f: Filter,
+    in_or: bool,
+    found: &mut Option<FilesIn>,
+) -> Result<Option<Filter>, QueryError> {
+    let place = match &f {
+        Filter::Cond(Cond::InFiles(span)) => Some((*span, FilesIn::Only)),
+        Filter::Not(inner) => match inner.as_ref() {
+            Filter::Cond(Cond::InFiles(span)) => Some((*span, FilesIn::Never)),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some((span, place)) = place {
+        if in_or {
+            return Err(QueryError::new("query-in-files-or", span));
+        }
+        *found = Some(place);
+        return Ok(None);
+    }
+    Ok(match f {
+        Filter::And(items) => {
+            let mut kept = Vec::new();
+            for i in items {
+                kept.extend(take_in(i, in_or, found)?);
+            }
+            match kept.len() {
+                0 => None,
+                1 => kept.pop(),
+                _ => Some(Filter::And(kept)),
+            }
+        }
+        Filter::Or(items) => {
+            let mut kept = Vec::new();
+            for i in items {
+                kept.extend(take_in(i, true, found)?);
+            }
+            Some(Filter::Or(kept))
+        }
+        Filter::Not(inner) => take_in(*inner, in_or, found)?.map(|i| Filter::Not(Box::new(i))),
+        other => Some(other),
+    })
+}
+
+fn rescope(f: Filter, scope: TextScope) -> Filter {
+    match f {
+        Filter::And(items) => Filter::And(items.into_iter().map(|i| rescope(i, scope)).collect()),
+        Filter::Or(items) => Filter::Or(items.into_iter().map(|i| rescope(i, scope)).collect()),
+        Filter::Not(inner) => Filter::Not(Box::new(rescope(*inner, scope))),
+        Filter::Cond(Cond::Text {
+            scope: TextScope::All,
+            text,
+            phrase,
+        }) => Filter::Cond(Cond::Text {
+            scope,
+            text,
+            phrase,
+        }),
+        other => other,
+    }
 }
 
 fn expr(e: &Expr, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
@@ -1334,6 +1428,12 @@ fn condition(
                 .map(|v| choice(v, field, HAS_PARTS))
                 .collect::<Result<_, _>>()?,
         ),
+        FieldType::In => {
+            for v in values {
+                choice(v, field, IN_PLACES)?;
+            }
+            Cond::InFiles(values[0].span)
+        }
     };
     Ok(Filter::Cond(cond))
 }

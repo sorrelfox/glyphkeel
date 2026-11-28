@@ -75,6 +75,9 @@ pub struct EngineConfig {
     /// [`crate::AgentFolders::Personal`], so that tests and other embedders
     /// never read the person's own settings file.
     pub agent_folders: crate::AgentFolders,
+    /// The limits attached files are read within for search; tests make
+    /// them tighter.
+    pub file_text_limits: gk_extract::Limits,
 }
 
 impl EngineConfig {
@@ -91,6 +94,7 @@ impl EngineConfig {
             time_zone: None,
             backups: None,
             agent_folders: crate::AgentFolders::Fixed(Vec::new()),
+            file_text_limits: gk_extract::Limits::default(),
         }
     }
 }
@@ -127,6 +131,11 @@ pub struct SessionStart {
     /// The profile it asked for.
     pub profile: Profile,
 }
+
+/// How long one turn of the background jobs reads attached files' text in
+/// the app, and in the MCP server.
+const FILE_TEXT_TURN_APP: Duration = Duration::from_secs(3);
+const FILE_TEXT_TURN_MCP: Duration = Duration::from_millis(300);
 
 /// One open workspace. Every operation of every adapter runs through
 /// [`Engine::call`]:
@@ -170,6 +179,11 @@ pub struct Engine {
     /// When this process last ran the scheduled automation rules (engine
     /// clock, ms).
     pub(crate) last_automation: Mutex<Option<i64>>,
+    /// The attached file whose text is being read for search, across the
+    /// turns of the background jobs.
+    pub(crate) extracting: Mutex<crate::file_text::Extractions>,
+    /// The limits attached files are read within.
+    pub(crate) file_text_limits: gk_extract::Limits,
     _app_lock: Option<LockFile>,
     /// Shared: the workspace is in use; see `WorkspaceLayout::open_lock`.
     _open_lock: LockFile,
@@ -318,6 +332,8 @@ impl Engine {
             backups_fixed,
             last_daily: Mutex::new(None),
             last_automation: Mutex::new(None),
+            extracting: Mutex::new(crate::file_text::Extractions::default()),
+            file_text_limits: config.file_text_limits,
             _app_lock: app_lock,
             _open_lock: open_lock,
         })
@@ -1059,8 +1075,9 @@ impl Engine {
     /// long-running programs: takes the jobs lock when it is free (another
     /// holder may have ended) and, while holding it, checkpoints the
     /// write-ahead log when it is due, runs the daily jobs (backup,
-    /// trash purge, unused files) when they are due, and every minute the
-    /// automation rules set off by due dates and the schedule.
+    /// trash purge, unused files) when they are due, every minute the
+    /// automation rules set off by due dates and the schedule, and reads
+    /// the text inside attached files that wait for it.
     pub fn jobs_tick(&self) -> Result<Option<CheckpointOutcome>, OpError> {
         if self.role == Role::Cli {
             return Ok(None);
@@ -1098,6 +1115,16 @@ impl Engine {
             && let Err(e) = self.run_automation()
         {
             tracing::warn!(error = %e, "the scheduled automation rules failed");
+        }
+        // The app's jobs have a thread of their own; the MCP server's share
+        // its loop with the requests, so they take a short turn.
+        let budget = if self.role == Role::App {
+            FILE_TEXT_TURN_APP
+        } else {
+            FILE_TEXT_TURN_MCP
+        };
+        if let Err(e) = self.index_files(budget) {
+            tracing::warn!(error = %e, "reading the text inside attached files failed");
         }
         outcome
     }
