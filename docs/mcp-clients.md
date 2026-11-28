@@ -152,6 +152,7 @@ first.
 | `write_release_notes` | Writes release notes for a version of a project |
 | `review_schedule` | Goes through a project's schedule problems and proposes fixes |
 | `summarise_task_history` | Summarises how a task came to where it is |
+| `work_on_task` | Reads a task's whole context in one call, then claims it and works on it after you agree |
 
 The arguments (a project, a task, a version) complete as you type. A
 prompt is offered only when the agent may use every tool it needs: a

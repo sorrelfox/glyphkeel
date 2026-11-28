@@ -347,6 +347,35 @@ fn list(q: &QueryCtx<'_>, input: ProposalListInput) -> Result<ProposalList, Fail
     })
 }
 
+/// The proposals that change task `task` and wait for the person, as the
+/// caller of `q` sees them (an agent, its own), newest first, at most
+/// `limit`.
+pub(crate) fn pending_on_task(
+    q: &QueryCtx<'_>,
+    task: Id,
+    limit: u32,
+) -> Result<Vec<Proposal>, Failure> {
+    let days = settings::load(q.tx)?.agent_approvals.expire_days;
+    let cutoff = q.now - i64::from(days) * DAY_MS;
+    let agent = q.caller.is_agent().then(|| q.caller.actor.name.clone());
+    let rows = {
+        let mut stmt = q.tx.prepare(&format!(
+            "SELECT {COLUMNS} FROM proposals
+              WHERE task_id = ?1 AND status = 'pending' AND created_at > ?2
+                AND (?3 IS NULL OR agent_name = ?3)
+              ORDER BY created_at DESC, id DESC LIMIT ?4"
+        ))?;
+        stmt.query_map(
+            params![task.as_bytes().as_slice(), cutoff, agent, limit],
+            stored,
+        )?
+        .collect::<Result<Vec<_>, _>>()?
+    };
+    rows.into_iter()
+        .map(|row| view(q.tx, row, q.now, days))
+        .collect()
+}
+
 /// Keeps the agent's call of `desc` with `input` as a proposal, inside the
 /// write transaction of `w` (whose caller is the agent). `handler` is the
 /// operation's own handler, run once in a savepoint for the preview;

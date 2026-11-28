@@ -556,7 +556,7 @@ impl Server {
             .call(&ctx, tool.main, Value::Object(args))?;
         let text = render::markdown(tool.name, &output);
         if reading {
-            self.returned(&read_limits, text.len() + output.to_string().len());
+            self.returned(&read_limits, charged(&text, &output));
         }
         Ok((text, output))
     }
@@ -1057,5 +1057,17 @@ impl ServerHandler for Server {
             () = context.cancelled() => stop.cancel(),
         }
         Ok(())
+    }
+}
+
+/// The bytes a tool result costs against the session's data limit: its
+/// text and its structured result, counted once when the text is the
+/// result itself as compact JSON.
+pub(crate) fn charged(text: &str, output: &Value) -> usize {
+    let json = output.to_string();
+    if text == json {
+        json.len()
+    } else {
+        text.len() + json.len()
     }
 }

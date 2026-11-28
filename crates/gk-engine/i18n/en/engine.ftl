@@ -350,6 +350,8 @@ place-bad-neighbour = An item can't be placed next to itself or next to one in a
 ## Tasks
 
 task-get-count = Ask for 1 to { $max } tasks at once.
+task-context-depth = Ask for 0 to { $max } levels of subtasks.
+task-context-size = Ask for { $min } to { $max } bytes.
 task-move-check-count = Check 1 to { $max } tasks at once.
 project-no-statuses = Project { $project } has no statuses; add one first.
 project-no-types = Project { $project } has no task types; add one first.

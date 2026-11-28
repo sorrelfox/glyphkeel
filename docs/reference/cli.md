@@ -119,6 +119,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert. |
 | `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
+| `glyphkeel task context <key>` | `task.context` | Everything needed to work on one task, in one read within a size: the task with its checklist, fields, sprint and version, its parents, subtasks and links, the recent comments and changes, the status rules, the project's agent brief, the wiki pages it links to, and waiting proposals; says what was trimmed. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
 | `glyphkeel task delete <keys>` | `task.delete` | Move tasks to the trash, each with its subtasks; they can be restored from there. |
 | `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |

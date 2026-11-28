@@ -8,7 +8,8 @@
       "write_status_update",
       "write_release_notes",
       "review_schedule",
-      "summarise_task_history"
+      "summarise_task_history",
+      "work_on_task"
     ],
     "read-only": [
       "plan_my_day",
@@ -26,7 +27,8 @@
       "write_status_update",
       "write_release_notes",
       "review_schedule",
-      "summarise_task_history"
+      "summarise_task_history",
+      "work_on_task"
     ]
   },
   "prompts": [
@@ -208,6 +210,29 @@
       "tools": [
         "get_task",
         "get_activity"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The task to work on, by key (TM-41).",
+          "name": "task",
+          "required": true,
+          "title": "Task"
+        }
+      ],
+      "completions": {
+        "task": "task"
+      },
+      "description": "Reads everything about a task in one call, says what it will do, and after the person agrees claims the task, does the work and reports on it.",
+      "name": "work_on_task",
+      "title": "Work on a task",
+      "tools": [
+        "get_task_context",
+        "claim_task",
+        "update_checklist",
+        "add_comment",
+        "release_task"
       ]
     }
   ]

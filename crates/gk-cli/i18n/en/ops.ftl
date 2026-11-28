@@ -494,6 +494,17 @@ op-task-get--include = What to add to each task: `subtasks`, `links`, `comments`
     `references`.
 op-task-get--keys = One to 20 task keys or IDs.
 
+## glyphkeel task context <key>
+
+op-task-context = Everything needed to work on one task, in one read within a size: the task with its checklist, fields, sprint and version, its parents, subtasks and links, the recent comments and changes, the status rules, the project's agent brief, the wiki pages it links to, and waiting proposals; says what was trimmed.
+op-task-context--depth = Levels of subtasks to list, 0 to 4: 1 (the default) lists the
+    task's own subtasks, 2 also theirs; 0 lists none.
+op-task-context--key = The task: its key (current or old) or ID.
+op-task-context--max-bytes = The most bytes of JSON to return, 4096 to 262144; default 32768.
+    Over it, the oldest comments go first, then the wiki pages'
+    openings, the oldest changes and proposals, and then the brief and
+    the description are cut; `trimmed` says what went.
+
 ## glyphkeel task create
 
 op-task-create = Create a task from a title alone or with its fields; it gets the project's next key.

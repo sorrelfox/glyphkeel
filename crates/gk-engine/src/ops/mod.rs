@@ -47,6 +47,7 @@ pub(crate) mod settings;
 pub(crate) mod sprint;
 pub(crate) mod swimlane;
 pub(crate) mod task;
+pub(crate) mod task_context;
 pub(crate) mod template;
 pub(crate) mod time;
 pub(crate) mod today;
@@ -75,6 +76,7 @@ pub(crate) fn register(r: &mut Registry) {
     rules::register(r);
     automation::register(r);
     task::register(r);
+    task_context::register(r);
     duplicate::register(r);
     claim::register(r);
     relation::register(r);
