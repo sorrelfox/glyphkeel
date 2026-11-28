@@ -438,3 +438,73 @@ fn a_new_project_refuses_a_folder_with_a_parent_or_an_unknown_folder() {
             .all(|p| p["key"] != "KD")
     );
 }
+
+#[test]
+fn an_agent_cannot_reach_the_disk_through_a_project_folder() {
+    let dir = TempDir::new().unwrap();
+    let e = setup(&dir);
+    call(&e, "folder.create", json!({ "name": "Clients" }));
+    let session = e
+        .start_session(&gk_engine::SessionStart {
+            name: "Agent".into(),
+            client_id: None,
+            client_version: None,
+            profile: gk_api::Profile::Full,
+        })
+        .unwrap();
+    let agent = Context::agent("Agent", session, gk_api::Profile::Full);
+    // A real folder outside the folders agents may use, and one that
+    // isn't there yet.
+    let outside = dir.path().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("secret.txt"), "x").unwrap();
+    let missing = dir.path().join("made-by-agent");
+    let before = || {
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|d| d.unwrap().file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    let listed = before();
+    for path in [&outside, &outside.join("secret.txt"), &missing] {
+        let path = path.to_string_lossy().into_owned();
+        for (op, input) in [
+            (
+                "project.create",
+                json!({ "name": "Delta", "key": "DD", "folder": path }),
+            ),
+            (
+                "template.apply",
+                json!({ "template": "software project", "name": "App", "key": "APP", "folder": path }),
+            ),
+        ] {
+            let err = e.call(&agent, op, input).expect_err(op);
+            assert_eq!(err.code, ErrorCode::NotFound, "{op} {path}: {err:?}");
+            assert_eq!(err.details["field"], "folder", "{op}: {err:?}");
+        }
+    }
+    assert_eq!(before(), listed, "nothing was made on disk");
+    assert!(!missing.exists());
+    assert_eq!(
+        std::fs::read_to_string(outside.join("secret.txt")).unwrap(),
+        "x"
+    );
+    assert!(
+        call(&e, "project.list", json!({}))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["key"] != "DD" && p["key"] != "APP")
+    );
+    // The same agent can still name the sidebar folder.
+    let made = e
+        .call(
+            &agent,
+            "project.create",
+            json!({ "name": "Delta", "key": "DD", "folder": "Clients" }),
+        )
+        .unwrap();
+    assert_eq!(made["project"]["folder"], folders(&e)[0]["id"]);
+}

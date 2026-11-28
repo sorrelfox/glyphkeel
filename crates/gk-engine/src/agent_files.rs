@@ -880,6 +880,10 @@ mod tests {
         ("folder.rename", "folder"),
         ("folder.delete", "folder"),
         ("folder.move", "folder"),
+        // The folder a new top-level project goes in: looked up by ID or
+        // name in the workspace, never opened on disk.
+        ("project.create", "folder"),
+        ("template.apply", "folder"),
     ];
 
     /// The top-level fields of an input schema, also those of each variant.
