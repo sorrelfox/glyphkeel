@@ -21,7 +21,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use gk_api::OpError;
 use gk_api::ops::board::{
     Board, BoardGet, BoardGetInput, BoardLayout, Card, CardColourBy, CardEdge, ColourRule, Column,
-    CoverMode, LayoutChange, LayoutGet, LayoutGetInput, LayoutUpdate, LayoutUpdateInput, SortMode,
+    CoverMode, LaneBy, LayoutChange, LayoutGet, LayoutGetInput, LayoutUpdate, LayoutUpdateInput,
+    SortMode,
 };
 use gk_api::ops::common::{Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{Checklist, TypeRef};
@@ -258,6 +259,32 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
         .filter_map(|f| gk_query::fields::strip_custom_prefix(f).map(str::to_owned))
         .collect();
     let colours = Colours::load(q, &layout, &p.key, include)?;
+    let lane_by = input.lanes.unwrap_or(layout.lanes);
+    let lane_field = match (lane_by, &input.lane_field) {
+        (LaneBy::Field, Some(text)) => Some(
+            super::swimlane::select_field(q.tx, p.id, text)?
+                .ok_or_else(|| lane_field_unknown(&p, text, "lane_field"))?,
+        ),
+        (LaneBy::Field, None) if !layout.lane_field.is_empty() => {
+            super::swimlane::select_field(q.tx, p.id, &layout.lane_field)?
+        }
+        (LaneBy::Field, None) => {
+            return Err(messages::invalid(
+                "lane_field",
+                "board-lane-field-needed",
+                &[],
+            ));
+        }
+        _ => None,
+    };
+    // A field deleted since the layout named it: no lanes.
+    let lane_by = if lane_by == LaneBy::Field && lane_field.is_none() {
+        LaneBy::None
+    } else {
+        lane_by
+    };
+    let lanes = super::swimlane::Lanes::load(q.tx, lane_by, &projects, lane_field.as_ref())?;
+    let mut parents: HashMap<String, String> = HashMap::new();
     for column in &mut columns {
         column.hidden = layout.hidden.contains(&column.id);
         column.collapsed = layout.collapsed.contains(&column.id);
@@ -291,6 +318,11 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
             // most of a large project.
             let mut shown = Vec::with_capacity(cards.len());
             for (mut card, _) in cards {
+                if lane_by == LaneBy::Parent
+                    && let Some(parent) = &card.parent
+                {
+                    parents.insert(card.id.clone(), parent.clone());
+                }
                 finish_card(q.tx, &mut card)?;
                 if !custom.is_empty() {
                     card_values(q.tx, &mut card, &custom)?;
@@ -308,16 +340,34 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
             column.cards = shown;
         }
     }
+    let lanes = lanes.assign(q.tx, &mut columns, &parents)?;
+    let lane_field = lane_field.map_or_else(String::new, |f| {
+        format!("{}{}", gk_query::fields::CUSTOM_PREFIX, f.query_name)
+    });
     Ok(Board {
         project: p.key,
         columns,
         layout: BoardLayout {
             include_subprojects: include,
+            lanes: lane_by,
+            lane_field,
             ..layout
         },
         hidden_columns,
         hidden_tasks,
+        lanes,
     })
+}
+
+fn lane_field_unknown(p: &ProjectRow, text: &str, path: &str) -> Failure {
+    messages::invalid(
+        path,
+        "board-lane-field-unknown",
+        &[
+            ("field", text.trim().to_owned()),
+            ("project", p.key.clone()),
+        ],
+    )
 }
 
 /// What the board's cards are coloured by, read once per board.
@@ -512,6 +562,7 @@ fn cards_of(
                     fields: BTreeMap::new(),
                     edge: None,
                     cover: None,
+                    lane: None,
                 },
                 closed,
             ))
@@ -579,25 +630,41 @@ pub(crate) fn rewrite_card_fields(
         let Some(before) = raw(w.tx(), id)? else {
             continue;
         };
-        let Some(fields) = before.get("card_fields").and_then(Value::as_array) else {
-            continue;
-        };
+        let mut after = before.clone();
         let mut touched = false;
-        let mut kept = Vec::with_capacity(fields.len());
-        for f in fields {
-            let Some(text) = f.as_str() else { continue };
+        if let Some(fields) = before.get("card_fields").and_then(Value::as_array) {
+            let mut kept = Vec::with_capacity(fields.len());
+            for f in fields {
+                let Some(text) = f.as_str() else { continue };
+                match column(text) {
+                    Some(Some(new)) => {
+                        kept.push(Value::String(new));
+                        touched = true;
+                    }
+                    Some(None) => touched = true,
+                    None => kept.push(f.clone()),
+                }
+            }
+            after["card_fields"] = Value::Array(kept);
+        }
+        // The swimlanes' field follows too; a deleted one ends the lanes.
+        if let Some(text) = before.get("lane_field").and_then(Value::as_str)
+            && !text.is_empty()
+        {
             match column(text) {
                 Some(Some(new)) => {
-                    kept.push(Value::String(new));
+                    after["lane_field"] = Value::String(new);
                     touched = true;
                 }
-                Some(None) => touched = true,
-                None => kept.push(f.clone()),
+                Some(None) => {
+                    after["lane_field"] = Value::String(String::new());
+                    after["lanes"] = Value::String("none".to_owned());
+                    touched = true;
+                }
+                None => {}
             }
         }
         if touched {
-            let mut after = before.clone();
-            after["card_fields"] = Value::Array(kept);
             write_raw(w, id, Some(&after))?;
             w.record_field(ENTITY, id, Some(id), "settings", Some(before), Some(after));
         }
@@ -854,6 +921,7 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
     if let Some(covers) = input.covers {
         layout.covers = covers;
     }
+    lanes_update(w.tx(), &p, &mut layout, &input)?;
     let before = raw(w.tx(), p.id)?;
     let after = if layout == BoardLayout::default() {
         None
@@ -878,6 +946,38 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
         layout,
         group: w.group_if_changed(),
     })
+}
+
+/// The swimlane part of a layout change: what the lanes group by and the
+/// select field.
+fn lanes_update(
+    tx: &Transaction<'_>,
+    p: &ProjectRow,
+    layout: &mut BoardLayout,
+    input: &LayoutUpdateInput,
+) -> Result<(), Failure> {
+    if let Some(text) = &input.lane_field {
+        if text.trim().is_empty() {
+            layout.lane_field.clear();
+        } else {
+            let field = super::swimlane::select_field(tx, p.id, text)?
+                .ok_or_else(|| lane_field_unknown(p, text, "lane_field"))?;
+            layout.lane_field = format!("{}{}", gk_query::fields::CUSTOM_PREFIX, field.query_name);
+        }
+    }
+    if let Some(by) = input.lanes {
+        layout.lanes = by;
+    }
+    if layout.lanes != LaneBy::Field {
+        layout.lane_field.clear();
+    } else if layout.lane_field.is_empty() {
+        return Err(messages::invalid(
+            "lane_field",
+            "board-lane-field-needed",
+            &[],
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

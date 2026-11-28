@@ -870,19 +870,19 @@ Not available to agents: It moves the person's own marker of what they have seen
 
 ## `board.get`
 
-A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.
+A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts.
 
 Input: `BoardGetInput`. Output: `Board`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `layout.get`
 
-The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.
+The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes.
 
 Input: `LayoutGetInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `layout.update`
 
-Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.
+Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers, swimlanes and older closed cards, or reset to the project's layout.
 
 Input: `LayoutUpdateInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

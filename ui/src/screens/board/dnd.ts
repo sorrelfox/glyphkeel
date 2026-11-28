@@ -34,6 +34,9 @@ export interface LaneOrder {
   cards: readonly string[];
   /** Cards can't be dropped here: collapsed, or not a status of the dragged card's project. */
   closed: boolean;
+  /** With swimlanes: the lane's row, and the column the cell is in. */
+  row?: number | undefined;
+  column?: string | undefined;
 }
 
 /** Where a keyboard step goes: a card, or an empty lane. */
@@ -59,9 +62,14 @@ export function step(lanes: readonly LaneOrder[], current: UniqueIdentifier, act
   }
   const index = lane.id === id ? lane.cards.length : lane.cards.indexOf(id);
   if (code === "ArrowUp" || code === "ArrowDown") {
-    const next = index + (code === "ArrowUp" ? -1 : 1);
+    const up = code === "ArrowUp";
+    const next = index + (up ? -1 : 1);
     const target = lane.cards[next];
-    return target === undefined ? null : { lane: lane.id, index: next, target };
+    if (target !== undefined) {
+      return { lane: lane.id, index: next, target };
+    }
+    // Past a swimlane's cell: the same column in the next open lane above or below.
+    return lane.row === undefined ? null : across(lanes, lane, up, active);
   }
   if (code !== "ArrowLeft" && code !== "ArrowRight") {
     return null;
@@ -69,7 +77,7 @@ export function step(lanes: readonly LaneOrder[], current: UniqueIdentifier, act
   const direction = code === "ArrowLeft" ? -1 : 1;
   for (let other = laneIndex + direction; other >= 0 && other < lanes.length; other += direction) {
     const candidate = lanes[other];
-    if (!candidate || candidate.closed) {
+    if (!candidate || candidate.closed || candidate.row !== lane.row) {
       continue;
     }
     const cards = candidate.cards.filter((key) => key !== String(active));
@@ -80,6 +88,21 @@ export function step(lanes: readonly LaneOrder[], current: UniqueIdentifier, act
   return null;
 }
 
+/** From a swimlane's cell up or down into the same column of the next open lane: at its end going up, its start going down. */
+function across(lanes: readonly LaneOrder[], from: LaneOrder, up: boolean, active: UniqueIdentifier): Step | null {
+  const rows = lanes
+    .filter((candidate) => candidate.column === from.column && candidate.row !== undefined && !candidate.closed)
+    .filter((candidate) => (up ? (candidate.row ?? 0) < (from.row ?? 0) : (candidate.row ?? 0) > (from.row ?? 0)))
+    .sort((a, b) => (up ? (b.row ?? 0) - (a.row ?? 0) : (a.row ?? 0) - (b.row ?? 0)));
+  const candidate = rows[0];
+  if (!candidate) {
+    return null;
+  }
+  const cards = candidate.cards.filter((key) => key !== String(active));
+  const at = up ? Math.max(cards.length - 1, 0) : 0;
+  return { lane: candidate.id, index: at, target: cards[at] ?? candidate.id };
+}
+
 /** What a lane tells the keyboard sensor through its drop target's data. */
 export interface LaneData {
   kind: "lane";
@@ -87,6 +110,9 @@ export interface LaneData {
   closed: boolean;
   /** Brings an index of a virtual lane into view. */
   scrollTo?: ((index: number) => void) | undefined;
+  /** With swimlanes: the lane's row, and the column of the cell. */
+  row?: number | undefined;
+  column?: string | undefined;
 }
 
 function isLaneData(data: unknown): data is LaneData {
@@ -108,11 +134,12 @@ export const indexCoordinates: KeyboardCoordinateGetter = (event, { active, curr
   const lanes = droppableContainers
     .toArray()
     .filter((container) => isLaneData(container.data.current))
-    .map((container) => ({ container, left: container.node.current?.getBoundingClientRect().left ?? 0 }))
-    .sort((a, b) => a.left - b.left)
+    .map((container) => ({ container, left: container.node.current?.getBoundingClientRect().left ?? 0, row: (container.data.current as LaneData).row ?? 0 }))
+    // Swimlanes: row by row, each from the inline start.
+    .sort((a, b) => a.row - b.row || a.left - b.left)
     .map(({ container }) => {
       const data = container.data.current as LaneData;
-      return { id: String(container.id), cards: data.cards, closed: container.disabled || data.closed, scrollTo: data.scrollTo };
+      return { id: String(container.id), cards: data.cards, closed: container.disabled || data.closed, scrollTo: data.scrollTo, row: data.row, column: data.column };
     });
   const next = step(lanes, over?.id ?? active, active, event.code);
   if (!next || !collisionRect) {

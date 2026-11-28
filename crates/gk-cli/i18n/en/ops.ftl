@@ -573,6 +573,9 @@ op-task-move--after = Place it after this task of the target status.
 op-task-move--at = Place it first or last in the target status; default when the status
     changes: last.
 op-task-move--before = Place it before this task of the target status.
+op-task-move--changes = Changes to the task's own fields made with the move, in the same
+    change, as `task.update` makes them: what a card dropped into a
+    board swimlane takes from it. Not with `project`.
 op-task-move--close-duplicates = When the move closes the task: `true` closes the open tasks marked
     as its duplicates too, in the same change (each into the status of
     the same name in its project, else the first one of the same
@@ -1102,19 +1105,22 @@ op-digest-dismiss--at = The `until` of the digest the person saw (RFC 3339); def
 
 ## glyphkeel board <project>
 
-op-board-get = A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.
+op-board-get = A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts.
 op-board-get--include-subprojects = Show the sub-projects' tasks too; default: as the layout says.
+op-board-get--lane-field = With `lanes: field`, the select custom field (name or `cf.<query
+    name>`); default: the layout's.
+op-board-get--lanes = Group the cards into swimlanes by this; default: as the layout says.
 op-board-get--project = The project: its key (current or old) or ID.
 op-board-get--show-older = Show every closed card, however old.
 
 ## glyphkeel board layout show <project>
 
-op-layout-get = The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.
+op-layout-get = The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes.
 op-layout-get--project = The project: its key (current or old) or ID.
 
 ## glyphkeel board layout set <project>
 
-op-layout-update = Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.
+op-layout-update = Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers, swimlanes and older closed cards, or reset to the project's layout.
 op-layout-update--card-fields = The fields shown on cards: `type`, `priority`, `due`, `start`,
     `labels`, `checklist`, `subtasks`, `estimate`, `days_in_column`,
     `updated`, `key`, and custom fields of the project as
@@ -1132,6 +1138,10 @@ op-layout-update--expand = Columns to expand again.
 op-layout-update--hide = Columns to hide, by status name or ID.
 op-layout-update--hide-done-after-days = Hide cards closed more than this many days ago; 0 shows all.
 op-layout-update--include-subprojects = Show the sub-projects' tasks too.
+op-layout-update--lane-field = The select custom field the lanes group by, by name or as
+    `cf.<query name>`.
+op-layout-update--lanes = What the swimlanes group the cards by: `none`, `parent`, `priority`,
+    `label`, `sprint`, `type` or `field` (with `lane_field`).
 op-layout-update--order = The column order, by status name or ID; columns left out follow in
     project order.
 op-layout-update--project = The project: its key (current or old) or ID.

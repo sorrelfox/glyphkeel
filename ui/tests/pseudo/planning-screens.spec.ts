@@ -3,8 +3,9 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-// The project settings' Fields, Rules and Templates tabs, the CSV import
-// dialog, the roadmap and the reports, on the sample data:
+// The board with swimlanes, the project settings' Fields, Rules and
+// Templates tabs, the CSV import dialog, the roadmap and the reports, on the
+// sample data:
 //
 // - in the pseudo-locale, no English is left in their text, labels,
 //   placeholders and titles, apart from the sample data's own words;
@@ -56,6 +57,19 @@ function settingsTab(tab: number): Screen["open"] {
 }
 
 const SCREENS: Screen[] = [
+  {
+    name: "board with swimlanes",
+    open: async (page) => {
+      await openProject(page);
+      // The toolbar's swimlanes menu, then its third choice: by priority.
+      await page.locator("[role=toolbar] button").filter({ has: page.locator("svg.lucide-rows-3") }).click();
+      await page.getByRole("menuitemradio").nth(2).click();
+      await expect(page.locator("section[data-swimlane]").first()).toBeVisible();
+      return page.locator("section[data-swimlane]").first().locator("xpath=..");
+    },
+    // The cards and the status names are the sample data's own.
+    data: ["[data-card]", "[data-column] h2"],
+  },
   { name: "fields tab", open: settingsTab(4), data: [] },
   // The status names are the project's own.
   { name: "rules tab", open: settingsTab(5), data: ["[data-testid^='rules-'] > button > span:nth-child(2)"] },

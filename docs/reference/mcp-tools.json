@@ -30903,7 +30903,7 @@
       "covers": [
         "task.move"
       ],
-      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. A required custom field of the target that the task would lack takes its default, else the move is refused unless `fields` ({name: value}) gives it. Entering a done or cancelled status closes the task; `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left out, a warning names them). Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. A required custom field of the target that the task would lack takes its default, else the move is refused unless `fields` ({name: value}) gives it. Entering a done or cancelled status closes the task; `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left out, a warning names them). `changes` ({type, priority, add_labels, remove_labels, sprint, parent, fields, clear}) changes those fields in the same change, as dropping a card into a board swimlane does: a lane's `value` is what it sets. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Where to move a task: another status, another place in its column, or\nanother project.",
@@ -30930,6 +30930,128 @@
           "before": {
             "description": "Place it before this task of the target status.",
             "type": "string"
+          },
+          "changes": {
+            "additionalProperties": false,
+            "description": "Changes to the task's own fields made with the move, in the same\nchange, as `task.update` makes them: what a card dropped into a\nboard swimlane takes from it. Not with `project`.",
+            "properties": {
+              "add_labels": {
+                "description": "Labels to add.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "clear": {
+                "description": "Fields to clear: `parent`, `sprint` or `labels`.",
+                "items": {
+                  "description": "A task field that can be cleared.",
+                  "oneOf": [
+                    {
+                      "const": "description",
+                      "description": "The description.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "parent",
+                      "description": "The parent: the task stops being a subtask.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "start_date",
+                      "description": "The start date.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "due_date",
+                      "description": "The due date.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimate",
+                      "description": "The estimate.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "progress",
+                      "description": "The progress set by hand.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "labels",
+                      "description": "Every label.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "fix_version",
+                      "description": "The version it is planned for.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "sprint",
+                      "description": "The sprint it is in (back to the backlog).",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Custom field values to set, by field name, query name or ID; `null`\nclears one.",
+                "type": "object"
+              },
+              "parent": {
+                "description": "A new parent task (same project, at most 5 levels, no loops).",
+                "type": "string"
+              },
+              "priority": {
+                "description": "A new priority.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No priority (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "low",
+                    "description": "Low.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "normal",
+                    "description": "Normal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "description": "High.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "urgent",
+                    "description": "Urgent.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "remove_labels": {
+                "description": "Labels to take off.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "sprint": {
+                "description": "Put it in this sprint (name or ID): a planned or active sprint of\nits project.",
+                "type": "string"
+              },
+              "type": {
+                "description": "A new type.",
+                "type": "string"
+              }
+            },
+            "type": "object"
           },
           "close_duplicates": {
             "description": "When the move closes the task: `true` closes the open tasks marked\nas its duplicates too, in the same change (each into the status of\nthe same name in its project, else the first one of the same\ncategory); `false` leaves them open without a warning. Left out, they\nstay open and a warning names them.",
@@ -56964,7 +57086,7 @@
         "board.get",
         "layout.get"
       ],
-      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and their `cover` image when the layout sets them. Example: get_board {\"project\": \"TM\"}",
+      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and their `cover` image when the layout sets them. With swimlanes (the layout's, or `lanes`: parent, priority, label, sprint, type, or field with `lane_field`), `lanes` lists each lane with its `counts` per column ID and total, the lane without a value last, and each card names its `lane`. Example: get_board {\"project\": \"TM\", \"lanes\": \"priority\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which board to read.",
@@ -56972,6 +57094,50 @@
           "include_subprojects": {
             "description": "Show the sub-projects' tasks too; default: as the layout says.",
             "type": "boolean"
+          },
+          "lane_field": {
+            "description": "With `lanes: field`, the select custom field (name or `cf.<query\nname>`); default: the layout's.",
+            "type": "string"
+          },
+          "lanes": {
+            "description": "Group the cards into swimlanes by this; default: as the layout says.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              }
+            ]
           },
           "project": {
             "description": "The project: its key (current or old) or ID.",
@@ -57293,6 +57459,10 @@
                           "type": "object"
                         },
                         "type": "array"
+                      },
+                      "lane": {
+                        "description": "The ID of the swimlane it is in; left out without swimlanes.",
+                        "type": "string"
                       },
                       "parent": {
                         "description": "The parent task's key, for a subtask.",
@@ -57701,6 +57871,112 @@
             "minimum": 0,
             "type": "integer"
           },
+          "lanes": {
+            "description": "The swimlanes in order, the lane without a value last; empty\nwithout swimlanes. Each card names its lane.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One swimlane: a band across the columns for one value of the field the\nlayout's `lanes` chooses.",
+              "properties": {
+                "count": {
+                  "description": "The cards it holds on the board, closed cards behind \"Show older\"\nand hidden columns aside.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "counts": {
+                  "additionalProperties": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "description": "Those cards by column ID.",
+                  "type": "object"
+                },
+                "empty": {
+                  "description": "The lane of the cards without a value; it comes last.",
+                  "type": "boolean"
+                },
+                "hue": {
+                  "description": "Its colour, for a type or label.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The lane's ID: the priority, the option, or the ID of the type,\nlabel, sprint or parent task; `none` for the lane of the cards\nwithout a value.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The parent task's key, for a lane of a parent.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name: the priority, the type's, label's, sprint's or option's\nname, or the parent's title; empty for the lane without a value.",
+                  "type": "string"
+                },
+                "settable": {
+                  "description": "Whether cards can be dropped into it to take its value; a completed\nsprint can't take tasks.",
+                  "type": "boolean"
+                },
+                "value": {
+                  "description": "What a card dropped into the lane gets, as `task.move`'s `changes`\ntake it: the priority, the type's or label's name, the sprint's or\nparent's ID, or the option; left out for the lane without a value.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "empty",
+                "settable",
+                "count",
+                "counts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "layout": {
             "additionalProperties": false,
             "description": "The layout the board was built with.",
@@ -57890,6 +58166,52 @@
                 "description": "Whether the sub-projects' tasks are on the board too.",
                 "type": "boolean"
               },
+              "lane_field": {
+                "default": "",
+                "description": "With `lanes: field`, the select custom field, as `cf.<query name>`;\nempty otherwise.",
+                "type": "string"
+              },
+              "lanes": {
+                "default": "none",
+                "description": "What the swimlanes group the cards by.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No swimlanes (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "parent",
+                    "description": "The parent task, such as an epic.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "The priority.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "label",
+                    "description": "The first label.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "sprint",
+                    "description": "The sprint.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "type",
+                    "description": "The type.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "field",
+                    "description": "A select custom field, named by `lane_field`.",
+                    "type": "string"
+                  }
+                ]
+              },
               "order": {
                 "description": "The column order, as status IDs. Statuses not listed keep their\nproject position between their neighbours.",
                 "items": {
@@ -57934,7 +58256,9 @@
               "include_subprojects",
               "colour_by",
               "colour_rules",
-              "covers"
+              "covers",
+              "lanes",
+              "lane_field"
             ],
             "type": "object"
           },
@@ -57967,7 +58291,7 @@
       "covers": [
         "layout.update"
       ],
-      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), `covers` (off, chosen, first_image), or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
+      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), `covers` (off, chosen, first_image), the swimlanes (`lanes`: none, parent, priority, label, sprint, type, or field with `lane_field`, a select field; which lanes are collapsed is the person's own setting in the app), or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a board layout; fields left out keep their value.",
@@ -58160,6 +58484,50 @@
           "include_subprojects": {
             "description": "Show the sub-projects' tasks too.",
             "type": "boolean"
+          },
+          "lane_field": {
+            "description": "The select custom field the lanes group by, by name or as\n`cf.<query name>`.",
+            "type": "string"
+          },
+          "lanes": {
+            "description": "What the swimlanes group the cards by: `none`, `parent`, `priority`,\n`label`, `sprint`, `type` or `field` (with `lane_field`).",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No swimlanes (the default).",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task, such as an epic.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The type.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A select custom field, named by `lane_field`.",
+                "type": "string"
+              }
+            ]
           },
           "order": {
             "description": "The column order, by status name or ID; columns left out follow in\nproject order.",
@@ -58414,6 +58782,52 @@
                 "description": "Whether the sub-projects' tasks are on the board too.",
                 "type": "boolean"
               },
+              "lane_field": {
+                "default": "",
+                "description": "With `lanes: field`, the select custom field, as `cf.<query name>`;\nempty otherwise.",
+                "type": "string"
+              },
+              "lanes": {
+                "default": "none",
+                "description": "What the swimlanes group the cards by.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No swimlanes (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "parent",
+                    "description": "The parent task, such as an epic.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "The priority.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "label",
+                    "description": "The first label.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "sprint",
+                    "description": "The sprint.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "type",
+                    "description": "The type.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "field",
+                    "description": "A select custom field, named by `lane_field`.",
+                    "type": "string"
+                  }
+                ]
+              },
               "order": {
                 "description": "The column order, as status IDs. Statuses not listed keep their\nproject position between their neighbours.",
                 "items": {
@@ -58458,7 +58872,9 @@
               "include_subprojects",
               "colour_by",
               "colour_rules",
-              "covers"
+              "covers",
+              "lanes",
+              "lane_field"
             ],
             "type": "object"
           },

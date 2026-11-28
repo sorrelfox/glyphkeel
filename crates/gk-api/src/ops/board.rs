@@ -4,9 +4,9 @@
 //! A project's board, and the person's own layout of it.
 //!
 //! The layout (hidden, collapsed and ordered columns, sort modes, card
-//! fields, card colours and covers, older closed cards, sub-projects) is
-//! personal and kept per project; it changes how the board looks, never the
-//! project's statuses.
+//! fields, card colours and covers, swimlanes, older closed cards,
+//! sub-projects) is personal and kept per project; it changes how the board
+//! looks, never the project's statuses.
 
 use std::collections::BTreeMap;
 
@@ -76,6 +76,27 @@ pub enum CoverMode {
     FirstImage,
 }
 
+/// What the board's swimlanes group the cards by.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LaneBy {
+    /// No swimlanes (the default).
+    #[default]
+    None,
+    /// The parent task, such as an epic.
+    Parent,
+    /// The priority.
+    Priority,
+    /// The first label.
+    Label,
+    /// The sprint.
+    Sprint,
+    /// The type.
+    Type,
+    /// A select custom field, named by `lane_field`.
+    Field,
+}
+
 /// The person's layout of one project's board.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -108,6 +129,13 @@ pub struct BoardLayout {
     /// Which image the cards show as their cover.
     #[serde(default)]
     pub covers: CoverMode,
+    /// What the swimlanes group the cards by.
+    #[serde(default)]
+    pub lanes: LaneBy,
+    /// With `lanes: field`, the select custom field, as `cf.<query name>`;
+    /// empty otherwise.
+    #[serde(default)]
+    pub lane_field: String,
 }
 
 impl Default for BoardLayout {
@@ -126,6 +154,8 @@ impl Default for BoardLayout {
             colour_by: CardColourBy::None,
             colour_rules: Vec::new(),
             covers: CoverMode::Off,
+            lanes: LaneBy::None,
+            lane_field: String::new(),
         }
     }
 }
@@ -238,6 +268,47 @@ pub struct Card {
     /// has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover: Option<CardCover>,
+    /// The ID of the swimlane it is in; left out without swimlanes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<String>,
+}
+
+/// The ID of the swimlane of the cards without a value.
+pub const EMPTY_LANE: &str = "none";
+
+/// One swimlane: a band across the columns for one value of the field the
+/// layout's `lanes` chooses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Swimlane {
+    /// The lane's ID: the priority, the option, or the ID of the type,
+    /// label, sprint or parent task; `none` for the lane of the cards
+    /// without a value.
+    pub id: String,
+    /// Its name: the priority, the type's, label's, sprint's or option's
+    /// name, or the parent's title; empty for the lane without a value.
+    pub name: String,
+    /// The parent task's key, for a lane of a parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// What a card dropped into the lane gets, as `task.move`'s `changes`
+    /// take it: the priority, the type's or label's name, the sprint's or
+    /// parent's ID, or the option; left out for the lane without a value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// The lane of the cards without a value; it comes last.
+    pub empty: bool,
+    /// Its colour, for a type or label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hue: Option<Hue>,
+    /// Whether cards can be dropped into it to take its value; a completed
+    /// sprint can't take tasks.
+    pub settable: bool,
+    /// The cards it holds on the board, closed cards behind "Show older"
+    /// and hidden columns aside.
+    pub count: u64,
+    /// Those cards by column ID.
+    pub counts: BTreeMap<String, u64>,
 }
 
 /// One column: a status, or with sub-projects, every status of that name.
@@ -293,6 +364,13 @@ pub struct BoardGetInput {
     /// Show every closed card, however old.
     #[serde(default)]
     pub show_older: bool,
+    /// Group the cards into swimlanes by this; default: as the layout says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lanes: Option<LaneBy>,
+    /// With `lanes: field`, the select custom field (name or `cf.<query
+    /// name>`); default: the layout's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_field: Option<String>,
 }
 
 /// A project's board as the person sees it.
@@ -310,6 +388,10 @@ pub struct Board {
     pub hidden_columns: u64,
     /// Tasks in hidden columns.
     pub hidden_tasks: u64,
+    /// The swimlanes in order, the lane without a value last; empty
+    /// without swimlanes. Each card names its lane.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lanes: Vec<Swimlane>,
 }
 
 /// Changes to a board layout; fields left out keep their value.
@@ -369,6 +451,14 @@ pub struct LayoutUpdateInput {
     /// `first_image`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub covers: Option<CoverMode>,
+    /// What the swimlanes group the cards by: `none`, `parent`, `priority`,
+    /// `label`, `sprint`, `type` or `field` (with `lane_field`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lanes: Option<LaneBy>,
+    /// The select custom field the lanes group by, by name or as
+    /// `cf.<query name>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_field: Option<String>,
 }
 
 /// A layout after a change.
@@ -415,7 +505,7 @@ op!(
 );
 
 pub(crate) const BOARD_GET: OpDescriptor = OpDescriptor::of::<BoardGet>(Meta {
-    summary: "A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.",
+    summary: "A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,
@@ -425,7 +515,7 @@ pub(crate) const BOARD_GET: OpDescriptor = OpDescriptor::of::<BoardGet>(Meta {
 });
 
 pub(crate) const LAYOUT_GET: OpDescriptor = OpDescriptor::of::<LayoutGet>(Meta {
-    summary: "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.",
+    summary: "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,
@@ -435,7 +525,7 @@ pub(crate) const LAYOUT_GET: OpDescriptor = OpDescriptor::of::<LayoutGet>(Meta {
 });
 
 pub(crate) const LAYOUT_UPDATE: OpDescriptor = OpDescriptor::of::<LayoutUpdate>(Meta {
-    summary: "Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.",
+    summary: "Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers, swimlanes and older closed cards, or reset to the project's layout.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

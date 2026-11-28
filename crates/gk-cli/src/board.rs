@@ -3,7 +3,9 @@
 
 //! A board for people: each column as a heading with its count and limits,
 //! then its cards, one a line: key, title, the coloured edge's name and the
-//! cover's file name. `--json` still prints the whole board.
+//! cover's file name. With swimlanes, the columns' headings come first, then
+//! each lane with its columns and their cards. `--json` still prints the
+//! whole board.
 
 use std::fmt::Write as _;
 
@@ -43,9 +45,23 @@ pub(crate) fn show(value: &Value) -> String {
         .map(|card| str_of(card, "key").chars().count())
         .max()
         .unwrap_or(0);
-    for column in shown {
+    let lanes = value["lanes"].as_array().map_or(&[][..], Vec::as_slice);
+    if lanes.is_empty() {
+        for column in shown {
+            out.push('\n');
+            column_text(&mut out, column, key_width);
+        }
+    } else {
         out.push('\n');
-        column_text(&mut out, column, key_width);
+        let _ = writeln!(out, "{}", text("cli-board-columns", &[]));
+        for column in &shown {
+            let _ = writeln!(out, "  {}", heading(column));
+        }
+        let by = str_of(&value["layout"], "lanes");
+        for lane in lanes {
+            out.push('\n');
+            lane_text(&mut out, lane, by, &shown, key_width);
+        }
     }
     let hidden = value["hidden_columns"].as_u64().unwrap_or(0);
     if hidden > 0 {
@@ -65,7 +81,66 @@ pub(crate) fn show(value: &Value) -> String {
     out
 }
 
-fn column_text(out: &mut String, column: &Value, key_width: usize) {
+/// A lane: its heading, then each column holding its cards, with them.
+fn lane_text(out: &mut String, lane: &Value, by: &str, columns: &[&Value], key_width: usize) {
+    let name = if lane["empty"].as_bool().unwrap_or(false) {
+        text("cli-board-lane-empty", &[("by", by.to_owned())])
+    } else if by == "priority" {
+        text(
+            "cli-board-lane-priority",
+            &[("priority", str_of(lane, "id").to_owned())],
+        )
+    } else if let Some(key) = lane["key"].as_str() {
+        text(
+            "cli-board-lane-parent",
+            &[
+                ("key", key.to_owned()),
+                ("title", str_of(lane, "name").to_owned()),
+            ],
+        )
+    } else {
+        str_of(lane, "name").to_owned()
+    };
+    let line = text(
+        "cli-board-lane",
+        &[("name", name), ("count", count(&lane["count"]))],
+    );
+    let _ = writeln!(out, "{line}");
+    let id = str_of(lane, "id");
+    let mut any = false;
+    for column in columns {
+        let cards: Vec<&Value> = column["cards"]
+            .as_array()
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .filter(|c| str_of(c, "lane") == id)
+            .collect();
+        if cards.is_empty() {
+            continue;
+        }
+        any = true;
+        let _ = writeln!(
+            out,
+            "  {}",
+            text(
+                "cli-board-lane-column",
+                &[
+                    ("name", str_of(column, "name").to_owned()),
+                    ("count", cards.len().to_string()),
+                ],
+            )
+        );
+        for card in cards {
+            card_line(out, card, key_width, "    ");
+        }
+    }
+    if !any {
+        let _ = writeln!(out, "  {}", text("cli-board-no-cards", &[]));
+    }
+}
+
+/// A column's heading: its name and count, and its limits.
+fn heading(column: &Value) -> String {
     let mut heading = text(
         "cli-board-column",
         &[
@@ -93,30 +168,17 @@ fn column_text(out: &mut String, column: &Value, key_width: usize) {
     if column["collapsed"].as_bool().unwrap_or(false) {
         note("cli-board-collapsed", &[]);
     }
-    let _ = writeln!(out, "{heading}");
+    heading
+}
+
+fn column_text(out: &mut String, column: &Value, key_width: usize) {
+    let _ = writeln!(out, "{}", heading(column));
     let cards = column["cards"].as_array().map_or(&[][..], Vec::as_slice);
     if cards.is_empty() {
         let _ = writeln!(out, "  {}", text("cli-board-no-cards", &[]));
     }
     for card in cards {
-        let key = str_of(card, "key");
-        let fill = key_width.saturating_sub(key.chars().count()) + 2;
-        let mut line = format!("  {key}{:fill$}{}", "", str_of(card, "title"));
-        if let Some(edge) = card.get("edge") {
-            line.push_str("  ");
-            line.push_str(&text(
-                "cli-board-edge",
-                &[("name", str_of(edge, "name").to_owned())],
-            ));
-        }
-        if let Some(cover) = card.get("cover") {
-            line.push_str("  ");
-            line.push_str(&text(
-                "cli-board-cover",
-                &[("name", str_of(cover, "name").to_owned())],
-            ));
-        }
-        let _ = writeln!(out, "{}", line.trim_end());
+        card_line(out, card, key_width, "  ");
     }
     let older = column["older"].as_u64().unwrap_or(0);
     if older > 0 {
@@ -126,6 +188,28 @@ fn column_text(out: &mut String, column: &Value, key_width: usize) {
             text("cli-board-older", &[("count", older.to_string())])
         );
     }
+}
+
+/// One card: key, title, the edge's name and the cover's file name.
+fn card_line(out: &mut String, card: &Value, key_width: usize, indent: &str) {
+    let key = str_of(card, "key");
+    let fill = key_width.saturating_sub(key.chars().count()) + 2;
+    let mut line = format!("{indent}{key}{:fill$}{}", "", str_of(card, "title"));
+    if let Some(edge) = card.get("edge") {
+        line.push_str("  ");
+        line.push_str(&text(
+            "cli-board-edge",
+            &[("name", str_of(edge, "name").to_owned())],
+        ));
+    }
+    if let Some(cover) = card.get("cover") {
+        line.push_str("  ");
+        line.push_str(&text(
+            "cli-board-cover",
+            &[("name", str_of(cover, "name").to_owned())],
+        ));
+    }
+    let _ = writeln!(out, "{}", line.trim_end());
 }
 
 #[cfg(test)]

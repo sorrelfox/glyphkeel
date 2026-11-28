@@ -44,6 +44,7 @@ pub(crate) mod schedule;
 pub(crate) mod search;
 pub(crate) mod settings;
 pub(crate) mod sprint;
+pub(crate) mod swimlane;
 pub(crate) mod task;
 pub(crate) mod template;
 pub(crate) mod time;

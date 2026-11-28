@@ -73,6 +73,45 @@ count and limits, then its cards, one a line, with the key, the title, the
 name of what colours the edge (`edge: Urgent bugs`) and the cover's file name
 (`cover: shot.png`). With `--json` it prints the whole board.
 
+## Swimlanes
+
+**Swimlanes** in the board's toolbar adds horizontal lanes across the
+columns, so one board can be read by **Epic or parent**, **Priority**,
+**Label**, **Sprint**, **Type** or a select custom field. **None** goes back
+to plain columns.
+
+- Each lane has a header with its name and its number of tasks, and each of
+  its columns shows how many of the lane's cards it holds. The column headers
+  at the top keep the column's total.
+- Cards without a value go in the last lane (**No priority**, **No label**,
+  **No parent**, **Backlog** for sprints). Priorities, types, open sprints
+  and a field's options always have their lane, even while it is empty;
+  labels and parents have one while a card shows them. A card with several
+  labels is in the lane of its first one.
+- The arrow in a lane's header collapses it. Which lanes are collapsed is your
+  own setting, kept on this computer for each project and grouping, so they
+  stay collapsed when the board opens again; it isn't part of the layout and
+  isn't in the history.
+- Dragging a card into another lane changes the lane's field as well, and
+  into another column the status too, in one change that one Undo takes back.
+  A lane that can't take the card says why while you drag: a completed
+  sprint, a task's own lane as its parent, or a parent in another project.
+- From the keyboard, a card's menu has **Move to** (another column, same
+  lane) and **Move to lane** (another lane, same column). While a card is
+  picked up with Space, the arrow keys move it between columns, and past the
+  top or bottom of a column into the lane above or below. Screen readers hear
+  the lane and the column of each step.
+- WIP limits stay the column's: the column header warns on the column's
+  total, whatever the lanes.
+
+The choice is part of your layout, so Undo takes it back too. From the
+command line, `glyphkeel board TM --lanes priority` prints the column totals
+and then each lane with its columns and cards; `glyphkeel board layout set TM
+--lanes field --lane-field cf.area` keeps a grouping. Agents read the lanes with `get_board`
+(each lane with its counts by column, each card naming its lane), set them
+with `set_board_layout`, and move a card into a lane with `move_task` and its
+`changes`.
+
 ## Filtering
 
 The filter bar above the board narrows the cards:

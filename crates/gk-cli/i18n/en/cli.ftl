@@ -186,6 +186,32 @@ cli-board-hidden = { $columns ->
         [one] 1 task
        *[other] { $tasks } tasks
     }
+# With swimlanes: a lane's heading, its name and how many cards it holds.
+cli-board-lane = Lane: { $name } ({ $count ->
+        [one] 1 task
+       *[other] { $count } tasks
+    })
+# The lane of the cards without a value, by what the lanes group by.
+cli-board-lane-empty = { $by ->
+        [parent] No parent
+        [priority] No priority
+        [label] No label
+        [sprint] No sprint
+       *[other] No value
+    }
+# A priority's lane.
+cli-board-lane-priority = { $priority ->
+        [urgent] Urgent
+        [high] High
+        [normal] Normal
+       *[low] Low
+    }
+# A parent's lane: the parent's key and title.
+cli-board-lane-parent = { $key } { $title }
+# With swimlanes: the columns first, with their totals and limits.
+cli-board-columns = Columns
+# With swimlanes: a column within a lane, and how many of the lane's cards it holds.
+cli-board-lane-column = { $name } ({ $count })
 
 ## Dashboards, as `dashboard show` prints them
 

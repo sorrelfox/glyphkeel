@@ -589,3 +589,64 @@ async fn an_agent_reads_the_flow_reports_and_its_own_closes() {
     assert_eq!(cycle["cycle"]["count"], 0, "never in progress");
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_reads_and_sets_board_swimlanes_and_moves_a_card_between_lanes() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Lanes").await;
+    output(
+        &c.call("create_project", json!({ "name": "Lanes", "key": "LN" }))
+            .await,
+    );
+    output(
+        &c.call(
+            "create_task",
+            json!({ "project": "LN", "title": "Crash", "priority": "urgent" }),
+        )
+        .await,
+    );
+
+    let board = output(
+        &c.call("get_board", json!({ "project": "LN", "lanes": "priority" }))
+            .await,
+    );
+    let ids: Vec<&str> = board["lanes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["urgent", "high", "normal", "low", "none"]);
+    assert_eq!(board["lanes"][0]["count"], 1);
+    assert_eq!(board["columns"][0]["cards"][0]["lane"], "urgent");
+
+    let set = output(
+        &c.call(
+            "set_board_layout",
+            json!({ "project": "LN", "lanes": "priority" }),
+        )
+        .await,
+    );
+    assert_eq!(set["layout"]["lanes"], "priority");
+
+    let moved = output(
+        &c.call(
+            "move_task",
+            json!({ "key": "LN-1", "status": "In progress", "changes": { "priority": "low" } }),
+        )
+        .await,
+    );
+    assert_eq!(moved["task"]["priority"], "low");
+    assert_eq!(moved["task"]["status"]["name"], "In progress");
+    let board = output(&c.call("get_board", json!({ "project": "LN" })).await);
+    let low = board["lanes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["id"] == "low")
+        .unwrap();
+    assert_eq!(low["count"], 1);
+    assert_eq!(board["lanes"][4]["empty"], true);
+    c.close().await;
+}

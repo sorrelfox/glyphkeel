@@ -28,7 +28,8 @@ import { useToasts } from "../../components/Toasts";
 import { useApplyTemplate, useTemplates } from "../../data/recurrence";
 import { cardsOf, columnsOf, useBoard, useCreateTask, useLayout, useMoveTask, useProject, useUpdateLayout, useUpdateTask, type Move } from "../../data/board";
 import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type CardSize, type Place, type Project } from "../../data/catalog";
-import { loadCardSize, saveCardSize } from "../../prefs/store";
+import { type Swimlane } from "../../generated/ops";
+import { loadCardSize, loadCollapsedLanes, saveCardSize, saveCollapsedLanes } from "../../prefs/store";
 import { useT } from "../../i18n/I18n";
 import { useNewTask, useStatus, useTimerTask } from "../../shell/context";
 import { CardView } from "./CardView";
@@ -39,6 +40,8 @@ import { fieldsOfCard } from "../../data/rules";
 import { useCustomFields } from "../../data/fields";
 import { useEntryReason, useProjectsByKey } from "../../data/useRules";
 import { boardView, isFiltered, moveColumn, NO_FILTERS, positionIn, type BoardView, type Filters } from "./model";
+import { cellId, laneChanges, laneOfCard, parseCell, swimlaneView, withLane } from "./swimlanes";
+import { Swimlanes } from "./Swimlanes";
 import { Toolbar } from "./Toolbar";
 import styles from "./Board.module.css";
 
@@ -121,25 +124,79 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   const cards = cardsOf(board);
   const columnOf = columnsOf(board);
   const columnName = new Map(board.columns.map((column) => [column.id, column.name]));
-  const lanesNow: Record<string, string[]> = Object.fromEntries(view.lanes.map((lane) => [lane.column.id, lane.cards.map((card) => card.key)]));
+  // With swimlanes, every drop target is a cell: one lane in one column.
+  const swimOn = layout.lanes !== "none" && (board.lanes?.length ?? 0) > 0;
+  // Which lanes are collapsed is the person's own, kept per project and grouping.
+  const grouping = layout.lanes === "field" ? `field:${layout.lane_field}` : layout.lanes;
+  const [collapsedLanes, setCollapsedLanes] = useState<{ grouping: string; ids: string[] }>(() => ({ grouping, ids: loadCollapsedLanes(project.id, grouping) }));
+  const closedLanes = collapsedLanes.grouping === grouping ? collapsedLanes.ids : loadCollapsedLanes(project.id, grouping);
+  const swim = swimOn ? swimlaneView(board.lanes ?? [], view, closedLanes) : [];
+  const lanesNow: Record<string, string[]> = swimOn
+    ? Object.fromEntries(swim.flatMap((lane) => view.lanes.map((column) => [cellId(lane.lane.id, column.column.id), (lane.cells[column.column.id] ?? []).map((card) => card.key)] as const)))
+    : Object.fromEntries(view.lanes.map((lane) => [lane.column.id, lane.cards.map((card) => card.key)]));
   const laneKeys = drag ? drag.lanes : lanesNow;
   const activeCard = drag ? cards.get(drag.key) : undefined;
+  /** The column of a drop target: the target itself without swimlanes. */
+  const columnAt = (target: string) => (swimOn ? (parseCell(target)?.column ?? target) : target);
+  const swimlaneAt = (target: string): Swimlane | undefined => {
+    const cell = swimOn ? parseCell(target) : undefined;
+    return cell === undefined ? undefined : swim.find((lane) => lane.lane.id === cell.lane)?.lane;
+  };
+  /** The drop target a card is in now. */
+  const homeOf = (key: string) => {
+    const card = cards.get(key);
+    const column = columnOf[key] ?? "";
+    return swimOn && card ? cellId(laneOfCard(card), column) : column;
+  };
+  /** A lane's name as people read it. */
+  const laneName = (lane: Swimlane): string => {
+    if (lane.empty) {
+      return t("swimlane-empty", { by: layout.lanes });
+    }
+    if (layout.lanes === "priority") {
+      return t(`priority-${lane.id}`);
+    }
+    if (lane.key !== undefined) {
+      return t("swimlane-parent", { key: lane.key, title: lane.name });
+    }
+    return lane.settable ? lane.name : t("swimlane-completed", { name: lane.name });
+  };
+  /** What a card's move into the lane of `target` changes, or why it can't; nothing when the lane stays. */
+  const laneMove = (card: Card, target: string) => {
+    const to = swimlaneAt(target);
+    if (!to || to.id === laneOfCard(card)) {
+      return undefined;
+    }
+    const from = (board.lanes ?? []).find((lane) => lane.id === laneOfCard(card));
+    return { to, result: laneChanges(layout.lanes, layout.lane_field, card, from, to, laneName(to)) };
+  };
+  /** Why the lane of `target` refuses the card, if it does. */
+  const laneReason = (target: string, card: Card | undefined): string | undefined => {
+    const moved = card === undefined ? undefined : laneMove(card, target);
+    return moved !== undefined && "refused" in moved.result ? t(moved.result.refused.id, moved.result.refused.args) : undefined;
+  };
 
   const projects = useProjectsByKey([project.key, ...[...cards.values()].map((card) => card.project)]);
   const entryReason = useEntryReason();
   /** Why the card can't enter the lane's status yet under the status's rules, if it can't. */
-  const ruleReason = (laneId: string, card: Card | undefined): string | undefined => {
+  const ruleReason = (target: string, card: Card | undefined): string | undefined => {
+    const laneId = columnAt(target);
     const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
     const status = card === undefined ? undefined : lane?.column.statuses[card.project];
     if (card === undefined || status === undefined || columnOf[card.key] === laneId) {
-      return undefined;
+      return laneReason(target, card);
     }
-    return entryReason(projects.get(card.project), status, fieldsOfCard(card));
+    return entryReason(projects.get(card.project), status, fieldsOfCard(card)) ?? laneReason(target, card);
   };
   /** A lane can take the card: open, its column has a status in the card's project, and the status's rules let it in. */
-  const takes = (laneId: string, card: Card | undefined) => {
+  const takes = (target: string, card: Card | undefined) => {
+    const laneId = columnAt(target);
     const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
-    return lane !== undefined && !lane.collapsed && card !== undefined && lane.column.statuses[card.project] !== undefined && ruleReason(laneId, card) === undefined;
+    const swimlane = swimlaneAt(target);
+    if (swimOn && (swimlane === undefined || closedLanes.includes(swimlane.id))) {
+      return false;
+    }
+    return lane !== undefined && !lane.collapsed && card !== undefined && lane.column.statuses[card.project] !== undefined && ruleReason(target, card) === undefined;
   };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -160,7 +217,8 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   };
 
   /** Sends a move to the engine and says what happened. */
-  const commit = (key: string, laneId: string, place: Place, ids: readonly string[]) => {
+  const commit = (key: string, target: string, place: Place, ids: readonly string[]) => {
+    const laneId = columnAt(target);
     const card = cards.get(key);
     const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
     const status = card && lane?.column.statuses[card.project];
@@ -168,13 +226,28 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
       toasts.show({ tone: "error", text: t("move-refused", { key, column: lane?.column.name ?? "" }) });
       return;
     }
-    const sameColumn = columnOf[key] === laneId;
-    const change: Move = { key, status, column: laneId, place };
+    const laneChange = laneMove(card, target);
+    const result = laneChange?.result;
+    if (result !== undefined && "refused" in result) {
+      toasts.show({ tone: "error", text: t(result.refused.id, result.refused.args) });
+      return;
+    }
+    const sameColumn = homeOf(key) === target;
+    const change: Move = {
+      key,
+      status,
+      column: laneId,
+      place,
+      ...(laneChange === undefined || result === undefined ? {} : { lane: { changes: result.changes, card: withLane(card, laneChange.to, layout.lanes) } }),
+    };
     move.mutate(change);
+    const swimlane = swimlaneAt(target);
     announce(
       sameColumn
         ? t("move-done-position", { key, column: lane.column.name, position: ids.indexOf(key) + 1 })
-        : t("move-done", { key, column: lane.column.name }),
+        : swimlane
+          ? t("swimlane-move-done", { key, column: lane.column.name, lane: laneName(swimlane) })
+          : t("move-done", { key, column: lane.column.name }),
     );
   };
 
@@ -222,7 +295,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
       return;
     }
     let ids = current.lanes[laneId] ?? [];
-    const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
+    const lane = view.lanes.find((candidate) => candidate.column.id === columnAt(laneId));
     const manual = lane?.sort === "manual";
     if (manual) {
       const from = ids.indexOf(key);
@@ -231,7 +304,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
         ids = arrayMove(ids, from, to);
       }
     }
-    const moved = columnOf[key] !== laneId;
+    const moved = homeOf(key) !== laneId;
     const before = lanesNow[laneId] ?? [];
     if (!moved && ids.join() === before.join()) {
       return;
@@ -239,12 +312,28 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     commit(key, laneId, manual ? positionIn(ids, key) : { at: "bottom" }, ids);
   };
 
+  /** Where a drop target is, for the announcements: its column and, with swimlanes, its lane. */
+  const placeOf = (over: string) => {
+    const target = laneOf(over, laneKeys) ?? "";
+    const swimlane = swimlaneAt(target);
+    return { column: columnName.get(columnAt(target)) ?? "", ...(swimlane ? { lane: laneName(swimlane) } : {}) };
+  };
   const announcements: Announcements = {
     onDragStart: ({ active }) => t("drag-start", { key: String(active.id) }),
-    onDragOver: ({ active, over }) =>
-      over ? t("drag-over", { key: String(active.id), column: columnName.get(laneOf(String(over.id), laneKeys) ?? "") ?? "" }) : undefined,
-    onDragEnd: ({ active, over }) =>
-      over ? t("drag-end", { key: String(active.id), column: columnName.get(laneOf(String(over.id), laneKeys) ?? "") ?? "" }) : t("drag-cancel", { key: String(active.id) }),
+    onDragOver: ({ active, over }) => {
+      if (!over) {
+        return undefined;
+      }
+      const place = placeOf(String(over.id));
+      return t(place.lane === undefined ? "drag-over" : "swimlane-drag-over", { key: String(active.id), ...place });
+    },
+    onDragEnd: ({ active, over }) => {
+      if (!over) {
+        return t("drag-cancel", { key: String(active.id) });
+      }
+      const place = placeOf(String(over.id));
+      return t(place.lane === undefined ? "drag-end" : "swimlane-drag-end", { key: String(active.id), ...place });
+    },
     onDragCancel: ({ active }) => t("drag-cancel", { key: String(active.id) }),
   };
 
@@ -261,7 +350,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     let tries = 0;
     const attempt = () => {
       // In its new lane: until the board draws the move, the card is still in the old one.
-      const within = lane === undefined ? "" : `section[data-lane="${CSS.escape(lane)}"] `;
+      const within = lane === undefined ? "" : `[data-lane="${CSS.escape(lane)}"] `;
       const element = document.querySelector<HTMLElement>(`${within}[data-card="${CSS.escape(key)}"]`);
       if (element) {
         element.focus();
@@ -278,8 +367,19 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     requestAnimationFrame(attempt);
   };
 
+  /** The drop targets in order, for the keyboard: columns, or with swimlanes each lane's cells row by row. */
+  const targets = (closed: (id: string, column: BoardView["lanes"][number]) => boolean) =>
+    swimOn
+      ? swim.flatMap((lane, row) =>
+          view.lanes.map((column) => {
+            const id = cellId(lane.lane.id, column.column.id);
+            return { id, cards: lanesNow[id] ?? [], closed: lane.collapsed || closed(id, column), row, column: column.column.id };
+          }),
+        )
+      : view.lanes.map((column) => ({ id: column.column.id, cards: lanesNow[column.column.id] ?? [], closed: closed(column.column.id, column) }));
+
   const moveSelection = (key: string, code: string) => {
-    const lanes = view.lanes.map((lane) => ({ id: lane.column.id, cards: lanesNow[lane.column.id] ?? [], closed: lane.collapsed || (lanesNow[lane.column.id] ?? []).length === 0 }));
+    const lanes = targets((id, column) => column.collapsed || (lanesNow[id] ?? []).length === 0);
     const next = step(lanes, key, "", code);
     if (next && cards.has(String(next.target))) {
       focusCard(String(next.target), next.lane, next.index);
@@ -288,16 +388,16 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
 
   const moveByKey = (key: string, code: string) => {
     const card = cards.get(key);
-    const lanes = view.lanes.map((lane) => ({ id: lane.column.id, cards: lanesNow[lane.column.id] ?? [], closed: !takes(lane.column.id, card) }));
+    const lanes = targets((id) => !takes(id, card) && homeOf(key) !== id);
     const next = step(lanes, key, key, code);
     if (!next || readOnly) {
       return;
     }
-    const lane = view.lanes.find((candidate) => candidate.column.id === next.lane);
+    const lane = view.lanes.find((candidate) => candidate.column.id === columnAt(next.lane));
     if (!lane) {
       return;
     }
-    const sameLane = columnOf[key] === next.lane;
+    const sameLane = homeOf(key) === next.lane;
     if (sameLane && lane.sort !== "manual") {
       announce(t("move-sorted", { column: lane.column.name }));
       return;
@@ -319,16 +419,38 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
         id: "move",
         label: t("card-move-to"),
         submenu: view.lanes.map((lane) => {
-          const reason = ruleReason(lane.column.id, card);
+          // With swimlanes: the same lane, in that column.
+          const target = swimOn ? cellId(laneOfCard(card), lane.column.id) : lane.column.id;
+          const reason = ruleReason(target, card);
           return {
             id: `move-${lane.column.id}`,
             label: lane.column.name,
             disabled: readOnly || columnOf[key] === lane.column.id || lane.column.statuses[card.project] === undefined || reason !== undefined,
             ...(reason === undefined ? {} : { detail: reason }),
-            run: () => { commit(key, lane.column.id, { at: "bottom" }, [...(lanesNow[lane.column.id] ?? []), key]); },
+            run: () => { commit(key, target, { at: "bottom" }, [...(lanesNow[target] ?? []), key]); },
           };
         }),
       },
+      ...(swimOn
+        ? [
+            {
+              id: "move-lane",
+              label: t("card-move-to-lane"),
+              submenu: swim.map(({ lane }) => {
+                // The same column, in that lane.
+                const target = cellId(lane.id, columnOf[key] ?? "");
+                const reason = laneReason(target, card);
+                return {
+                  id: `lane-${lane.id}`,
+                  label: laneName(lane),
+                  disabled: readOnly || laneOfCard(card) === lane.id || reason !== undefined,
+                  ...(reason === undefined ? {} : { detail: reason }),
+                  run: () => { commit(key, target, { at: "bottom" }, [...(lanesNow[target] ?? []), key]); },
+                };
+              }),
+            } satisfies MenuEntry,
+          ]
+        : []),
       {
         id: "priority",
         label: t("card-priority"),
@@ -563,7 +685,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
           // nothing is dragged, when every card a scrolling lane draws would
           // make the page measure all of them.
           measuring={{ droppable: { strategy: MeasuringStrategy.WhileDragging } }}
-          accessibility={{ announcements, screenReaderInstructions: { draggable: t("drag-instructions") } }}
+          accessibility={{ announcements, screenReaderInstructions: { draggable: t(swimOn ? "swimlane-drag-instructions" : "drag-instructions") } }}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
@@ -571,6 +693,48 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
             setDrag(null);
           }}
         >
+          {swimOn ? (
+            <Swimlanes
+              label={t("board-label", { name: project.name })}
+              columns={view.lanes}
+              lanes={swim}
+              keys={laneKeys}
+              cards={cards}
+              handlers={handlers}
+              active={drag?.key ?? null}
+              over={drag?.over ?? null}
+              closed={(cell) => !takes(cell, activeCard) && homeOf(drag?.key ?? "") !== cell}
+              reason={(cell) => ruleReason(cell, activeCard)}
+              nameOf={laneName}
+              onToggle={(lane) => {
+                const ids = closedLanes.includes(lane) ? closedLanes.filter((id) => id !== lane) : [...closedLanes, lane];
+                setCollapsedLanes({ grouping, ids });
+                saveCollapsedLanes(project.id, grouping, ids);
+              }}
+              columnMenu={laneMenu}
+              onExpandColumn={(column) => {
+                updateLayout({ collapsed: layout.collapsed.filter((id) => id !== column) });
+              }}
+              adding={adding}
+              templates={templates.data?.items ?? []}
+              onAdd={(column) => {
+                if (!readOnly) {
+                  setAdding(column);
+                }
+              }}
+              onCreate={createIn}
+              onStopAdding={() => {
+                setAdding(null);
+              }}
+              onScroller={(cell, run) => {
+                if (run) {
+                  scrollers.set(cell, run);
+                } else {
+                  scrollers.delete(cell);
+                }
+              }}
+            />
+          ) : (
           <div className={styles.lanes} role="group" aria-label={t("board-label", { name: project.name })}>
             {view.lanes.map((lane, index) =>
               lane.collapsed ? (
@@ -620,6 +784,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
               ),
             )}
           </div>
+          )}
           <DragOverlay dropAnimation={motionReduced() ? null : { duration: 160 }}>
             {activeCard ? <CardView card={activeCard} fields={layout.card_fields} custom={customFields} compact={cardSize === "compact"} today={today} lifted /> : null}
           </DragOverlay>

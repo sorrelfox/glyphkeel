@@ -49,7 +49,8 @@ test("a status that needs an estimate is closed to a task without one, and read-
   await card.dblclick();
   const panel = page.getByRole("complementary", { name: /^Task / });
   await panel.getByRole("button", { name: /^Status:/ }).click();
-  const option = page.getByRole("menuitem", { name: /^Done/ });
+  // A status menu's entries are radio items: the current one is checked.
+  const option = page.getByRole("menuitemradio", { name: /^Done/ });
   await expect(option).toBeDisabled();
   await expect(option).toContainText(/Fill in first: .?Estimate/);
   await page.keyboard.press("Escape");

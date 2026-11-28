@@ -68,6 +68,16 @@ const SCREENS: Screen[] = [
   { name: "today", open: async (page) => { await expect(page.getByRole("main")).toBeVisible(); } },
   { name: "board", open: async (page) => { await withSidebar(page); await openProject(page); } },
   { name: "board with a task open", open: async (page) => { await withSidebar(page); await openTask(page, openProject); } },
+  {
+    name: "board with swimlanes",
+    open: async (page) => {
+      await withSidebar(page);
+      await openProject(page);
+      await page.getByRole("button", { name: /^Swimlanes: / }).click();
+      await page.getByRole("menuitemradio", { name: "Priority", exact: true }).click();
+      await expect(page.locator("section[data-swimlane]").first()).toBeVisible();
+    },
+  },
   { name: "list", open: async (page) => { await withSidebar(page); await view(page, "List"); await expect(page.getByRole("grid").first()).toBeVisible(); } },
   { name: "calendar", open: async (page) => { await withSidebar(page); await view(page, "Calendar"); await page.waitForTimeout(300); } },
   { name: "gantt", open: async (page) => { await withSidebar(page); await view(page, "Gantt"); await page.waitForTimeout(300); } },
@@ -242,7 +252,7 @@ test.describe("dark theme", () => {
 test.describe("right to left", () => {
   test.use({ viewport: SMALLEST, locale: "he-IL" });
 
-  for (const screen of SCREENS.filter((each) => ["today", "board", "list", "dashboards"].includes(each.name))) {
+  for (const screen of SCREENS.filter((each) => ["today", "board", "board with swimlanes", "list", "dashboards"].includes(each.name))) {
     test(`${screen.name} fits`, async ({ page }) => {
       await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
       await page.goto(screen.path ?? "/");

@@ -1503,6 +1503,34 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
         // values are set as an edit would set them.
         super::custom_field::apply_input(w, task.id, &from, &input.fields, false)?;
     }
+    if !input.changes.is_empty() {
+        if to.id != from.id {
+            return Err(messages::invalid(
+                "changes",
+                "task-move-changes-with-project",
+                &[],
+            ));
+        }
+        // The fields first, so the status's entry rules see their new values.
+        let c = &input.changes;
+        let changed = update(
+            w,
+            TaskUpdateInput {
+                key: task.id.to_string(),
+                task_type: c.task_type.clone(),
+                priority: c.priority,
+                add_labels: c.add_labels.clone(),
+                remove_labels: c.remove_labels.clone(),
+                sprint: c.sprint.clone(),
+                parent: c.parent.clone(),
+                fields: c.fields.clone(),
+                clear: c.clear.clone(),
+                override_claim: input.override_claim,
+                ..TaskUpdateInput::default()
+            },
+        )?;
+        warnings.extend(changed.warnings);
+    }
     let current = lookup::task_by_id(w.tx(), task.id)?.unwrap_or(task.clone());
     let status = match &input.status {
         Some(s) => lookup::named(w.tx(), List::Statuses, &to, "status", s)?.id,

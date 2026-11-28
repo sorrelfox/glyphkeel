@@ -462,6 +462,8 @@ board-card-field = Cards can't show "{ $field }".
 board-colour-rules-max = A board can have at most { $max } colour rules.
 board-colour-rule-empty = A colour rule needs a query.
 board-card-custom-field = { $project } has no custom field "{ $field }" to show on cards.
+board-lane-field-needed = Swimlanes by a custom field need `lane_field`: one of the project's select fields.
+board-lane-field-unknown = { $project } has no select field "{ $field }" to group swimlanes by.
 view-field-name = Each entry is a field name of 1 to { $max } characters.
 list-layout-columns = A list layout names at most { $max } columns.
 list-layout-width = A column is { $min } to { $max } pixels wide.
@@ -649,6 +651,7 @@ field-not-for-type = { $field } is shown only for tasks of the types { $types },
 field-required = { $field } is required; give it a value.
 field-left-off = The custom field "{ $field }" doesn't exist in { $project }; its value was left off.
 task-move-fields-without-project = Custom field values go with a move to another project; to change them in place, edit the task.
+task-move-changes-with-project = A move to another project can't change the task's fields as well; move it first, then change them.
 field-required-after-change = { $task } needs a value for { $field }, which { $project } requires for tasks of the type { $type }.
 field-required-after-change-hint = { $more ->
         [0] Give it a value in the same change, or give the field a default in the project's settings.

@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAskCloseDuplicates } from "../components/DuplicatePrompt";
 import { useToasts } from "../components/Toasts";
-import { type LayoutChange, type LayoutUpdateInput, type ProjectList, type TaskCreateInput, type TaskUpdateInput } from "../generated/ops";
+import { type LayoutChange, type LayoutUpdateInput, type MoveChanges, type ProjectList, type TaskCreateInput, type TaskUpdateInput } from "../generated/ops";
 import { useT } from "../i18n/I18n";
 import { type Board, type BoardLayout, type Card, type Place } from "./catalog";
 import { errorToast, useCall, useOp } from "./hooks";
@@ -98,6 +98,8 @@ export function layoutUpdate(project: string, before: BoardLayout, change: Layou
       colour_by: before.colour_by,
       colour_rules: before.colour_rules,
       covers: before.covers,
+      lanes: before.lanes,
+      ...(before.lanes === "field" ? { lane_field: before.lane_field } : {}),
     };
   }
   const input: LayoutUpdateInput = { project };
@@ -137,6 +139,12 @@ export function layoutUpdate(project: string, before: BoardLayout, change: Layou
   }
   if (change.covers !== undefined) {
     input.covers = change.covers;
+  }
+  if (change.lane_field !== undefined) {
+    input.lane_field = change.lane_field;
+  }
+  if (change.lanes !== undefined) {
+    input.lanes = change.lanes;
   }
   return input;
 }
@@ -188,6 +196,8 @@ export interface Move {
   /** The column the card lands in. */
   column: string;
   place: Place;
+  /** With swimlanes: what the card's lane changes, made in the same change, and the card as it then shows. */
+  lane?: { changes: MoveChanges; card: Card };
 }
 
 const isClosed = (category: string | undefined) => category === "done" || category === "cancelled";
@@ -201,10 +211,11 @@ export function closesCard(board: Board, move: Move): boolean {
 
 /** The board with one card moved, as it will look once the engine agrees. */
 export function moveOnBoard(board: Board, move: Move): Board {
-  const card = cardsOf(board).get(move.key);
-  if (!card) {
+  const found = cardsOf(board).get(move.key);
+  if (!found) {
     return board;
   }
+  const card = move.lane?.card ?? found;
   const columns = board.columns.map((column) => {
     const had = column.cards.some((candidate) => candidate.key === move.key);
     const cards = column.cards.filter((candidate) => candidate.key !== move.key);
@@ -240,7 +251,13 @@ export function useMoveTask(board: { project: string; layout: { include_subproje
   const mutation = useMutation({
     mutationFn: async ({ move, before }: { move: Move; before: Board | undefined }) => {
       const close = await ask(move.key, before !== undefined && closesCard(before, move));
-      return call("task.move", { key: move.key, status: move.status, ...move.place, ...(close === undefined ? {} : { close_duplicates: close }) });
+      return call("task.move", {
+        key: move.key,
+        status: move.status,
+        ...move.place,
+        ...(close === undefined ? {} : { close_duplicates: close }),
+        ...(move.lane === undefined ? {} : { changes: move.lane.changes }),
+      });
     },
     onError: (error: OpFailure, { before }) => {
       if (before) {
