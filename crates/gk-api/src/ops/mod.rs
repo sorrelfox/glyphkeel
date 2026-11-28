@@ -32,6 +32,7 @@ pub mod csv_import;
 pub mod dashboard;
 pub mod date;
 pub mod description;
+pub mod digest;
 pub mod draft;
 pub mod field;
 pub mod file;

@@ -46,6 +46,8 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel dashboard widget <dashboard> <widget>` | `dashboard.widget` | What one widget of a dashboard shows now. |
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
+| `glyphkeel digest dismiss` | `digest.dismiss` | Mark the digest as seen up to a moment, so that the next one starts there. |
+| `glyphkeel digest show` | `digest.get` | What changed without the person since a moment (by default since they last looked): agent sessions with their changes and tasks, automation rules with their runs and failures, reminders and tasks that came due, and changes through the command line (for an agent, also the person's changes in the app), with counts. |
 | `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |
 | `glyphkeel field add` | `field.create` | Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required. |
 | `glyphkeel field delete` | `field.delete` | Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone. |

@@ -16,6 +16,43 @@
 The sidebar shows the counts next to **Today**. From the command line:
 `glyphkeel today`.
 
+### While you were away
+
+When agents, automation rules or the command line changed something since you
+last looked, Today starts with **While you were away**, a digest of it in
+groups, each with a sentence that sums it up:
+
+- **Agents**: each agent session that changed something, with its name, its
+  client, how many changes it made and the tasks it touched. **Revert session**
+  takes back everything that session changed (changes that something changed
+  since are left as they are, and the message says how many), and **Open in
+  Activity** shows only that session's changes.
+- **Automation**: each rule that ran, with its runs and failures, why the last
+  failure failed, and the tasks it acted on. **Run log** shows its latest runs,
+  and **Revert its changes** takes back what its runs changed.
+- **Reminders and due dates**: reminders that came due and that you haven't
+  seen, and open tasks whose due day began while you were away.
+- **Command line**: what you changed with `glyphkeel`, with the tasks it
+  touched and **Revert these changes**.
+
+Changes you made in the app aren't in it: you saw them. A task key opens the
+task beside Today. **Inbox** in the sidebar shows how many entries the digest
+has and goes to it.
+
+**Mark as seen** clears the digest: the next one starts from the moment the
+digest you saw was read, so anything that came in while you were reading it
+still shows. That moment is yours alone, kept in the workspace and not in its
+history, so it survives a restart and Undo doesn't move it back. Until you
+mark it, the digest covers the last day.
+
+With Preferences › Notifications › **Say at the start what agents did while
+you were away** on, Glyphkeel says so in one notification when it starts, if
+agents changed something since you last marked the digest as seen. It is off
+until you turn it on, and needs desktop notifications on.
+
+From the command line: `glyphkeel digest show` (with `--since yesterday` or a
+moment for another start) and `glyphkeel digest dismiss`.
+
 ## Search
 
 The **Search** field at the top of the sidebar suggests tasks, pages and

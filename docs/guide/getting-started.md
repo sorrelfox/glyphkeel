@@ -105,7 +105,8 @@ changed later.
 
 ## The window
 
-- **The sidebar** on the left has **Search**, the views **Today**, **All
+- **The sidebar** on the left has **Search**, **Inbox** (what changed while
+  you were away), the views **Today**, **All
   tasks**, **Time report**, **Reports** and **Activity**, your **Projects**,
   **Trash** and **Preferences**. F9 shows or hides it.
 - **The header bar** has the project's views (**Board**, **List**,

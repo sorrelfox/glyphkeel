@@ -175,6 +175,12 @@
       "deprecated": { "ui": ["GK_LOCK_PORT"] }
     },
     {
+      "name": "digest",
+      "config": "playwright.digest.config.ts",
+      "about": "the digest on Today and the sidebar's Inbox on sample data",
+      "ports": { "ui": 5334 }
+    },
+    {
       "name": "pseudo",
       "config": "playwright.pseudo.config.ts",
       "about": "screenshots in a pseudo-locale, on the development server (the pseudo suite)",

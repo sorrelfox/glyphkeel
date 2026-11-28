@@ -1866,6 +1866,161 @@ export type DescriptionSave = {
   revision?: string;
 };
 
+/** What changed without the person since the digest's start. */
+export type Digest = {
+  /** The agent sessions that changed something, the latest first; for an agent, its own session is left out. */
+  agents: DigestSession[];
+  /** Changes the person made in the app, for an agent catching up; empty for the person, who saw them. */
+  app: DigestCli;
+  /** The automation rules that ran, the latest first. */
+  automation: DigestRule[];
+  /** Open tasks whose due day began since the start, the earliest due date first; tasks already due at the start are left out. */
+  became_due: DigestDueTask[];
+  /** Changes the person made through the command line. */
+  cli: DigestCli;
+  /** The size of every list. */
+  counts: DigestCounts;
+  /** Reminders that came due since the start and weren't acknowledged, the earliest first. */
+  reminders: DueReminder[];
+  /** The start (RFC 3339, UTC). */
+  since: string;
+  /** Where the start came from. */
+  since_from: DigestSince;
+  /** The end: the moment the digest was read. Pass it to the dismissal, so that what changed after it still shows next time. */
+  until: string;
+};
+
+/** Changes the person made through one program since the start. */
+export type DigestCli = {
+  /** Changed items. */
+  changes: number;
+  /** Commands (history groups). */
+  group_count: number;
+  /** The history groups, newest first (at most 500), for reverting them. */
+  groups: string[];
+  /** When the latest change was made; left out without changes. */
+  last_at?: string;
+  /** How many tasks were touched in all. */
+  task_count: number;
+  /** The tasks touched, the most recently touched first, up to the limit. */
+  tasks: ActivityTask[];
+};
+
+/** How much the digest holds, also beyond the limits. */
+export type DigestCounts = {
+  /** Items agents changed. */
+  agent_changes: number;
+  /** Items the person changed in the app; counted for agents only. */
+  app_changes: number;
+  /** Open tasks whose due day began since the start (due today or passed since). */
+  became_due: number;
+  /** Items changed through the command line. */
+  cli_changes: number;
+  /** Runs that failed. */
+  failures: number;
+  /** The entries of the digest: each session, rule, reminder and task that became due, the command line as one and, for agents, the person's changes in the app as one. The sidebar shows it next to Inbox. */
+  items: number;
+  /** Reminders that came due and weren't acknowledged. */
+  reminders: number;
+  /** Automation rules that ran. */
+  rules: number;
+  /** Runs of automation rules. */
+  runs: number;
+  /** Agent sessions that changed something. */
+  sessions: number;
+};
+
+/** When the person saw the digest. */
+export type DigestDismissInput = {
+  /** The `until` of the digest the person saw (RFC 3339); default: now. The marker never moves back. */
+  at?: string | null;
+};
+
+/** The person's marker after dismissing. */
+export type DigestDismissed = {
+  /** The moment up to which the person has seen the digest (RFC 3339, UTC); the next digest starts there. */
+  marker: string;
+};
+
+/** A task whose due date came while the person was away. */
+export type DigestDueTask = {
+  /** Its due date (`YYYY-MM-DD`). */
+  due_date: string;
+  /** Whether the due date has passed (else it is today). */
+  overdue: boolean;
+  /** The task. */
+  task: ActivityTask;
+};
+
+/** Which changes the digest covers. */
+export type DigestInput = {
+  /** At most this many items in each list, 1 to 100; default 20. The counts are always complete. */
+  limit?: number | null;
+  /** Only this project (key or ID), with its sub-projects; default: every project. */
+  project?: string | null;
+  /** From when: a moment (RFC 3339) or a day in words (`yesterday`, `-3d`, `2026-11-20`: from its start, in the caller's time zone). Left out: for the person, the moment they last dismissed the digest; for an agent, the end of its previous session of the same name; without either, the last 24 hours. */
+  since?: string | null;
+};
+
+/** One automation rule's runs since the digest's start. */
+export type DigestRule = {
+  /** Items its runs changed. */
+  changes: number;
+  /** Runs that failed. */
+  failures: number;
+  /** The history groups of its runs that changed something, newest first (at most 500), for reverting them. */
+  groups: string[];
+  /** The rule's ID. */
+  id: string;
+  /** When it ran last (RFC 3339, UTC). */
+  last_at: string;
+  /** Why its latest failure failed, when one did. */
+  last_error?: OpError;
+  /** Runs stopped by a limit. */
+  limited: number;
+  /** Its name (as of its latest run). */
+  name: string;
+  /** Its project, by key; left out for a rule of the whole workspace or a rule deleted since. */
+  project?: string;
+  /** Its latest runs, newest first, up to the limit: the run log. */
+  recent: AutomationRun[];
+  /** Runs since the start. */
+  runs: number;
+  /** How many tasks its runs acted on. */
+  task_count: number;
+  /** The tasks its runs acted on, the latest first, up to the limit. */
+  tasks: ActivityTask[];
+};
+
+/** One agent session's changes since the digest's start. */
+export type DigestSession = {
+  /** Changed items since the start, counting each item once per command. */
+  changes: number;
+  /** The client's own ID (`claude-code`), when it sent one. */
+  client?: string;
+  /** Commands (history groups) since the start. */
+  groups: number;
+  /** The session's ID, for reverting it or opening it in the activity log. */
+  id: string;
+  /** When it made its latest change. */
+  last_at: string;
+  /** The agent's display name. */
+  name: string;
+  /** Changes since the start that were reverted since. */
+  reverted: number;
+  /** Whether the session still runs. */
+  running: boolean;
+  /** When it started (RFC 3339, UTC). */
+  started_at: string;
+  /** How many tasks it touched in all. */
+  task_count: number;
+  /** The tasks it touched, the most recently touched first, up to the limit. */
+  tasks: ActivityTask[];
+};
+
+/** Where the digest's starting moment came from. */
+export type DigestSince = "given" | "marker" | "previous_session" | "last_day";
+
 /** One kept draft. */
 export type Draft = {
   /** The revision the text was edited from. */
@@ -6455,6 +6610,8 @@ export interface OpMap {
   "reminder.due": { input: ReminderDueInput; output: DueReminders; safety: "read"; kind: "query" };
   "reminder.acknowledge": { input: ReminderAckInput; output: ReminderAcknowledged; safety: "write"; kind: "command" };
   "today.get": { input: TodayInput; output: Today; safety: "read"; kind: "query" };
+  "digest.get": { input: DigestInput; output: Digest; safety: "read"; kind: "query" };
+  "digest.dismiss": { input: DigestDismissInput; output: DigestDismissed; safety: "app"; kind: "command" };
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
@@ -6644,6 +6801,8 @@ export const OP_SAFETY = {
   "reminder.due": "read",
   "reminder.acknowledge": "write",
   "today.get": "read",
+  "digest.get": "read",
+  "digest.dismiss": "app",
   "board.get": "read",
   "layout.get": "read",
   "layout.update": "write",
@@ -6822,6 +6981,12 @@ export function makeOps(call: Call) {
       history: (input: OpMap["description.history"]["input"] = {}) => call("description.history", input),
       /** One description revision with its text, and the differences from another revision on request. (read) */
       revision: (input: OpMap["description.revision"]["input"]) => call("description.revision", input),
+    },
+    digest: {
+      /** What changed without the person since a moment (by default since they last looked): agent sessions with their changes and tasks, automation rules with their runs and failures, reminders and tasks that came due, and changes through the command line (for an agent, also the person's changes in the app), with counts. (read) */
+      get: (input: OpMap["digest.get"]["input"] = {}) => call("digest.get", input),
+      /** Mark the digest as seen up to a moment, so that the next one starts there. (app) */
+      dismiss: (input: OpMap["digest.dismiss"]["input"] = {}) => call("digest.dismiss", input),
     },
     draft: {
       /** The person's unsaved text of one editor (a description, a comment, a new comment or a wiki page), kept from earlier. (read) */

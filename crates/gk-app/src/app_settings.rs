@@ -58,6 +58,11 @@ pub(crate) struct Stored {
     pub(crate) background: Option<bool>,
     /// Whether reminders show as desktop notifications.
     pub(crate) notifications: bool,
+    /// Whether the app says at its start, as a notification, that agents
+    /// changed something since the digest was last dismissed. Off unless
+    /// turned on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) digest_notification: bool,
     /// The page's preferences, by name; the page checks their values.
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub(crate) ui: Map<String, Value>,
@@ -86,6 +91,7 @@ impl Default for Stored {
         Self {
             background: None,
             notifications: true,
+            digest_notification: false,
             ui: Map::new(),
             quick_add_shortcut: None,
             safe_rendering: false,
@@ -319,6 +325,9 @@ impl AppSettings {
             if let Some(notifications) = patch.notifications {
                 stored.notifications = notifications;
             }
+            if let Some(digest) = patch.digest_notification {
+                stored.digest_notification = digest;
+            }
             if let Some(safe) = patch.safe_rendering {
                 stored.safe_rendering = safe;
             }
@@ -419,6 +428,9 @@ impl Notifier for Switched {
 pub(crate) struct View {
     pub(crate) background: bool,
     pub(crate) notifications: bool,
+    /// Whether the app's start notifies of agents' changes since the
+    /// digest was last dismissed.
+    pub(crate) digest_notification: bool,
     /// Whether the app starts with the system.
     pub(crate) autostart: bool,
     /// Safe rendering as chosen; it applies from the next start.
@@ -451,6 +463,8 @@ pub(crate) struct Patch {
     #[serde(default)]
     pub(crate) notifications: Option<bool>,
     #[serde(default)]
+    pub(crate) digest_notification: Option<bool>,
+    #[serde(default)]
     pub(crate) safe_rendering: Option<bool>,
     /// `"system"` or an IANA name such as `"Europe/Berlin"`.
     #[serde(default)]
@@ -466,6 +480,7 @@ fn view(
     View {
         background: mode.enabled(),
         notifications: stored.notifications,
+        digest_notification: stored.digest_notification,
         autostart: crate::autostart::enabled(stored.autostart),
         safe_rendering: stored.safe_rendering,
         safe_rendering_in_use: crate::graphics::safe_in_use(),
@@ -624,6 +639,7 @@ mod tests {
         let stored = Stored {
             background: Some(false),
             notifications: false,
+            digest_notification: true,
             ui,
             quick_add_shortcut: Some(crate::shortcut::ShortcutSetting {
                 enabled: true,

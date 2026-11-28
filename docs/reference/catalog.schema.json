@@ -59063,6 +59063,892 @@
       "summary": "What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar."
     },
     {
+      "cli": "digest show",
+      "exposure": "data",
+      "id": "digest.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which changes the digest covers.",
+        "properties": {
+          "limit": {
+            "description": "At most this many items in each list, 1 to 100; default 20. The\ncounts are always complete.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only this project (key or ID), with its sub-projects; default: every\nproject.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since": {
+            "description": "From when: a moment (RFC 3339) or a day in words (`yesterday`,\n`-3d`, `2026-11-20`: from its start, in the caller's time zone).\nLeft out: for the person, the moment they last dismissed the\ndigest; for an agent, the end of its previous session of the same\nname; without either, the last 24 hours.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DigestInput",
+        "type": "object"
+      },
+      "input_name": "DigestInput",
+      "kind": "query",
+      "mcp_tool": "get_digest",
+      "output": {
+        "$defs": {
+          "ActivityTask": {
+            "additionalProperties": false,
+            "description": "A task as the activity log names it.",
+            "properties": {
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key (`TM-41`).",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "title"
+            ],
+            "type": "object"
+          },
+          "AutomationRun": {
+            "additionalProperties": false,
+            "description": "One run of a rule, from its log.",
+            "properties": {
+              "at": {
+                "description": "When it ran (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "changes": {
+                "description": "How many items it changed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "depth": {
+                "description": "How many rules came before it in the chain (0: set off by a change\nof a person, an agent or the schedule).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "error": {
+                "$ref": "#/$defs/OpError",
+                "description": "Why it failed or was limited."
+              },
+              "group": {
+                "description": "The history group of its changes, when it made some.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The run's ID.",
+                "type": "string"
+              },
+              "result": {
+                "$ref": "#/$defs/RunResult",
+                "description": "How it ended."
+              },
+              "rule": {
+                "description": "The rule's ID.",
+                "type": "string"
+              },
+              "rule_name": {
+                "description": "The rule's name when it ran.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task it acted on, by key; left out when it no longer exists.",
+                "type": "string"
+              },
+              "trigger": {
+                "$ref": "#/$defs/TriggerKind",
+                "description": "What set it off."
+              }
+            },
+            "required": [
+              "id",
+              "rule",
+              "rule_name",
+              "at",
+              "result",
+              "trigger",
+              "changes",
+              "depth"
+            ],
+            "type": "object"
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "DigestCli": {
+            "additionalProperties": false,
+            "description": "Changes the person made through one program since the start.",
+            "properties": {
+              "changes": {
+                "description": "Changed items.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "group_count": {
+                "description": "Commands (history groups).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "groups": {
+                "description": "The history groups, newest first (at most 500), for reverting them.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "last_at": {
+                "description": "When the latest change was made; left out without changes.",
+                "type": "string"
+              },
+              "task_count": {
+                "description": "How many tasks were touched in all.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tasks": {
+                "description": "The tasks touched, the most recently touched first, up to the limit.",
+                "items": {
+                  "$ref": "#/$defs/ActivityTask"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "changes",
+              "group_count",
+              "groups",
+              "tasks",
+              "task_count"
+            ],
+            "type": "object"
+          },
+          "DigestCounts": {
+            "additionalProperties": false,
+            "description": "How much the digest holds, also beyond the limits.",
+            "properties": {
+              "agent_changes": {
+                "description": "Items agents changed.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "app_changes": {
+                "description": "Items the person changed in the app; counted for agents only.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "became_due": {
+                "description": "Open tasks whose due day began since the start (due today or\npassed since).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cli_changes": {
+                "description": "Items changed through the command line.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "failures": {
+                "description": "Runs that failed.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "items": {
+                "description": "The entries of the digest: each session, rule, reminder and task\nthat became due, the command line as one and, for agents, the\nperson's changes in the app as one. The sidebar shows it\nnext to Inbox.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminders": {
+                "description": "Reminders that came due and weren't acknowledged.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rules": {
+                "description": "Automation rules that ran.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "runs": {
+                "description": "Runs of automation rules.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sessions": {
+                "description": "Agent sessions that changed something.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sessions",
+              "agent_changes",
+              "rules",
+              "runs",
+              "failures",
+              "reminders",
+              "became_due",
+              "cli_changes",
+              "app_changes",
+              "items"
+            ],
+            "type": "object"
+          },
+          "DigestDueTask": {
+            "additionalProperties": false,
+            "description": "A task whose due date came while the person was away.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "overdue": {
+                "description": "Whether the due date has passed (else it is today).",
+                "type": "boolean"
+              },
+              "task": {
+                "$ref": "#/$defs/ActivityTask",
+                "description": "The task."
+              }
+            },
+            "required": [
+              "task",
+              "due_date",
+              "overdue"
+            ],
+            "type": "object"
+          },
+          "DigestRule": {
+            "additionalProperties": false,
+            "description": "One automation rule's runs since the digest's start.",
+            "properties": {
+              "changes": {
+                "description": "Items its runs changed.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "failures": {
+                "description": "Runs that failed.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "groups": {
+                "description": "The history groups of its runs that changed something, newest\nfirst (at most 500), for reverting them.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The rule's ID.",
+                "type": "string"
+              },
+              "last_at": {
+                "description": "When it ran last (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "last_error": {
+                "$ref": "#/$defs/OpError",
+                "description": "Why its latest failure failed, when one did."
+              },
+              "limited": {
+                "description": "Runs stopped by a limit.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "description": "Its name (as of its latest run).",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project, by key; left out for a rule of the whole workspace or a\nrule deleted since.",
+                "type": "string"
+              },
+              "recent": {
+                "description": "Its latest runs, newest first, up to the limit: the run log.",
+                "items": {
+                  "$ref": "#/$defs/AutomationRun"
+                },
+                "type": "array"
+              },
+              "runs": {
+                "description": "Runs since the start.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task_count": {
+                "description": "How many tasks its runs acted on.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tasks": {
+                "description": "The tasks its runs acted on, the latest first, up to the limit.",
+                "items": {
+                  "$ref": "#/$defs/ActivityTask"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "runs",
+              "failures",
+              "limited",
+              "changes",
+              "last_at",
+              "groups",
+              "tasks",
+              "task_count",
+              "recent"
+            ],
+            "type": "object"
+          },
+          "DigestSession": {
+            "additionalProperties": false,
+            "description": "One agent session's changes since the digest's start.",
+            "properties": {
+              "changes": {
+                "description": "Changed items since the start, counting each item once per command.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "client": {
+                "description": "The client's own ID (`claude-code`), when it sent one.",
+                "type": "string"
+              },
+              "groups": {
+                "description": "Commands (history groups) since the start.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The session's ID, for reverting it or opening it in the activity\nlog.",
+                "type": "string"
+              },
+              "last_at": {
+                "description": "When it made its latest change.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The agent's display name.",
+                "type": "string"
+              },
+              "reverted": {
+                "description": "Changes since the start that were reverted since.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "running": {
+                "description": "Whether the session still runs.",
+                "type": "boolean"
+              },
+              "started_at": {
+                "description": "When it started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "task_count": {
+                "description": "How many tasks it touched in all.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tasks": {
+                "description": "The tasks it touched, the most recently touched first, up to the\nlimit.",
+                "items": {
+                  "$ref": "#/$defs/ActivityTask"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "running",
+              "started_at",
+              "last_at",
+              "changes",
+              "reverted",
+              "groups",
+              "tasks",
+              "task_count"
+            ],
+            "type": "object"
+          },
+          "DigestSince": {
+            "description": "Where the digest's starting moment came from.",
+            "oneOf": [
+              {
+                "const": "given",
+                "description": "The caller's `since`.",
+                "type": "string"
+              },
+              {
+                "const": "marker",
+                "description": "The moment the person last dismissed the digest.",
+                "type": "string"
+              },
+              {
+                "const": "previous_session",
+                "description": "The end of the agent's previous session of the same name.",
+                "type": "string"
+              },
+              {
+                "const": "last_day",
+                "description": "The last 24 hours: nothing else was known.",
+                "type": "string"
+              }
+            ]
+          },
+          "DueReminder": {
+            "additionalProperties": false,
+            "description": "One reminder that is due.",
+            "properties": {
+              "at": {
+                "description": "When it came due (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The task's due date.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The ID to acknowledge it with.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReminderKind",
+                "description": "What reminds."
+              },
+              "missed": {
+                "description": "Whether it came due before `since`: missed while no program showed\nit.",
+                "type": "boolean"
+              },
+              "note": {
+                "description": "The reminder's text; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task."
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "at",
+              "missed",
+              "task"
+            ],
+            "type": "object"
+          },
+          "ErrorCode": {
+            "description": "What kind of failure an operation error is. Adapters decide on the code, never\non the message.",
+            "oneOf": [
+              {
+                "const": "invalid",
+                "description": "The input doesn't parse or breaks a rule; `details.path` names the\nfield when there is one.",
+                "type": "string"
+              },
+              {
+                "const": "not_found",
+                "description": "No such item or name; `details.choices` lists the valid ones when the\nlist is short.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "The item changed since the caller read it, or the change collides\nwith a newer one.",
+                "type": "string"
+              },
+              {
+                "const": "forbidden",
+                "description": "The caller's profile doesn't allow this, the operation needs a\nconfirmation that wasn't given, or the item is archived.",
+                "type": "string"
+              },
+              {
+                "const": "limit",
+                "description": "A size limit, a cap on bulk changes or a rate limit.",
+                "type": "string"
+              },
+              {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
+                "const": "busy",
+                "description": "Another program kept the workspace locked; trying again later works.",
+                "type": "string"
+              },
+              {
+                "const": "workspace_upgraded",
+                "description": "A newer program upgraded the workspace while this one was running.\nThe program must restart.",
+                "type": "string"
+              },
+              {
+                "const": "workspace_too_new",
+                "description": "The workspace was made by a newer program.",
+                "type": "string"
+              },
+              {
+                "const": "storage",
+                "description": "The disk, the file system or the database failed.",
+                "type": "string"
+              }
+            ]
+          },
+          "OpError": {
+            "additionalProperties": false,
+            "description": "An operation failed. The message says what happened, the hint what to do\nnext; both are written for the reader, person or agent.",
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode",
+                "description": "What kind of failure."
+              },
+              "details": {
+                "additionalProperties": true,
+                "description": "Facts a program can act on: `path`, `choices`, `current_version`,\n`max`, `retry_after`, …",
+                "type": "object"
+              },
+              "hint": {
+                "description": "What to do next.",
+                "type": "string"
+              },
+              "message": {
+                "description": "What happened.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "ReminderKind": {
+            "description": "What reminds.",
+            "oneOf": [
+              {
+                "const": "reminder",
+                "description": "A personal reminder on a task.",
+                "type": "string"
+              },
+              {
+                "const": "deadline",
+                "description": "A task's due date is near: the day before it, at the reminder time.",
+                "type": "string"
+              },
+              {
+                "const": "timer",
+                "description": "The timer has run for longer than the workspace's setting.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "A notification an automation rule left; `note` is its text.",
+                "type": "string"
+              }
+            ]
+          },
+          "RunResult": {
+            "description": "How a run of a rule ended.",
+            "oneOf": [
+              {
+                "const": "done",
+                "description": "The actions were made.",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "description": "An action failed; none of the run's changes were kept.",
+                "type": "string"
+              },
+              {
+                "const": "limited",
+                "description": "The rule didn't run: too many runs this hour, or too long a chain\nof rules setting each other off.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TriggerKind": {
+            "description": "What sets a rule off.",
+            "oneOf": [
+              {
+                "const": "task_created",
+                "description": "A task was created.",
+                "type": "string"
+              },
+              {
+                "const": "field_changed",
+                "description": "One of `fields` of a task changed (any watched field when none are\nnamed).",
+                "type": "string"
+              },
+              {
+                "const": "moved_to_status",
+                "description": "A task moved to `status` (any status when none is named).",
+                "type": "string"
+              },
+              {
+                "const": "comment_added",
+                "description": "A comment was added to a task.",
+                "type": "string"
+              },
+              {
+                "const": "due_date_reached",
+                "description": "An open task's due date came: once per task and due date.",
+                "type": "string"
+              },
+              {
+                "const": "overdue",
+                "description": "An open task's due date passed: once per task and due date.",
+                "type": "string"
+              },
+              {
+                "const": "schedule",
+                "description": "At a time of day (`every: daily`) or of a week (`every: weekly` on\n`weekday`), for each task that matches the condition.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What changed without the person since the digest's start.",
+        "properties": {
+          "agents": {
+            "description": "The agent sessions that changed something, the latest first; for an\nagent, its own session is left out.",
+            "items": {
+              "$ref": "#/$defs/DigestSession"
+            },
+            "type": "array"
+          },
+          "app": {
+            "$ref": "#/$defs/DigestCli",
+            "description": "Changes the person made in the app, for an agent catching up; empty\nfor the person, who saw them."
+          },
+          "automation": {
+            "description": "The automation rules that ran, the latest first.",
+            "items": {
+              "$ref": "#/$defs/DigestRule"
+            },
+            "type": "array"
+          },
+          "became_due": {
+            "description": "Open tasks whose due day began since the start, the earliest due\ndate first; tasks already due at the start are left out.",
+            "items": {
+              "$ref": "#/$defs/DigestDueTask"
+            },
+            "type": "array"
+          },
+          "cli": {
+            "$ref": "#/$defs/DigestCli",
+            "description": "Changes the person made through the command line."
+          },
+          "counts": {
+            "$ref": "#/$defs/DigestCounts",
+            "description": "The size of every list."
+          },
+          "reminders": {
+            "description": "Reminders that came due since the start and weren't acknowledged,\nthe earliest first.",
+            "items": {
+              "$ref": "#/$defs/DueReminder"
+            },
+            "type": "array"
+          },
+          "since": {
+            "description": "The start (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "since_from": {
+            "$ref": "#/$defs/DigestSince",
+            "description": "Where the start came from."
+          },
+          "until": {
+            "description": "The end: the moment the digest was read. Pass it to the dismissal,\nso that what changed after it still shows next time.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "since_from",
+          "until",
+          "agents",
+          "automation",
+          "reminders",
+          "became_due",
+          "cli",
+          "app",
+          "counts"
+        ],
+        "title": "Digest",
+        "type": "object"
+      },
+      "output_name": "Digest",
+      "safety": "read",
+      "summary": "What changed without the person since a moment (by default since they last looked): agent sessions with their changes and tasks, automation rules with their runs and failures, reminders and tasks that came due, and changes through the command line (for an agent, also the person's changes in the app), with counts."
+    },
+    {
+      "app_reason": "It moves the person's own marker of what they have seen; an agent that moved it would hide its changes from the person.",
+      "cli": "digest dismiss",
+      "exposure": "app",
+      "id": "digest.dismiss",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "When the person saw the digest.",
+        "properties": {
+          "at": {
+            "description": "The `until` of the digest the person saw (RFC 3339); default: now.\nThe marker never moves back.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DigestDismissInput",
+        "type": "object"
+      },
+      "input_name": "DigestDismissInput",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The person's marker after dismissing.",
+        "properties": {
+          "marker": {
+            "description": "The moment up to which the person has seen the digest (RFC 3339,\nUTC); the next digest starts there.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "marker"
+        ],
+        "title": "DigestDismissed",
+        "type": "object"
+      },
+      "output_name": "DigestDismissed",
+      "safety": "app",
+      "summary": "Mark the digest as seen up to a moment, so that the next one starts there."
+    },
+    {
       "cli": "board <project>",
       "exposure": "data",
       "id": "board.get",

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ChartArea, Clock, FolderPlus, History, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { ChartArea, Clock, FolderPlus, History, Inbox, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
 import { classes } from "../classes";
 import { useCounts, useProjects } from "../data/board";
+import { useInboxCount } from "../data/digest";
 import { folderOfProject, useFolders } from "../data/folders";
 import { useSidebarCounts } from "../data/today";
 import { useT } from "../i18n/I18n";
@@ -15,6 +17,7 @@ import { dragRegion, type TitleBar } from "../start";
 import { FolderDialog, type FolderRequest } from "../screens/project/FolderDialog";
 import { type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectTree } from "../screens/project/ProjectTree";
+import { DIGEST_HEADING } from "../screens/today/DigestPanel";
 import { type View } from "./shellActions";
 import { SidebarSearch } from "./SidebarSearch";
 import { TimerChip } from "./TimerChip";
@@ -38,7 +41,8 @@ interface SidebarProps {
 /**
  * The sidebar, top to bottom: the search field (typing suggests tasks,
  * projects and actions; Enter opens the search page with its text; the
- * command palette keeps its own key), Today and All
+ * command palette keeps its own key), Inbox (the digest of what changed
+ * while the person was away, at the top of Today) with its count, Today and All
  * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree (with its folders and the buttons for a new folder and a new project), the
  * timer chip while a timer runs, then Trash and Preferences.
  *
@@ -65,6 +69,18 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
     picked !== null && picked.project === project && (folders.data?.items ?? []).some((folder) => folder.id === picked.folder) ? picked.folder : undefined;
   const newProjectFolder = selectedFolder ?? folderOfProject(projects.data?.items ?? [], project);
   const sidebarCounts = useSidebarCounts();
+  const inboxCount = useInboxCount();
+  const navigate = useNavigate();
+  // Inbox opens Today at the digest, whose heading takes the focus.
+  const openInbox = () => {
+    void navigate({ to: "/", search: {} }).then(() => {
+      requestAnimationFrame(() => {
+        const heading = document.getElementById(DIGEST_HEADING);
+        heading?.scrollIntoView({ block: "start" });
+        heading?.focus();
+      });
+    });
+  };
   // Until Today's counts are in, the project tree's.
   const allCount = sidebarCounts?.open ?? counts?.all;
 
@@ -75,6 +91,15 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
       </div>
 
       <div className={styles.navGroup}>
+        <button type="button" className="nav" onClick={openInbox}>
+          <Inbox className="ic" />
+          <span>{t("sidebar-inbox")}</span>
+          {inboxCount !== undefined && inboxCount > 0 && (
+            <span className="count" data-count="inbox">
+              {inboxCount}
+            </span>
+          )}
+        </button>
         <button type="button" className={classes("nav", view === "today" && "on")} aria-current={view === "today" ? "page" : undefined} onClick={today.run}>
           <Sun className="ic" />
           <span>{t("view-today")}</span>

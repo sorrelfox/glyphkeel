@@ -539,6 +539,46 @@ pub(crate) fn personal_due(
         .collect()
 }
 
+/// The personal reminders and the notifications of automation rules that
+/// came due from `since` up to `until` and weren't acknowledged, the
+/// earliest first, each with its task's project. Deadline alerts and the
+/// timer are left out: the digest lists due dates on their own.
+pub(crate) fn came_due(
+    tx: &Transaction<'_>,
+    zone: &Zone,
+    since: i64,
+    until: i64,
+) -> Result<Vec<(Id, DueReminder)>, Failure> {
+    let mut due: Vec<Candidate> = candidates(tx, zone, until)?
+        .into_iter()
+        .filter(|c| {
+            matches!(c.kind, ReminderKind::Reminder | ReminderKind::Automation)
+                && c.at >= since
+                && c.at <= until
+        })
+        .collect();
+    due.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.id.cmp(&b.id)));
+    let mut out = Vec::with_capacity(due.len());
+    for c in due {
+        let Some(task) = super::lookup::task_by_id(tx, c.task)? else {
+            continue;
+        };
+        out.push((
+            task.project,
+            DueReminder {
+                id: c.id,
+                kind: c.kind,
+                at: rfc3339(c.at),
+                missed: false,
+                task: task_ref(tx, c.task)?,
+                due_date: c.due,
+                note: c.note,
+            },
+        ));
+    }
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------
 // Acknowledging
 

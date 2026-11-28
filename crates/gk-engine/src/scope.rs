@@ -192,7 +192,7 @@ pub(crate) fn narrow_input(ctx: &Context, op: &str, mut input: Value) -> Value {
                 fields.insert("include_subprojects".to_owned(), json!(true));
             }
         }
-        "history.feed" | "time.report" | "today.get" => {
+        "history.feed" | "time.report" | "today.get" | "digest.get" => {
             if unset(fields, "project") {
                 fields.insert("project".to_owned(), json!(project));
             }

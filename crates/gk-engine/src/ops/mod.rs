@@ -19,6 +19,7 @@ pub(crate) mod custom_field;
 pub(crate) mod dashboard;
 pub(crate) mod date;
 pub(crate) mod description;
+pub(crate) mod digest;
 pub(crate) mod draft;
 pub(crate) mod duplicate;
 pub(crate) mod fields;
@@ -91,6 +92,7 @@ pub(crate) fn register(r: &mut Registry) {
     view::register(r);
     dashboard::register(r);
     folder::register(r);
+    digest::register(r);
     version::register(r);
     sprint::register(r);
     schedule::register(r);

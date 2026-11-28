@@ -183,10 +183,28 @@ describe("reminders and background", () => {
       expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({
         background: false,
         notifications: false,
+        digest_notification: false,
         autostart: false,
         safe_rendering: false,
         time_zone: "system",
       });
+    });
+  });
+
+  it("turns the notification of agents' changes at the start on, while notifications are on", async () => {
+    setUp({ page: "notifications" });
+    const digest = await screen.findByRole("switch", { name: "Say at the start what agents did while you were away" });
+    await waitFor(() => {
+      expect((digest as HTMLInputElement).disabled).toBe(false);
+    });
+    expect((digest as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(digest);
+    await waitFor(() => {
+      expect((JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}") as { digest_notification?: boolean }).digest_notification).toBe(true);
+    });
+    fireEvent.click(screen.getByRole("switch", { name: "Show reminders as desktop notifications" }));
+    await waitFor(() => {
+      expect((digest as HTMLInputElement).disabled).toBe(true);
     });
   });
 

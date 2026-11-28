@@ -4,7 +4,8 @@
 // The app's own settings, which belong to this computer rather than to the
 // workspace: whether the app keeps running in the background when its last
 // window closes, whether it starts with the system, whether reminders show
-// as desktop notifications, and whether the web view draws without the GPU
+// as desktop notifications (and whether the start says what agents did
+// while the person was away), and whether the web view draws without the GPU
 // (safe rendering). The app keeps them in its settings file and the
 // desktop's autostart folder; a plain browser (the development bridge, the
 // sample data, tests) keeps them in the page's storage.
@@ -34,6 +35,8 @@ export interface AppSettings {
   background: boolean;
   /** Reminders show as desktop notifications. */
   notifications: boolean;
+  /** The app's start says, as a notification, that agents changed something since the digest was last dismissed. */
+  digest_notification: boolean;
   /** The app starts with the system (in the background when background mode is on). */
   autostart: boolean;
   /** Safe rendering as chosen; it applies from the next start. */
@@ -52,7 +55,7 @@ export interface AppSettings {
   agent_folders: string[];
 }
 
-export type AppSettingsPatch = Partial<Pick<AppSettings, "background" | "notifications" | "safe_rendering" | "time_zone">>;
+export type AppSettingsPatch = Partial<Pick<AppSettings, "background" | "notifications" | "digest_notification" | "safe_rendering" | "time_zone">>;
 
 /** A time zone to choose from, with its offset from UTC now. */
 export interface ZoneChoice {
@@ -62,7 +65,7 @@ export interface ZoneChoice {
 
 export const SYSTEM_ZONE = "system";
 
-const DEFAULTS = { background: true, notifications: true, autostart: false, safe_rendering: false, time_zone: SYSTEM_ZONE };
+const DEFAULTS = { background: true, notifications: true, digest_notification: false, autostart: false, safe_rendering: false, time_zone: SYSTEM_ZONE };
 const PREF = "app";
 
 /** The settings kept in the page's storage, outside the app. */
@@ -74,6 +77,7 @@ function stored(): AppSettings {
   return {
     background: typeof record.background === "boolean" ? record.background : DEFAULTS.background,
     notifications: typeof record.notifications === "boolean" ? record.notifications : DEFAULTS.notifications,
+    digest_notification: typeof record.digest_notification === "boolean" ? record.digest_notification : DEFAULTS.digest_notification,
     autostart: typeof record.autostart === "boolean" ? record.autostart : DEFAULTS.autostart,
     safe_rendering: typeof record.safe_rendering === "boolean" ? record.safe_rendering : DEFAULTS.safe_rendering,
     // A page outside the app draws as the browser does.
@@ -144,8 +148,8 @@ export function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings>
         details: { message_id: "time-zone-unknown", args: { name: patch.time_zone } },
       }));
   }
-  const { background, notifications, autostart, safe_rendering, time_zone } = { ...stored(), ...patch };
-  writePref(PREF, { background, notifications, autostart, safe_rendering, time_zone });
+  const { background, notifications, digest_notification, autostart, safe_rendering, time_zone } = { ...stored(), ...patch };
+  writePref(PREF, { background, notifications, digest_notification, autostart, safe_rendering, time_zone });
   return Promise.resolve(stored());
 }
 
@@ -154,8 +158,8 @@ export function setAutostart(on: boolean): Promise<AppSettings> {
   if (inApp()) {
     return command("set_autostart", { on });
   }
-  const { background, notifications, safe_rendering, time_zone } = stored();
-  writePref(PREF, { background, notifications, autostart: on, safe_rendering, time_zone });
+  const { background, notifications, digest_notification, safe_rendering, time_zone } = stored();
+  writePref(PREF, { background, notifications, digest_notification, autostart: on, safe_rendering, time_zone });
   return Promise.resolve(stored());
 }
 

@@ -1081,6 +1081,25 @@ op-today-get--limit = At most this many tasks per list, 1 to 200; default 50. Th
 op-today-get--project = Only this project (key or ID), with its sub-projects; default: every
     active project.
 
+## glyphkeel digest show
+
+op-digest-get = What changed without the person since a moment (by default since they last looked): agent sessions with their changes and tasks, automation rules with their runs and failures, reminders and tasks that came due, and changes through the command line (for an agent, also the person's changes in the app), with counts.
+op-digest-get--limit = At most this many items in each list, 1 to 100; default 20. The
+    counts are always complete.
+op-digest-get--project = Only this project (key or ID), with its sub-projects; default: every
+    project.
+op-digest-get--since = From when: a moment (RFC 3339) or a day in words (`yesterday`,
+    `-3d`, `2026-11-20`: from its start, in the caller's time zone).
+    Left out: for the person, the moment they last dismissed the
+    digest; for an agent, the end of its previous session of the same
+    name; without either, the last 24 hours.
+
+## glyphkeel digest dismiss
+
+op-digest-dismiss = Mark the digest as seen up to a moment, so that the next one starts there.
+op-digest-dismiss--at = The `until` of the digest the person saw (RFC 3339); default: now.
+    The marker never moves back.
+
 ## glyphkeel board <project>
 
 op-board-get = A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.

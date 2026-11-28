@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -20,8 +20,12 @@ import { useT, type Translate } from "../../i18n/I18n";
 import { cutShort, fieldLabel, useMomentFormat } from "../task/Activity";
 import styles from "./Safety.module.css";
 
-/** The feed's filters: one project, people or agents, and a range of days. */
+const route = getRouteApi("/shell/activity");
+
+/** The feed's filters: one project, people or agents, a range of days, and one agent session. */
 export interface FeedFilter {
+  /** An agent session's ID: only its changes. */
+  session?: string | undefined;
   /** A project's ID; every project when absent. */
   project?: string | undefined;
   actor?: ActorKind | undefined;
@@ -33,6 +37,7 @@ export interface FeedFilter {
 /** The filter as the engine's activity read takes it; the engine counts the project's sub-projects in, and the days in the person's zone. */
 export function feedRequest(filter: FeedFilter): FeedRequest {
   return {
+    ...(filter.session === undefined ? {} : { session: filter.session }),
     ...(filter.actor === undefined ? {} : { actor_kind: filter.actor }),
     ...(filter.project === undefined ? {} : { project: filter.project }),
     ...(filter.from === undefined ? {} : { from: filter.from }),
@@ -88,7 +93,7 @@ type ActorChoice = ActorKind | typeof ALL;
 /**
  * The workspace's activity: every change, newest first, with who made it,
  * through which program and when, filtered by project, by people or agents
- * and by days. The list is virtual and reads further pages of the log as
+ * and by days, or to one agent session (as the digest on Today opens it). The list is virtual and reads further pages of the log as
  * it scrolls; a change can be reverted where the engine allows it.
  */
 export function ActivityScreen() {
@@ -98,7 +103,10 @@ export function ActivityScreen() {
   const [actor, setActor] = useState<ActorChoice>(ALL);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const { session } = route.useSearch();
+  const navigate = useNavigate();
   const filter: FeedFilter = {
+    session,
     project: project === ALL ? undefined : project,
     actor: actor === ALL ? undefined : actor,
     from: from === "" ? undefined : from,
@@ -183,6 +191,14 @@ export function ActivityScreen() {
         <div className="grow" />
         {feed.data && <span className={classes("muted num", styles.small)}>{t("activity-count", { shown: rows.length, total: feed.data.pages[0]?.total ?? 0 })}</span>}
       </div>
+      {session !== undefined && (
+        <p className={classes("muted", styles.note)} data-activity-session={session}>
+          <span>{t("activity-session-only")}</span>{" "}
+          <Button className="btn flat sm" onPress={() => void navigate({ to: "/activity", search: {} })}>
+            {t("activity-session-all")}
+          </Button>
+        </p>
+      )}
       {feed.isError && <p className={classes("faint", styles.note)}>{failureText(t, feed.error)}</p>}
       {feed.data && rows.length === 0 && !canLoad && <p className={classes("muted", styles.note)}>{t(filtered ? "activity-none-matching" : "activity-none")}</p>}
       <div ref={scrollRef} className={styles.scroll}>

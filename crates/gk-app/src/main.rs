@@ -17,6 +17,7 @@ mod app_settings;
 mod autostart;
 mod background;
 mod cli_tool;
+mod digest;
 mod files;
 mod graphics;
 mod instance;
@@ -211,7 +212,12 @@ fn main() -> ExitCode {
                 Arc::clone(app.state::<Arc<Workspace>>().app_lock()),
                 app.state::<AppSettings>().switched(notifier(app.handle())),
             );
-            app.state::<Arc<Workspace>>().start_reminders(notifier);
+            app.state::<Arc<Workspace>>().start_reminders(Arc::clone(&notifier));
+            // Agents' changes since the digest was last dismissed, once,
+            // when the person asked for it.
+            if app.state::<AppSettings>().stored().digest_notification {
+                app.state::<Arc<Workspace>>().notify_digest(notifier);
+            }
             background::start(app.handle());
             // A task named by the first link opens with the window; the
             // others go to the page once it listens.

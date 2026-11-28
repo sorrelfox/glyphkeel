@@ -12,7 +12,7 @@ use crate::ops::{
     file, history, link, project, query, report, rules, schedule, search, settings, sprint, task,
     time, today, transfer, trash, version, view, wiki, workspace,
 };
-use crate::ops::{automation, folder, recurrence, template};
+use crate::ops::{automation, digest, folder, recurrence, template};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -262,6 +262,8 @@ pub static CATALOG: &[OpDescriptor] = &[
     time::REMINDER_DUE,
     time::REMINDER_ACKNOWLEDGE,
     today::TODAY_GET,
+    digest::DIGEST_GET,
+    digest::DIGEST_DISMISS,
     board::BOARD_GET,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,

@@ -105,6 +105,7 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { FakeDigest } from "./digest";
 import { createFolder, deleteFolder, find as findFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
 import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
@@ -2609,6 +2610,19 @@ export class FakeWorkspace {
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
 
+  /** The digest of what changed without the person, and their marker (no history, like drafts). */
+  private readonly digest = new FakeDigest({
+    now: () => this.today(),
+    today: () => localDay(this.today()),
+    dayInput: (text, path) => this.dayInput(text, path),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    keyOf: (task) => this.keyOf(task),
+    dueReminders: () => (this.handlers["reminder.due"]?.({ limit: 500 }) as DueReminders | undefined)?.items ?? [],
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  });
+
   /** What the project folders need of this workspace. */
   private readonly folderHost: FolderHost = {
     folders: () => (this.state.folders ??= []),
@@ -4533,7 +4547,14 @@ export class FakeWorkspace {
       }
       return { output: { view, deleted: true }, changes: this.viewChange(view, ["deleted"]) };
     },
-    "history.revert": ({ groups, dry_run }) => {
+    "digest.get": (input) => this.digest.get(input),
+    "digest.dismiss": (input) => this.digest.dismiss(input),
+    "history.revert": ({ groups, session, dry_run }) => {
+      // The digest's made-up sessions and rules revert on their own.
+      const ofDigest = this.digest.revert({ groups, session, dry_run });
+      if (ofDigest !== undefined) {
+        return dry_run === true ? { reverted: ofDigest, skipped: [] } : { output: { reverted: ofDigest, skipped: [] }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
+      }
       const reverted: string[] = [];
       const skipped: { group: string; reason: string; reason_id: string; reason_args: Record<string, string> }[] = [];
       for (const group of groups ?? []) {
