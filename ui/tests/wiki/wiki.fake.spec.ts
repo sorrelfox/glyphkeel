@@ -264,8 +264,8 @@ test.describe("in the pseudo-locale", () => {
     // Project names are sample data, not translated.
     await page.getByRole("row", { name: "Task Manager" }).click();
     await expect(page.getByRole("heading", { name: "Task Manager", level: 1 })).toBeVisible();
-    // The view switcher's last button: Wiki.
-    await page.locator("header .seg button").last().click();
+    // The view switcher's seventh button: Wiki (the menu of views comes after it).
+    await page.locator("header .seg button").nth(6).click();
     // The second tree is the wiki's, after the sidebar's projects.
     await expect(page.getByRole("treegrid")).toHaveCount(2);
     await page.getByRole("treegrid").last().getByRole("row").nth(2).click();
