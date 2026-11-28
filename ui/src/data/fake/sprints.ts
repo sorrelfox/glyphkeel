@@ -134,7 +134,7 @@ export function sprintOut(host: SprintHost, sprint: FakeSprint, withTasks: boole
   };
 }
 
-function refOf(sprint: FakeSprint): SprintRef {
+export function refOf(sprint: FakeSprint): SprintRef {
   return {
     id: sprint.id,
     name: sprint.name,
@@ -150,7 +150,7 @@ export function sprintRef(host: SprintHost, task: FakeTask): SprintRef | undefin
   return sprint ? refOf(sprint) : undefined;
 }
 
-function find(host: SprintHost, ref: string, projectRef: string | null | undefined, path = "sprint"): FakeSprint {
+export function find(host: SprintHost, ref: string, projectRef: string | null | undefined, path = "sprint"): FakeSprint {
   const byId = host.sprints().find((candidate) => candidate.id === ref);
   if (byId) return byId;
   const candidates = projectRef ? host.sprints().filter((sprint) => sprint.projectId === host.project(projectRef).id) : host.sprints();

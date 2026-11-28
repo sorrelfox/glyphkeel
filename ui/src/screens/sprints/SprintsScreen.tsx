@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, IterationCw, MoreHorizontal, Play, Plus, Square } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, IterationCw, MoreHorizontal, Play, Plus, Square } from "lucide-react";
 import { useState } from "react";
 import { Button, CheckboxButton, CheckboxField, GridList, GridListItem, Menu, MenuTrigger, Popover, useDragAndDrop, useLocale, type DropItem, type Selection } from "react-aria-components";
 
@@ -10,11 +10,13 @@ import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { Switch } from "../../components/Switch";
 import { formatDuration } from "../../data/duration";
-import { failureText } from "../../data/hooks";
+import { failureText, useOp } from "../../data/hooks";
+import { loadMeasure } from "../../data/planning";
 import { nextNumber, shownSprints, useSprintBoard } from "../../data/sprints";
 import { useDurationUnits } from "../../data/time";
 import { useToday } from "../../data/zone";
-import { type Sprint, type SprintTask } from "../../generated/ops";
+import { type Sprint, type SprintTask, type VelocityReport } from "../../generated/ops";
+import { useMeasureFormat } from "../reports/PlanningReports";
 import { useT } from "../../i18n/I18n";
 import { TaskPanel } from "../task/TaskPanel";
 import { Burndown } from "./Burndown";
@@ -76,6 +78,9 @@ export function Sprints({ project, openTask, onOpen }: SprintsProps) {
   const t = useT();
   const today = useToday();
   const board = useSprintBoard(project);
+  const navigate = useNavigate();
+  const [measure] = useState(() => loadMeasure(project));
+  const velocity = useOp("report.velocity", { project, measure: measure.measure, ...(measure.field === undefined ? {} : { field: measure.field }) });
   const [showClosed, setShowClosed] = useState(false);
   const [editing, setEditing] = useState<Editing>(null);
   // The chosen tasks, by key, across every list.
@@ -145,6 +150,10 @@ export function Sprints({ project, openTask, onOpen }: SprintsProps) {
         <Switch isSelected={showClosed} onChange={setShowClosed}>
           {t("sprints-show-closed", { count: closedCount })}
         </Switch>
+        <Button className="btn flat" onPress={() => void navigate({ to: "/reports", search: { report: "velocity", project } })}>
+          <BarChart3 className="ic s" aria-hidden="true" />
+          {t("sprints-velocity")}
+        </Button>
         {chosen.size > 0 && (
           <div className={styles.moveBar} role="group" aria-label={t("sprints-chosen", { count: chosen.size })}>
             <span>{t("sprints-chosen", { count: chosen.size })}</span>
@@ -192,6 +201,7 @@ export function Sprints({ project, openTask, onOpen }: SprintsProps) {
           <li key={sprint.id}>
             <SprintCard
               sprint={sprint}
+              velocity={velocity.data}
               canStart={active === undefined}
               onEdit={(kind) => {
                 setEditing({ kind, sprint });
@@ -236,13 +246,15 @@ function nextStart(sprints: readonly Sprint[], today: string): string {
 
 interface SprintCardProps {
   sprint: Sprint;
+  /** The project's velocity, for the planning hint. */
+  velocity: VelocityReport | undefined;
   /** No other sprint of the project is active. */
   canStart: boolean;
   onEdit: (kind: "edit" | "start" | "complete" | "delete") => void;
   children: React.ReactNode;
 }
 
-function SprintCard({ sprint, canStart, onEdit, children }: SprintCardProps) {
+function SprintCard({ sprint, velocity, canStart, onEdit, children }: SprintCardProps) {
   const t = useT();
   const { locale } = useLocale();
   const units = useDurationUnits();
@@ -312,6 +324,7 @@ function SprintCard({ sprint, canStart, onEdit, children }: SprintCardProps) {
         </MenuTrigger>
       </header>
       {sprint.goal !== undefined && sprint.goal !== "" && <p className={styles.goal}>{sprint.goal}</p>}
+      {sprint.state === "planned" && velocity !== undefined && <PlanningHint sprint={sprint} velocity={velocity} />}
       {sprint.state !== "planned" && (
         <div className={styles.progress}>
           <div className="meter grow" role="progressbar" aria-label={t("sprints-progress-label", { name: sprint.name })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)}>
@@ -344,6 +357,22 @@ function SprintCard({ sprint, canStart, onEdit, children }: SprintCardProps) {
         children
       )}
     </article>
+  );
+}
+
+/** What a planned sprint holds against the project's average velocity: a guide, not a limit. */
+function PlanningHint({ sprint, velocity }: { sprint: Sprint; velocity: VelocityReport }) {
+  const t = useT();
+  const format = useMeasureFormat(velocity.measure);
+  const planned = velocity.upcoming.find((each) => each.sprint.id === sprint.id);
+  if (planned === undefined || velocity.average === undefined) {
+    return null;
+  }
+  const over = planned.planned > velocity.average;
+  return (
+    <p className={classes("muted", styles.goal)} data-plan-hint={over ? "over" : "within"}>
+      {t("sprints-plan-hint", { planned: format(planned.planned), average: format(velocity.average), over: over ? "yes" : "no" })}
+    </p>
   );
 }
 

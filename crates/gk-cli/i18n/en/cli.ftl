@@ -251,6 +251,17 @@ cli-dashboard-created-closed = { $from } to { $to }: { $created } created, { $cl
 cli-dashboard-cycle-time = { $count } closed; median cycle time { $cycle } days, median lead time { $lead } days
 cli-dashboard-time-total = { $from } to { $to }: { $total } in all
 cli-dashboard-burndown = { $sprint }: { $open } of { $total } tasks open
+# The burn-up of a version or sprint at its last day.
+cli-dashboard-burnup = { $name }: { $completed } of { $scope } completed
+cli-dashboard-burnup-forecast = At this pace: { $date }
+# One completed sprint: work it took on and work it completed.
+cli-dashboard-velocity-sprint = { $sprint }: { $committed } committed, { $completed } completed
+cli-dashboard-velocity-average = Average of the last { $count }: { $average }
+# Tasks compared, the median ratio of spent to estimated time, and the share within 20 percent.
+cli-dashboard-estimates = { $count ->
+        [one] 1 task
+       *[other] { $count } tasks
+    }: median { $median }× the estimate, { $share }% within 20%
 cli-dashboard-version = { $name }: { $closed } of { $total } tasks closed ({ $percent }%)
 # One change of the activity: when, who, the operation and the item.
 cli-dashboard-change = { $at }  { $actor }  { $op }  { $item }
@@ -269,6 +280,9 @@ cli-widget-cycle-time = Cycle time
 cli-widget-time-report = Time logged
 cli-widget-burndown = Sprint burndown
 cli-widget-version-progress = Version progress
+cli-widget-burnup = Burn-up
+cli-widget-velocity = Sprint velocity
+cli-widget-estimate-accuracy = Estimate accuracy
 cli-widget-tasks-by-field = Tasks by field
 cli-widget-due-soon = Due soon
 cli-widget-overdue = Overdue

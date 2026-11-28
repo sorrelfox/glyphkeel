@@ -36,9 +36,9 @@ describe("change events", () => {
     expect(invalidated(queryClient)).toEqual(["agent.sessions", "history.feed", "settings.get", "workspace.get"]);
   });
 
-  it("refresh the timer chip on a timer change, and the task, cards and report on a time entry", () => {
+  it("refresh the timer chip on a timer change, and the task, cards and reports on a time entry", () => {
     expect(invalidationsFor(changed(1, "timer", ["timer"]))).toEqual(["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get", "proposal.list", "proposal.get", "timer.get", "workspace.get", "today.get"]);
-    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get", "proposal.list", "proposal.get", "trash.list", "task.get", "board.get", "board.get_across", "time.report", "task.search", "work_kind.list"]);
+    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get", "proposal.list", "proposal.get", "trash.list", "task.get", "board.get", "board.get_across", "time.report", "task.search", "work_kind.list", "report.estimates"]);
   });
 
   it("refresh the trash when tasks are deleted, restored or purged", () => {

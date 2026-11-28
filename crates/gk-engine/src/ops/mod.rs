@@ -32,6 +32,7 @@ pub(crate) mod links;
 pub(crate) mod list_layout;
 pub(crate) mod lookup;
 pub(crate) mod macros;
+pub(crate) mod planning;
 pub(crate) mod project;
 pub(crate) mod project_delete;
 pub(crate) mod proposal;
@@ -95,6 +96,7 @@ pub(crate) fn register(r: &mut Registry) {
     query::register(r);
     date::register(r);
     report::register(r);
+    planning::register(r);
     bulk::register(r);
     view::register(r);
     dashboard::register(r);

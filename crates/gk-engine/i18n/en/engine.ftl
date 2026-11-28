@@ -1225,3 +1225,13 @@ dashboard-too-many-widgets = A dashboard holds at most { $max } widgets.
 dashboard-position = Give a place from 1 to { $max }.
 dashboard-project-gone = The widget's project ({ $project }) no longer exists.
 dashboard-project-gone-hint = Choose another project for the widget, or remove it.
+
+## Planning reports: velocity, burn-up, estimate accuracy
+
+planning-field-needed = Name the number field to measure by, such as cf.points.
+planning-field-unused = A field is named only with the measure "field".
+# $field is the custom field's name.
+planning-field-not-number = Field "{ $field }" doesn't hold numbers; choose a whole-number or decimal field.
+planning-last = Show 1 to { $max } sprints.
+burnup-version-or-sprint = Name a version or a sprint, one of the two.
+burnup-sprint-not-started = Sprint "{ $sprint }" hasn't started yet, so it has no burn-up.

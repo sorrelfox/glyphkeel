@@ -15,27 +15,29 @@ import { OP_ROOT, opPrefix } from "./queries";
 const LINKS: readonly OpId[] = ["wiki.backlinks", "wiki.references", "task.backlinks", "task.references"];
 /** The flow reports read tasks, statuses, types and labels, and the week's first day. */
 const FLOW: readonly OpId[] = ["report.created_closed", "report.cumulative_flow", "report.cycle_time"];
+/** The planning reports read tasks, their sprints, versions, estimates, number fields and logged time. */
+const PLAN: readonly OpId[] = ["report.velocity", "report.burnup", "report.estimates"];
 
 export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // `workspace.get` carries the settings too.
   // Durations are told in the workspace's units, and the timer reminds after its hours.
   // The trash counts its days left by the `trash_days` setting, and dates in words count weeks from `week_start`.
-  settings: ["settings.get", "workspace.get", "date.parse", "timer.get", "time.report", "trash.list", ...FLOW],
+  settings: ["settings.get", "workspace.get", "date.parse", "timer.get", "time.report", "trash.list", ...FLOW, ...PLAN],
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
   // A task's reminder is one of its fields; the time report shows titles.
   // Its cover marks one of its files.
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
-  task: ["trash.list", "task.get", "board.get", "board.get_across", "project.list", "folder.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "sprint.list", "sprint.get", "sprint.burndown", "field.list", "file.get", ...LINKS, ...FLOW],
+  task: ["trash.list", "task.get", "board.get", "board.get_across", "project.list", "folder.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "sprint.list", "sprint.get", "sprint.burndown", "field.list", "file.get", ...LINKS, ...FLOW, ...PLAN],
   // Statuses, types and labels show on every card and in the task panel;
   // a wiki page's task lists (`{{tasks …}}`) show statuses and match by them.
-  project: ["trash.list", "project.list", "folder.list", "project.get", "board.get", "board.get_across", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "sprint.list", "sprint.get", "field.list", ...LINKS, ...FLOW],
-  status: ["project.get", "board.get", "board.get_across", "task.get", "project.list", "folder.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW],
-  task_type: ["project.get", "board.get", "board.get_across", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list", ...FLOW],
-  label: ["project.get", "board.get", "board.get_across", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", ...FLOW],
+  project: ["trash.list", "project.list", "folder.list", "project.get", "board.get", "board.get_across", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "sprint.list", "sprint.get", "field.list", ...LINKS, ...FLOW, ...PLAN],
+  status: ["project.get", "board.get", "board.get_across", "task.get", "project.list", "folder.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW, ...PLAN],
+  task_type: ["project.get", "board.get", "board.get_across", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list", ...FLOW, ...PLAN],
+  label: ["project.get", "board.get", "board.get_across", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", ...FLOW, ...PLAN],
   // Custom fields: their list, the values tasks show, the columns and the query field.
-  custom_field: ["field.list", "task.get", "task.search", "query.parse", "view.list", ...FLOW],
+  custom_field: ["field.list", "task.get", "task.search", "query.parse", "view.list", ...FLOW, ...PLAN],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get", "board.get_across"],
   // The order and widths of the list's columns.
@@ -48,18 +50,18 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // The Gantt chart draws blocks links as dependencies.
   relation: ["task.get", "board.get", "board.get_across", "task.search", "schedule.get", "schedule.preview_move"],
   // Cards and the task show the time spent; the report adds it up.
-  time_entry: ["trash.list", "task.get", "board.get", "board.get_across", "time.report", "task.search", "work_kind.list"],
+  time_entry: ["trash.list", "task.get", "board.get", "board.get_across", "time.report", "task.search", "work_kind.list", "report.estimates"],
   // Kinds of work: their list, and the entries and reports that name them.
-  work_kind: ["work_kind.list", "task.get", "time.report", "timer.get"],
+  work_kind: ["work_kind.list", "task.get", "time.report", "timer.get", "report.estimates"],
   // The one timer: its chip, the task's timer button, and `workspace.get`, which carries it.
   timer: ["timer.get", "workspace.get", "today.get"],
   // Saved views of the list.
   // Saved views of the list and the other screens; My work reads its own.
   view: ["view.list", "board.get_across"],
   // Versions: the roadmap, the task panel's picker, queries naming them and the Gantt chart's markers.
-  version: ["version.list", "version.get", "task.get", "task.search", "query.parse", ...FLOW],
+  version: ["version.list", "version.get", "task.get", "task.search", "query.parse", ...FLOW, ...PLAN],
   // Sprints: the sprints page and its burndown, the task panel's picker, cards and queries naming them.
-  sprint: ["sprint.list", "sprint.get", "sprint.burndown", "task.get", "task.search", "board.get", "board.get_across", "query.parse", "view.list"],
+  sprint: ["sprint.list", "sprint.get", "sprint.burndown", "task.get", "task.search", "board.get", "board.get_across", "query.parse", "view.list", ...PLAN],
   // Wiki pages: their search, links to them and their text, and their revisions (read like a description's).
   // A recurring task's series: the task carries it, and lists mark its current occurrence.
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get", "board.get_across"],

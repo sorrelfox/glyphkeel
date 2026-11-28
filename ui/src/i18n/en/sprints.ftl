@@ -146,3 +146,15 @@ burndown-legend-ideal = Ideal
 burndown-legend-scope = All work in the sprint
 # The column of days in the burndown's table.
 burndown-day-column = Day
+
+## Velocity and burn-up from the sprints page
+
+sprints-velocity = Velocity
+# $planned and $average are amounts of work, formatted; $over is yes when more is planned than the average.
+sprints-plan-hint = { $over ->
+    [yes] Planned: { $planned } · average velocity: { $average } (more than usual)
+   *[no] Planned: { $planned } · average velocity: { $average }
+}
+burnup-open = Burn-up
+# $name is the sprint's name.
+burnup-open-named = Burn-up of { $name }

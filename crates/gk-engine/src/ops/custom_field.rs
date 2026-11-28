@@ -139,7 +139,7 @@ fn row_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<FieldRow>, StoreErro
 
 /// The field `text` names among `fields`: its name or query name (any
 /// case, with or without `cf.`) or its ID.
-fn named<'a>(fields: &'a [FieldRow], text: &str) -> Option<&'a FieldRow> {
+pub(crate) fn named<'a>(fields: &'a [FieldRow], text: &str) -> Option<&'a FieldRow> {
     let text = text.trim();
     let id = text.parse::<Id>().ok();
     let bare = gk_query::fields::strip_custom_prefix(text).unwrap_or(text);
@@ -149,7 +149,7 @@ fn named<'a>(fields: &'a [FieldRow], text: &str) -> Option<&'a FieldRow> {
         .find(|f| Some(f.id) == id || fold(&f.name) == wanted || f.query_name == wanted)
 }
 
-fn not_found(fields: &[FieldRow], path: &str, text: &str) -> Failure {
+pub(crate) fn not_found(fields: &[FieldRow], path: &str, text: &str) -> Failure {
     let names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
     messages::with(
         "field-not-found",

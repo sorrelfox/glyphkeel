@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Tab, TabList, TabPanel, Tabs, useLocale } from "react-aria-components";
@@ -32,6 +32,7 @@ import { isoDay } from "../board/model";
 import { presetRange, startOfWeek } from "../time/TimeReport";
 import { bandColour, CLOSED, CREATED, CreatedClosedChart, CumulativeFlowChart, CycleTimeChart, OPEN, Swatch } from "./charts";
 import { QueryInput } from "../list/QueryInput";
+import { BurnupPanel, EstimatesPanel, VelocityPanel } from "./PlanningReports";
 import styles from "./FlowReports.module.css";
 
 /** The list's key for "all projects", "any type", "any label" and "any version"; no name has this form. */
@@ -39,8 +40,12 @@ const ANY = "*";
 /** The most tasks the cycle time table lists; the export has them all. */
 const TASK_ROWS = 500;
 
-type Tab = "created-closed" | "cumulative" | "cycle";
-const TABS: readonly Tab[] = ["created-closed", "cumulative", "cycle"];
+type Tab = "created-closed" | "cumulative" | "cycle" | "velocity" | "burnup" | "estimates";
+const TABS: readonly Tab[] = ["created-closed", "cumulative", "cycle", "velocity", "burnup", "estimates"];
+/** The tabs of the planning reports, which have their own controls. */
+const PLANNING: readonly Tab[] = ["velocity", "burnup", "estimates"];
+
+const route = getRouteApi("/shell/reports");
 type Actor = "" | "me" | "agent";
 type Metric = "cycle" | "lead";
 
@@ -130,7 +135,9 @@ export function FlowReportsScreen() {
   const projects = useOp("project.list", {});
   const today = useToday();
   const weekStart = settings.data?.week_start ?? "monday";
-  const [tab, setTab] = useState<Tab>("created-closed");
+  const search = route.useSearch();
+  const [tab, setTab] = useState<Tab>(TABS.find((each) => each === search.report) ?? "created-closed");
+  const planning = PLANNING.includes(tab);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [bucket, setBucket] = useState<FlowBucket>("week");
   const [project, setProject] = useState("");
@@ -158,6 +165,7 @@ export function FlowReportsScreen() {
   };
   const withActor: FlowReportInput = { ...input, ...(actor === "" ? {} : { actor }) };
   const created = useOp("report.created_closed", withActor, { enabled: tab === "created-closed" });
+  const flowTab = tab === "created-closed" || tab === "cumulative" || tab === "cycle";
   const flow = useOp("report.cumulative_flow", { ...input, group_by: groupBy }, { enabled: tab === "cumulative" });
   const cycle = useOp("report.cycle_time", { ...withActor, tasks: true }, { enabled: tab === "cycle" });
   const current = tab === "created-closed" ? created : tab === "cumulative" ? flow : cycle;
@@ -193,10 +201,19 @@ export function FlowReportsScreen() {
   const types = [...new Set((chosenProject.data?.types ?? []).map((each) => each.name))];
   const labels = [...new Set((chosenProject.data?.labels ?? []).map((each) => each.name))];
   const versions = [...new Set((chosenVersions.data?.items ?? []).map((each) => each.name))];
-  const tabLabel: Record<Tab, string> = { "created-closed": "flow-tab-created-closed", cumulative: "flow-tab-cumulative", cycle: "flow-tab-cycle" };
+  const tabLabel: Record<Tab, string> = {
+    "created-closed": "flow-tab-created-closed",
+    cumulative: "flow-tab-cumulative",
+    cycle: "flow-tab-cycle",
+    velocity: "plan-tab-velocity",
+    burnup: "plan-tab-burnup",
+    estimates: "plan-tab-estimates",
+  };
 
   return (
     <section className={styles.screen} aria-label={t("view-reports")}>
+      {flowTab && (
+      <>
       <div className={styles.controls}>
         <span className={classes("field", styles.dayField)}>
           <input type="date" aria-label={t("report-from")} value={from} onChange={(event) => { setDay("from", event.target.value); }} />
@@ -300,6 +317,8 @@ export function FlowReportsScreen() {
           />
         </div>
       </div>
+      </>
+      )}
       <Tabs
         selectedKey={tab}
         onSelectionChange={(key) => {
@@ -316,7 +335,7 @@ export function FlowReportsScreen() {
             ))}
           </TabList>
           <div className="grow" />
-          {tab !== "cumulative" && (
+          {flowTab && tab !== "cumulative" && (
             <Select
               className={styles.select}
               label={t("flow-actor")}
@@ -356,12 +375,14 @@ export function FlowReportsScreen() {
           <Switch isSelected={asTable} onChange={setAsTable}>
             {t("flow-as-table")}
           </Switch>
-          <Button className="btn flat" isDisabled={!current.data} onPress={exportCsv}>
-            <Download className="ic" aria-hidden="true" />
-            <span>{t("flow-export")}</span>
-          </Button>
+          {!planning && (
+            <Button className="btn flat" isDisabled={!current.data} onPress={exportCsv}>
+              <Download className="ic" aria-hidden="true" />
+              <span>{t("flow-export")}</span>
+            </Button>
+          )}
         </div>
-        {current.isError && (
+        {flowTab && current.isError && (
           <p className="faint" role="alert" data-flow-error>
             {failureText(t, current.error)}
           </p>
@@ -374,6 +395,15 @@ export function FlowReportsScreen() {
         </TabPanel>
         <TabPanel id="cycle" className={classes(styles.panel)}>
           {cycle.data && <CycleTime report={cycle.data} asTable={asTable} metric={metric} />}
+        </TabPanel>
+        <TabPanel id="velocity" className={classes(styles.panel)}>
+          <VelocityPanel project={search.project} asTable={asTable} />
+        </TabPanel>
+        <TabPanel id="burnup" className={classes(styles.panel)}>
+          <BurnupPanel project={search.project} version={search.version} sprint={search.sprint} asTable={asTable} />
+        </TabPanel>
+        <TabPanel id="estimates" className={classes(styles.panel)}>
+          <EstimatesPanel project={search.project} asTable={asTable} />
         </TabPanel>
       </Tabs>
     </section>

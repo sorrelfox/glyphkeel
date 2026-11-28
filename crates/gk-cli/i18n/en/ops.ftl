@@ -1028,6 +1028,42 @@ op-report-cycle-time--tasks = Cycle time only: also list every task closed in th
 op-report-cycle-time--to = The last day, included; default today.
 op-report-cycle-time--type = Only tasks of this type, by name.
 
+## glyphkeel report velocity <project>
+
+op-report-velocity = The velocity of a project's completed sprints: the work each took on at its start against the work it completed, in tasks, estimated hours or a number field, with the average of the last three and the work planned for the sprints to come.
+op-report-velocity--csv = Also return the report as CSV text (comma-separated, a header line,
+    CRLF line ends).
+op-report-velocity--field = With `measure: field`: a whole-number or decimal custom field (its
+    name or `cf.<name>`).
+op-report-velocity--last = How many of the latest completed sprints to show, 1 to 50; default
+    10.
+op-report-velocity--measure = `tasks` (default), `estimate` (hours) or `field`.
+op-report-velocity--project = The project: a key or ID.
+
+## glyphkeel report burnup
+
+op-report-burnup = A burn-up of a version or a sprint: the work planned for it and the part completed at the end of each day, from the history, with a forecast of when the two meet.
+op-report-burnup--csv = Also return the days as CSV text.
+op-report-burnup--field = With `measure: field`: a whole-number or decimal custom field.
+op-report-burnup--forecast = Add the forecast; default true.
+op-report-burnup--measure = `tasks` (default), `estimate` (hours) or `field`.
+op-report-burnup--project = With a name or `active`: the project (key or ID).
+op-report-burnup--sprint = The sprint (active or closed): its ID, its name, or `active`.
+op-report-burnup--version = The version: its ID or name. Give this or `sprint`.
+
+## glyphkeel report estimates
+
+op-report-estimates = Estimate accuracy: for tasks closed over a range of days with an estimate and logged time, the median ratio of spent to estimated time, the share within 20 %, and the outliers, overall and by type, label, project, kind of work or month.
+op-report-estimates--csv = Also return the tasks as CSV text.
+op-report-estimates--from = The first day tasks were closed on: `YYYY-MM-DD`, `today` or
+    `yesterday`; default 89 days before `to`.
+op-report-estimates--group-by = `none` (default), `type`, `label`, `project`, `work_kind` or
+    `month`.
+op-report-estimates--project = Only this project (key or ID) and its sub-projects.
+op-report-estimates--query = Only tasks that match this query, as they are now.
+op-report-estimates--tasks = Also list every task compared.
+op-report-estimates--to = The last day, included; default today.
+
 ## glyphkeel timer status
 
 op-timer-get = The workspace's timer: its task, whether it runs and the time so far.

@@ -19,6 +19,7 @@ use crate::error::OpError;
 use crate::ops::automation::AutomationRun;
 use crate::ops::common::{Actor, ActorKind, Hue, Priority};
 use crate::ops::history::ActivityEntry;
+use crate::ops::planning::{BurnupReport, EstimatesReport, PlanMeasure, VelocityReport};
 use crate::ops::report::{CreatedClosedReport, CumulativeFlowReport, CycleTimeReport, FlowBucket};
 use crate::ops::sprint::SprintBurndown;
 use crate::ops::task::StatusRef;
@@ -45,6 +46,12 @@ pub enum WidgetKind {
     Burndown,
     /// The progress of a project's open versions.
     VersionProgress,
+    /// The burn-up of a version, or of a project's active sprint.
+    Burnup,
+    /// The velocity of a project's completed sprints.
+    Velocity,
+    /// How closed tasks' logged time compared with their estimates.
+    EstimateAccuracy,
     /// Open tasks counted by a field: status, priority, type, label or a
     /// custom select or yes/no field.
     TasksByField,
@@ -62,7 +69,7 @@ pub enum WidgetKind {
 
 impl WidgetKind {
     /// Every kind, in the order the app offers them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 17] = [
         Self::QueryCount,
         Self::QueryList,
         Self::TasksByField,
@@ -74,6 +81,9 @@ impl WidgetKind {
         Self::TimeReport,
         Self::Burndown,
         Self::VersionProgress,
+        Self::Burnup,
+        Self::Velocity,
+        Self::EstimateAccuracy,
         Self::Activity,
         Self::AutomationFailures,
         Self::Note,
@@ -91,6 +101,9 @@ impl WidgetKind {
             Self::TimeReport => "time_report",
             Self::Burndown => "burndown",
             Self::VersionProgress => "version_progress",
+            Self::Burnup => "burnup",
+            Self::Velocity => "velocity",
+            Self::EstimateAccuracy => "estimate_accuracy",
             Self::TasksByField => "tasks_by_field",
             Self::DueSoon => "due_soon",
             Self::Overdue => "overdue",
@@ -103,7 +116,9 @@ impl WidgetKind {
     /// The settings a widget of this kind takes.
     #[must_use]
     pub const fn settings(self) -> &'static [WidgetSetting] {
-        use WidgetSetting::{ActorKind, Bucket, Days, Field, GroupBy, Limit, Project, Query, Text};
+        use WidgetSetting::{
+            ActorKind, Bucket, Days, Field, GroupBy, Limit, Measure, Project, Query, Text, Version,
+        };
         match self {
             Self::QueryCount => &[Query, Project],
             Self::QueryList => &[Query, Project, Limit],
@@ -112,6 +127,9 @@ impl WidgetKind {
             }
             Self::TimeReport => &[Project, Days, GroupBy],
             Self::Burndown | Self::VersionProgress => &[Project],
+            Self::Burnup => &[Project, Version, Measure, Field],
+            Self::Velocity => &[Project, Measure, Field],
+            Self::EstimateAccuracy => &[Query, Project, Days],
             Self::TasksByField => &[Field, Query, Project],
             Self::DueSoon => &[Query, Project, Days, Limit],
             Self::Overdue => &[Query, Project, Limit],
@@ -144,6 +162,10 @@ pub enum WidgetSetting {
     ActorKind,
     /// The note's text.
     Text,
+    /// How work is measured.
+    Measure,
+    /// The version.
+    Version,
 }
 
 impl WidgetSetting {
@@ -160,6 +182,8 @@ impl WidgetSetting {
             Self::GroupBy => "group_by",
             Self::ActorKind => "actor_kind",
             Self::Text => "text",
+            Self::Measure => "measure",
+            Self::Version => "version",
         }
     }
 }
@@ -183,7 +207,8 @@ pub struct WidgetSettings {
     #[schemars(with = "String")]
     pub project: Option<String>,
     /// `tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom
-    /// select or yes/no field (`cf.<name>`).
+    /// select or yes/no field (`cf.<name>`); `velocity` and `burnup` with
+    /// `measure: field`: the number field (`cf.<name>`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
     pub field: Option<String>,
@@ -193,7 +218,8 @@ pub struct WidgetSettings {
     pub limit: Option<u32>,
     /// `due_soon`: due within this many days (default 7); `time_report`:
     /// the last this many days, today included (default 7); `activity`:
-    /// only the changes of the last this many days. 1 to 366.
+    /// only the changes of the last this many days; `estimate_accuracy`:
+    /// tasks closed in the last this many days (default 90). 1 to 366.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "u32")]
     pub days: Option<u32>,
@@ -215,6 +241,16 @@ pub struct WidgetSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
     pub text: Option<String>,
+    /// `velocity` and `burnup`: `tasks` (default), `estimate` (hours) or
+    /// `field`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "PlanMeasure")]
+    pub measure: Option<PlanMeasure>,
+    /// `burnup`: the version (name or ID); left out: the project's active
+    /// sprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    pub version: Option<String>,
 }
 
 /// One widget of a dashboard.
@@ -388,6 +424,15 @@ pub struct WidgetValue {
     /// `burndown`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub burndown: Option<SprintBurndown>,
+    /// `burnup`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub burnup: Option<BurnupReport>,
+    /// `velocity`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub velocity: Option<VelocityReport>,
+    /// `estimate_accuracy`, grouped by type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimates: Option<EstimatesReport>,
     /// `version_progress`: the project's open and locked versions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub versions: Option<Vec<Version>>,

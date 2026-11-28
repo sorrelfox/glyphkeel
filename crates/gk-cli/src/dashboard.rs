@@ -66,6 +66,9 @@ fn kind_title(kind: &str, w: &Value) -> String {
         "time_report" => "cli-widget-time-report",
         "burndown" => "cli-widget-burndown",
         "version_progress" => "cli-widget-version-progress",
+        "burnup" => "cli-widget-burnup",
+        "velocity" => "cli-widget-velocity",
+        "estimate_accuracy" => "cli-widget-estimate-accuracy",
         "tasks_by_field" => "cli-widget-tasks-by-field",
         "due_soon" => "cli-widget-due-soon",
         "overdue" => "cli-widget-overdue",
@@ -84,6 +87,10 @@ fn num(v: &Value) -> String {
     v.as_u64()
         .map(|n| n.to_string())
         .or_else(|| v.as_i64().map(|n| n.to_string()))
+        .or_else(|| {
+            v.as_f64()
+                .map(|f| ((f * 100.0).round() / 100.0).to_string())
+        })
         .unwrap_or_else(|| "0".to_owned())
 }
 
@@ -263,6 +270,107 @@ fn widget_text(out: &mut String, place: usize, value: &Value) {
                 ],
             ),
         );
+    }
+    if let Some(r) = value.get("burnup") {
+        let last = r["days"].as_array().and_then(|d| d.last());
+        let name = r["version"]["name"]
+            .as_str()
+            .or_else(|| r["sprint"]["name"].as_str())
+            .unwrap_or_default()
+            .to_owned();
+        line(
+            out,
+            text(
+                "cli-dashboard-burnup",
+                &[
+                    ("name", name),
+                    (
+                        "completed",
+                        last.map_or_else(|| "0".to_owned(), |d| num(&d["completed"])),
+                    ),
+                    (
+                        "scope",
+                        last.map_or_else(|| "0".to_owned(), |d| num(&d["scope"])),
+                    ),
+                ],
+            ),
+        );
+        if let Some(date) = r["forecast"]["date"].as_str() {
+            line(
+                out,
+                text(
+                    "cli-dashboard-burnup-forecast",
+                    &[("date", date.to_owned())],
+                ),
+            );
+        }
+    }
+    if let Some(r) = value.get("velocity") {
+        for s in r["sprints"].as_array().map_or(&[][..], Vec::as_slice) {
+            line(
+                out,
+                text(
+                    "cli-dashboard-velocity-sprint",
+                    &[
+                        ("sprint", str_of(&s["sprint"], "name").to_owned()),
+                        ("committed", num(&s["committed"])),
+                        ("completed", num(&s["completed"])),
+                    ],
+                ),
+            );
+        }
+        match r.get("average") {
+            Some(avg) => line(
+                out,
+                text(
+                    "cli-dashboard-velocity-average",
+                    &[("average", num(avg)), ("count", num(&r["average_of"]))],
+                ),
+            ),
+            None => line(out, text("cli-none", &[])),
+        }
+    }
+    if let Some(r) = value.get("estimates") {
+        let t = &r["total"];
+        let share = t["within_share"].as_f64().map_or_else(
+            || text("cli-no-value", &[]),
+            |s| format!("{:.0}", s * 100.0),
+        );
+        line(
+            out,
+            text(
+                "cli-dashboard-estimates",
+                &[
+                    ("count", num(&t["count"])),
+                    (
+                        "median",
+                        t.get("median_ratio")
+                            .map_or_else(|| text("cli-no-value", &[]), num),
+                    ),
+                    ("share", share),
+                ],
+            ),
+        );
+        for g in r["groups"].as_array().map_or(&[][..], Vec::as_slice) {
+            let name = match str_of(g, "name") {
+                "" => text("cli-dashboard-no-value", &[]),
+                n => n.to_owned(),
+            };
+            line(
+                out,
+                text(
+                    "cli-dashboard-bar",
+                    &[
+                        ("name", name),
+                        (
+                            "count",
+                            g.get("median_ratio")
+                                .map_or_else(|| text("cli-no-value", &[]), num),
+                        ),
+                    ],
+                ),
+            );
+        }
     }
     if let Some(versions) = value["versions"].as_array() {
         if versions.is_empty() {

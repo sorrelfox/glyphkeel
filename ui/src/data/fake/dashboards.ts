@@ -10,7 +10,10 @@ import {
   type Actor,
   type ActivityPage,
   type AutomationRunList,
+  type BurnupReport,
   type CreatedClosedReport,
+  type EstimatesReport,
+  type VelocityReport,
   type CumulativeFlowReport,
   type CycleTimeReport,
   type Dashboard,
@@ -73,6 +76,8 @@ export interface DashboardHost {
   read: (op: string, input: unknown) => unknown;
   /** Checks a query; throws its mistake. */
   checkQuery: (query: string, path: string) => void;
+  /** The ID of the version `ref` names, among those of `project` (an ID). */
+  versionId: (ref: string, project: string | undefined) => string;
   /** A custom field of this query name (without `cf.`) that tasks can be counted by. */
   countableField: (name: string) => boolean;
   actor: () => Actor;
@@ -160,8 +165,28 @@ function checkSettings(host: DashboardHost, kind: WidgetKind, settings: WidgetSe
   } else {
     next.project = host.project(project).id;
   }
-  if ((kind === "burndown" || kind === "version_progress") && next.project === undefined && pinned === null) {
+  if ((kind === "burndown" || kind === "version_progress" || kind === "burnup" || kind === "velocity") && next.project === undefined && pinned === null) {
     host.fail("invalid", `A ${kind} widget needs a project: give one, or pin the dashboard to a project.`, `${at}settings.project`);
+  }
+  if (kind === "burnup" || kind === "velocity") {
+    const project = next.project ?? pinned;
+    const measure = settings.measure ?? "tasks";
+    const field = settings.field?.trim() ?? "";
+    if (measure === "field" && field === "") {
+      host.fail("invalid", "Name the number field to measure by, such as cf.points.", `${at}settings.field`);
+    }
+    if (measure !== "field" && field !== "") {
+      host.fail("invalid", 'A field is named only with the measure "field".', `${at}settings.field`);
+    }
+    if (field === "") {
+      delete next.field;
+    }
+    const version = settings.version?.trim() ?? "";
+    if (version === "") {
+      delete next.version;
+    } else {
+      next.version = host.versionId(version, project ?? undefined);
+    }
   }
   if (kind === "tasks_by_field") {
     const field = settings.field?.trim() ?? "";
@@ -480,6 +505,24 @@ function compute(host: DashboardHost, board: FakeDashboard, widget: FakeWidget, 
     case "burndown": {
       const project = scopeKey(host, board, widget) ?? host.fail("invalid", "A burndown widget needs a project.", "settings.project");
       value.burndown = host.read("sprint.burndown", { sprint: "active", project }) as SprintBurndown;
+      return;
+    }
+    case "burnup": {
+      const project = scopeKey(host, board, widget) ?? host.fail("invalid", "A burnup widget needs a project.", "settings.project");
+      value.burnup = host.read("report.burnup", { ...(s.version === undefined ? { sprint: "active" } : { version: s.version }), project, ...some("measure", s.measure), ...some("field", s.field) }) as BurnupReport;
+      return;
+    }
+    case "velocity": {
+      const project = scopeKey(host, board, widget) ?? host.fail("invalid", "A velocity widget needs a project.", "settings.project");
+      value.velocity = host.read("report.velocity", { project, ...some("measure", s.measure), ...some("field", s.field) }) as VelocityReport;
+      return;
+    }
+    case "estimate_accuracy": {
+      const project = scopeKey(host, board, widget);
+      const to = host.today();
+      const from = new Date(`${to}T00:00:00Z`);
+      from.setUTCDate(from.getUTCDate() - ((s.days ?? 90) - 1));
+      value.estimates = host.read("report.estimates", { from: from.toISOString().slice(0, 10), group_by: "type", ...some("project", project), ...some("query", s.query) }) as EstimatesReport;
       return;
     }
     case "version_progress": {

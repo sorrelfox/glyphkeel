@@ -42,3 +42,9 @@ about-loading = Loading…
 about-text-elsewhere = Shown in the desktop app. The file { $file } is also part of Glyphkeel's source code.
 # $years is the years of the copyright, such as 2026.
 about-copyright = Copyright © { $years } Glyphkeel contributors
+
+## Preferences: the estimate hint, a personal choice
+
+preferences-estimates = Estimates
+preferences-estimate-hint = Show how estimates usually turn out
+preferences-estimate-hint-about = In the task panel, beside the estimate: how the time logged on closed tasks of the same type compared with their estimates. Only for you, on this computer.

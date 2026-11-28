@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { useNavigate } from "@tanstack/react-router";
+import { TrendingUp } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useLocale } from "react-aria-components";
+import { Button, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { Segmented } from "../../components/Segmented";
@@ -28,6 +30,7 @@ function utc(day: string): Date {
 export function Burndown({ sprint }: { sprint: Sprint }) {
   const t = useT();
   const burndown = useBurndown(sprint.id);
+  const navigate = useNavigate();
   if (burndown.error) {
     return (
       <p className={styles.note} role="alert">
@@ -41,7 +44,20 @@ export function Burndown({ sprint }: { sprint: Sprint }) {
   }
   return (
     <section className={styles.burndown} aria-label={t("burndown-title", { name: sprint.name })}>
-      <BurndownFigure sprint={sprint} data={data} heading={<h3 className={styles.subTitle}>{t("burndown-heading")}</h3>} />
+      <BurndownFigure
+        sprint={sprint}
+        data={data}
+        heading={
+          <>
+            <h3 className={styles.subTitle}>{t("burndown-heading")}</h3>
+            <Button className="btn flat sm" aria-label={t("burnup-open-named", { name: sprint.name })} onPress={() => void navigate({ to: "/reports", search: { report: "burnup", project: sprint.project, sprint: sprint.id } })}>
+              <TrendingUp className="ic s" aria-hidden="true" />
+              {t("burnup-open")}
+            </Button>
+            <span className="grow" />
+          </>
+        }
+      />
     </section>
   );
 }
