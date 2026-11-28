@@ -255,6 +255,23 @@ Example: revert_changes {\"session\": \"current\", \"dry_run\": true}",
         idempotent: false,
     },
     McpTool {
+        name: "get_proposals",
+        toolset: Toolset::Workspace,
+        title: "Your proposed changes",
+        description: "Lists the changes you proposed that wait for, or got, the person's decision, \
+newest first. When the workspace says your changes need approval (get_workspace shows \
+`caller.approvals`), a changing tool returns a `pending_approval` error with a proposal ID \
+instead of making the change: the change is kept, with a preview of what it would change, until \
+the person approves it (it then runs as you, and `group` is its history group) or rejects it \
+(`reason` says why). Don't send a pending change again. Filter by `status` (\"pending\", \
+\"approved\", \"rejected\", \"expired\"), `session` (\"current\" for this session) or `ids`. \
+Subscribe to glyphkeel://proposals to hear when one is decided. \
+Example: get_proposals {\"status\": \"pending\"}",
+        main: "proposal.list",
+        covers: &["proposal.list", "proposal.get"],
+        idempotent: true,
+    },
+    McpTool {
         name: "list_projects",
         toolset: Toolset::Projects,
         title: "List projects",
@@ -2084,6 +2101,7 @@ mod tests {
                 "search",
                 "get_activity",
                 "get_digest",
+                "get_proposals",
                 "list_projects",
                 "get_project",
                 "list_folders",

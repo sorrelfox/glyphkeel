@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useNavigate } from "@tanstack/react-router";
-import { ChartArea, Clock, FolderPlus, History, Inbox, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { ChartArea, Clock, FolderPlus, History, Inbox, LayoutDashboard, List, Plus, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { useAction } from "../actions/ActionsProvider";
@@ -10,6 +10,7 @@ import { Kbd } from "../components/Kbd";
 import { classes } from "../classes";
 import { useCounts, useProjects } from "../data/board";
 import { useInboxCount } from "../data/digest";
+import { usePendingProposals } from "../data/proposals";
 import { folderOfProject, useFolders } from "../data/folders";
 import { useSidebarCounts } from "../data/today";
 import { useT } from "../i18n/I18n";
@@ -43,7 +44,7 @@ interface SidebarProps {
  * projects and actions; Enter opens the search page with its text; the
  * command palette keeps its own key), Inbox (the digest of what changed
  * while the person was away, at the top of Today) with its count, Today and All
- * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree (with its folders and the buttons for a new folder and a new project), the
+ * tasks with their counts, the dashboards, the time report, the reports, the activity, the approvals (with how many changes of agents wait), the project tree (with its folders and the buttons for a new folder and a new project), the
  * timer chip while a timer runs, then Trash and Preferences.
  *
  * A new project goes into the selected folder: the folder row picked in
@@ -57,6 +58,8 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
   const reports = useAction("nav.reports");
   const dashboards = useAction("nav.dashboards");
   const activity = useAction("nav.activity");
+  const approvals = useAction("nav.approvals");
+  const pendingProposals = usePendingProposals();
   const trash = useAction("nav.trash");
   const preferences = useAction("app.preferences");
   const counts = useCounts();
@@ -133,6 +136,15 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
         <button type="button" className={classes("nav", view === "activity" && "on")} aria-current={view === "activity" ? "page" : undefined} onClick={activity.run}>
           <History className="ic" />
           <span>{t("view-activity")}</span>
+        </button>
+        <button type="button" className={classes("nav", view === "approvals" && "on")} aria-current={view === "approvals" ? "page" : undefined} onClick={approvals.run}>
+          <ShieldCheck className="ic" />
+          <span>{t("view-approvals")}</span>
+          {pendingProposals !== undefined && pendingProposals > 0 && (
+            <span className="count" data-count="approvals" title={t("approvals-badge", { count: pendingProposals })}>
+              {pendingProposals}
+            </span>
+          )}
         </button>
       </div>
 

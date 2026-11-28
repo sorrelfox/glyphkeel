@@ -33,6 +33,7 @@ pub(crate) mod lookup;
 pub(crate) mod macros;
 pub(crate) mod project;
 pub(crate) mod project_delete;
+pub(crate) mod proposal;
 pub(crate) mod query;
 pub(crate) mod recurrence;
 pub(crate) mod relation;
@@ -66,6 +67,7 @@ pub(crate) fn register(r: &mut Registry) {
     workspace::register(r);
     settings::register(r);
     agent::register(r);
+    proposal::register(r);
     history::register(r);
     project::register(r);
     custom_field::register(r);

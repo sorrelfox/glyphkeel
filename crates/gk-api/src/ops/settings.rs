@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::agent::AgentLimits;
+use crate::ops::proposal::AgentApprovals;
 use crate::profile::Profile;
 
 /// The workspace's settings, with defaults filled in.
@@ -35,6 +36,10 @@ pub struct Settings {
     /// The limits on every agent session. Only the person sets them, in the
     /// app.
     pub agent_limits: AgentLimits,
+    /// Which changes of agents wait for the person's approval, per
+    /// profile, and how long a proposal waits. Only the person sets it, in
+    /// the app.
+    pub agent_approvals: AgentApprovals,
     /// Hours a timer runs before it reminds that it is still running; 0
     /// never.
     pub timer_reminder_hours: u32,
@@ -56,6 +61,7 @@ impl Default for Settings {
             agent_max_profile: Profile::Standard,
             agent_confirmations: true,
             agent_limits: AgentLimits::DEFAULT,
+            agent_approvals: AgentApprovals::DEFAULT,
             timer_reminder_hours: 8,
             backup_folder: None,
         }

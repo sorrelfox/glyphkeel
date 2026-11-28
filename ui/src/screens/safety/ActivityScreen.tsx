@@ -68,6 +68,10 @@ export function describeChange(t: Translate, entry: ActivityEntry, locale: strin
     .filter((name) => name !== undefined);
   const fields = names.length === 0 || f.created !== undefined ? undefined : new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names);
   let what: string;
+  if (entry.entity === "proposal") {
+    const status = text(f.status?.after);
+    return { what: t(status === "approved" || status === "rejected" ? `activity-proposal-${status}` : "activity-proposal-pending"), item: undefined, fields: undefined };
+  }
   if (f.purged !== undefined) {
     what = t("activity-purged", { entity: t(`activity-entity-${entityName(entry.entity)}`) });
   } else if (f.trashed !== undefined) {
@@ -80,7 +84,7 @@ export function describeChange(t: Translate, entry: ActivityEntry, locale: strin
   return { what, item, fields };
 }
 
-const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind", "automation_rule", "dashboard", "project_folder"]);
+const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind", "automation_rule", "dashboard", "project_folder", "proposal"]);
 
 /** The entity's name in the messages; anything newer reads as an item. */
 function entityName(entity: string): string {
@@ -297,6 +301,7 @@ function FeedRow({
           ))}
         {fields !== undefined && <span className={classes("faint", styles.small)}>{fields}</span>}
         {entry.reverted_by !== undefined && <span className={classes("faint", styles.small)}>{t("history-was-reverted")}</span>}
+        {entry.approved_by_person === true && entry.entity !== "proposal" && <span className={classes("faint", styles.small)}>{t("history-approved-by-you")}</span>}
       </span>
       <span role="cell" className={classes(styles.cell, "muted")}>{project?.path ?? ""}</span>
       <span role="cell" className={styles.cell}>

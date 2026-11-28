@@ -88,6 +88,66 @@ Clients that can't show questions work as before: the profile decides. To
 turn the questions off, switch off **Agents may ask you** in Preferences ›
 Agents & CLI; turning it on again asks you in a window of the desktop.
 
+## Approvals
+
+Questions in the client work only while you are there to answer them. With
+approvals, an agent proposes changes instead, and you look at them later,
+in the app, when it suits you.
+
+Preferences › Agents & CLI › **Changes need approval** has a setting for each
+profile:
+
+| Setting | What waits for you |
+|---|---|
+| **Off** | Nothing: the profile decides, as above |
+| **Deletions only** | Moving items to the trash and deleting for good (standard and full agents) |
+| **All changes** | Every change |
+
+For a read-only agent the choice is **Off** (it changes nothing) or **All
+changes**: it may then propose what a standard agent may do, and nothing runs
+until you approve it. Approvals work with the other settings: **Most an agent
+may do** still caps the profile, the status rules still hold, and a change
+you allow when the agent asks (above) runs at once.
+
+A change that waits isn't made. The engine runs it once to see what it would
+change, takes that back, and keeps the proposal: the tool, what the agent
+sent, its session, and each field before and after. A change the engine
+would refuse (a task that doesn't exist, a move the status rules forbid) is
+refused at once instead. The agent gets an error that starts with
+`Error (pending_approval)` and has a `Proposal: <id>` line. It shouldn't send
+the change again; `get_proposals` lists its proposals with their status, and
+the resource `glyphkeel://proposals` changes when one is decided.
+
+In the app, **Approvals** in the sidebar shows how many wait. They are grouped
+by agent session, each with what it does, the task and the fields before and
+after. You can approve one, approve all of a session, reject one with a reason
+the agent reads, or open the task. A new proposal shows a desktop
+notification; while the app is locked it doesn't say what was proposed.
+
+An approved change runs then, as the agent, in its session: history shows the
+agent's name and **You approved this change the agent proposed**, and it can be undone and
+reverted like any other change. If something it changes was changed again
+since the proposal, approving shows what (the value then and now) and runs
+only when you approve it anyway. A proposal runs once, even when two programs approve it at the same
+moment. If the change fails when you approve it, the proposal waits again and
+says why. If the program that was running it stops halfway, the proposal
+stays **being approved** and is marked as interrupted: it never runs again by
+itself, the activity log shows what it changed, and you can only reject it to
+set it aside. A proposal nobody decides on expires after
+14 days (you can choose 1 to 365). Letting agents' changes run without the
+approval they needed asks you in a window of the desktop app, as raising
+**Most an agent may do** does; expired and decided proposals stay in the
+list, as the session's record.
+
+From the command line:
+
+```sh
+glyphkeel proposals list --status pending
+glyphkeel proposals show <id>
+glyphkeel proposals approve <id>...      # or --session <id> for all of a session
+glyphkeel proposals reject <id> --reason "Not before the release"
+```
+
 ## Limits on each session
 
 Preferences › Agents & CLI › **Limits on each agent session**:
@@ -206,6 +266,7 @@ and subscribe to hear when it changes, including changes you make in the app:
 | `glyphkeel://tasks/TM-41` | A task, as `get_task` returns it |
 | `glyphkeel://projects/TM` | A project; it changes when anything in it does |
 | `glyphkeel://queries?query=status%3Aopen%20label%3Aui` | The first 50 tasks a [query](query-language.md) finds; it changes when the result does |
+| `glyphkeel://proposals` | The agent's own [proposed changes](#approvals); it changes when one is made or decided |
 
 Clients of the 2026-07-28 protocol subscribe with `subscriptions/listen`,
 older ones with `resources/subscribe`. Notifications come at most once a
@@ -319,5 +380,7 @@ glyphkeel activity --actor-kind agent
   project.
 - You choose the most it may do, and only you can raise it. A change beyond
   it, or one that deletes a lot, runs only when you allow it.
+- You can have its changes, or only its deletions, wait for your
+  [approval](#approvals).
 - Everything it changes can be seen and reverted.
 - It reads and writes files only in the [folders agents may use](#files-on-disk).

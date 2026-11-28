@@ -258,7 +258,11 @@ pub(crate) fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPag
 
 /// The task an item of the log belongs to, as it is now: the task itself,
 /// or the task of a comment, time entry or file.
-fn task_of(tx: &Transaction<'_>, entity: &str, id: &str) -> Result<Option<ActivityTask>, Failure> {
+pub(crate) fn task_of(
+    tx: &Transaction<'_>,
+    entity: &str,
+    id: &str,
+) -> Result<Option<ActivityTask>, Failure> {
     let owner = match entity {
         fields::TASK => "?1",
         comment::ENTITY => "(SELECT task_id FROM comments WHERE id = ?1)",
@@ -305,6 +309,11 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         .and_then(|v| v.get("confirmed"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let approved_by_person = changes
+        .as_ref()
+        .and_then(|v| v.get("approved"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut fields = changes
         .and_then(|v| v.get("fields").cloned())
         .and_then(|f| serde_json::from_value::<BTreeMap<String, FieldChange>>(f).ok())
@@ -336,6 +345,7 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         task: None,
         reverted_by: id_at(r, 12)?,
         confirmed_by_person,
+        approved_by_person,
     })
 }
 
@@ -353,7 +363,8 @@ pub(crate) fn group_op(tx: &Transaction<'_>, group: Id) -> Result<Option<String>
 /// The groups of `session` that are not reverted yet.
 fn session_groups(tx: &Transaction<'_>, session: Id) -> Result<Vec<Id>, StoreError> {
     let mut stmt = tx.prepare(
-        "SELECT DISTINCT group_id FROM activity WHERE session_id = ?1 AND reverted_by IS NULL",
+        "SELECT DISTINCT group_id FROM activity
+          WHERE session_id = ?1 AND reverted_by IS NULL AND entity_kind <> 'proposal'",
     )?;
     let rows = stmt.query_map([session.as_bytes().as_slice()], |r| r.get::<_, Vec<u8>>(0))?;
     let mut out = Vec::new();
@@ -395,7 +406,7 @@ fn revertible_fields(row: &GroupRow) -> Vec<&String> {
 
 /// The current value of a recorded field, as history records it; `None`
 /// (outer) when this kind of change can't be reverted.
-fn current(
+pub(crate) fn current(
     tx: &Transaction<'_>,
     entity: &str,
     id: Id,
@@ -769,6 +780,7 @@ const APP_ONLY_SETTINGS: &[&str] = &[
     "agent_max_profile",
     "agent_confirmations",
     super::agent::LIMITS_SETTING,
+    super::agent::APPROVALS_SETTING,
     crate::backup::SETTING,
 ];
 
@@ -840,8 +852,17 @@ pub(crate) fn revert_groups(
     let mut reverted = Vec::new();
     let mut skipped = Vec::new();
     for &group in groups {
-        let rows = group_rows(w.tx(), group)?;
-        if let Some((id, args)) = blocker(w.tx(), &rows, w.caller())? {
+        // A proposal's record (proposed, approved, rejected) stays as it
+        // is: reverting an approved change takes back the change only.
+        let (decisions, rows): (Vec<GroupRow>, Vec<GroupRow>) = group_rows(w.tx(), group)?
+            .into_iter()
+            .partition(|r| r.entity == super::proposal::ENTITY);
+        let found = if rows.is_empty() && !decisions.is_empty() {
+            Some(("revert-proposal", vec![]))
+        } else {
+            blocker(w.tx(), &rows, w.caller())?
+        };
+        if let Some((id, args)) = found {
             skipped.push(SkippedGroup {
                 group: group.to_string(),
                 reason: messages::text(id, &args),

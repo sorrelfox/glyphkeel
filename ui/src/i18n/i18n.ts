@@ -7,6 +7,7 @@ import { PSEUDO_LOCALE, pseudoResource } from "./pseudo";
 
 import enAgents from "./en/agents.ftl?raw";
 import enApp from "./en/app.ftl?raw";
+import enApprovals from "./en/approvals.ftl?raw";
 import enAutomation from "./en/automation.ftl?raw";
 import enCalendar from "./en/calendar.ftl?raw";
 import enCsv from "./en/csv.ftl?raw";
@@ -43,7 +44,7 @@ import enDesktop from "../../../crates/gk-app/i18n/en/app.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enAgents, enApp, enAutomation, enCalendar, enCsv, enDashboards, enDesktop, enDev, enDigest, enEditor, enEngine, enFields, enFolders, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enSecurity, enSprints, enSwimlanes, enToday, enWiki],
+  en: [enAgents, enApp, enApprovals, enAutomation, enCalendar, enCsv, enDashboards, enDesktop, enDev, enDigest, enEditor, enEngine, enFields, enFolders, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enSecurity, enSprints, enSwimlanes, enToday, enWiki],
 };
 
 /** The language the app falls back to. */

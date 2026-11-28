@@ -59,6 +59,9 @@ asks first; if the person declines, the tool returns a forbidden error: don't as
 the person tells you to.
 Resources glyphkeel://tasks/{key}, glyphkeel://projects/{key} and \
 glyphkeel://queries?query=... can be read and subscribed to, to hear when they change.
+When your changes need the person's approval, a changing tool returns pending_approval with a \
+proposal ID: the change waits for the person. Don't send it again; get_proposals and the \
+resource glyphkeel://proposals say when it is approved or rejected, and why.
 Reads are limited per session (get_workspace shows agent_limits); a rate_limited error says \
 how many seconds to wait: wait, then read fewer or smaller results.";
 
@@ -250,6 +253,23 @@ impl Server {
         self.inner.session.requested_profile().capped_by(cap)
     }
 
+    /// The profile whose tools the agent may call under `settings`: its
+    /// own, or for a read-only agent that may propose changes, the standard
+    /// one, whose changes then wait for the person's approval.
+    fn tools_profile_in(&self, settings: &Value) -> Profile {
+        let profile = self.profile_in(settings);
+        let proposes = settings
+            .get("agent_approvals")
+            .and_then(|a| a.get("read_only"))
+            .and_then(Value::as_str)
+            == Some("all_writes");
+        if profile == Profile::ReadOnly && proposes {
+            Profile::Standard
+        } else {
+            profile
+        }
+    }
+
     /// The session's read limits in `settings`, for its profile.
     fn read_limits_in(&self, settings: &Value) -> ReadLimits {
         ReadLimits::of(&agent_limits(settings), self.profile_in(settings))
@@ -276,7 +296,7 @@ impl Server {
 
     /// The agent's profile after the workspace's cap, read now.
     fn effective_profile(&self) -> Result<Profile, OpError> {
-        Ok(self.profile_in(&self.settings()?))
+        Ok(self.tools_profile_in(&self.settings()?))
     }
 
     /// Whether the tool list changed since it was last served, because the
@@ -292,7 +312,7 @@ impl Server {
         };
         self.settings().is_ok_and(|settings| {
             let now = Listing {
-                profile: self.profile_in(&settings),
+                profile: self.tools_profile_in(&settings),
                 can_ask: last.can_ask,
                 confirmations: confirmations_on(&settings),
             };
@@ -400,7 +420,7 @@ impl Server {
         let asker = asker.filter(|_| confirmations_on(&settings));
         let tool = self.known_tool(name);
         if let (Some(asker), Some(tool)) = (&asker, tool) {
-            let profile = self.profile_in(&settings);
+            let profile = self.tools_profile_in(&settings);
             let reason =
                 confirm::reason_before(tool, profile, &args, trash_per_call(&settings), |key| {
                     self.project_size(key)
@@ -489,7 +509,7 @@ impl Server {
         confirmed: bool,
     ) -> Result<(String, Value), OpError> {
         let settings = self.settings()?;
-        let profile = self.profile_in(&settings);
+        let profile = self.tools_profile_in(&settings);
         let listed: Vec<&str> = tools::listed(profile, &self.inner.toolsets)
             .map(|(t, _)| t.name)
             .collect();
@@ -553,16 +573,25 @@ impl Server {
         })
     }
 
+    /// The caller that looks up what a watched resource means: the agent
+    /// itself for its proposals, the server's own reads for the rest.
+    fn watch_context(&self, resource: &Resource) -> Result<gk_engine::Context, OpError> {
+        match resource {
+            Resource::Proposals => self.agent_context(),
+            _ => Ok(self.lookup_context()),
+        }
+    }
+
     /// What watching each of `uris` means; the ones that name nothing or
     /// can't be read are left out. At most [`resources::MAX_WATCHED`].
     fn resolve_all<'a>(
         &self,
         uris: impl IntoIterator<Item = &'a String>,
     ) -> BTreeMap<String, Target> {
-        let ctx = self.lookup_context();
         uris.into_iter()
             .filter_map(|uri| {
                 let resource = Resource::parse(uri)?;
+                let ctx = self.watch_context(&resource).ok()?;
                 Target::resolve(&self.inner.engine, &ctx, &resource)
                     .ok()
                     .map(|t| (uri.clone(), t))
@@ -797,7 +826,7 @@ impl ServerHandler for Server {
             .settings()
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         let listing = Listing {
-            profile: self.profile_in(&settings),
+            profile: self.tools_profile_in(&settings),
             can_ask: Asker::of(&context).is_some(),
             confirmations: confirmations_on(&settings),
         };
@@ -908,7 +937,7 @@ impl ServerHandler for Server {
         context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, McpError> {
         self.note_client(context.client_info());
-        Ok(ListResourcesResult::default())
+        Ok(ListResourcesResult::with_all_items(resources::fixed()))
     }
 
     async fn list_resource_templates(
@@ -952,7 +981,9 @@ impl ServerHandler for Server {
         self.note_client(context.client_info());
         let resource = Resource::parse(&request.uri)
             .ok_or_else(|| protocol_error(&resources::unknown(&request.uri)))?;
-        let target = Target::resolve(&self.inner.engine, &self.lookup_context(), &resource)
+        let target = self
+            .watch_context(&resource)
+            .and_then(|ctx| Target::resolve(&self.inner.engine, &ctx, &resource))
             .map_err(|e| protocol_error(&e))?;
         {
             let mut watched = self

@@ -187,6 +187,12 @@
       "ports": { "ui": 5310, "bridge": 5320 }
     },
     {
+      "name": "approvals",
+      "config": "playwright.approvals.config.ts",
+      "about": "the Approvals inbox for changes agents proposed, on sample data",
+      "ports": { "ui": 5326 }
+    },
+    {
       "name": "pseudo",
       "config": "playwright.pseudo.config.ts",
       "about": "screenshots in a pseudo-locale, on the development server (the pseudo suite)",

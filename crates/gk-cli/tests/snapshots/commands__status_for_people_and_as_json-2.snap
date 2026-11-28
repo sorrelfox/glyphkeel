@@ -22,8 +22,14 @@ expression: "ws.ok(&[\"workspace\", \"--json\"])"
   "id": "[id]",
   "name": "Personal",
   "program_version": [version],
-  "schema_version": 23,
+  "schema_version": 24,
   "settings": {
+    "agent_approvals": {
+      "expire_days": 14,
+      "full": "off",
+      "read_only": "off",
+      "standard": "off"
+    },
     "agent_confirmations": true,
     "agent_limits": {
       "read_burst": 60,

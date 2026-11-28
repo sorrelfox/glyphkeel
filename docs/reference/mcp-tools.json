@@ -6,6 +6,7 @@
       "get_activity",
       "get_digest",
       "revert_changes",
+      "get_proposals",
       "list_projects",
       "get_project",
       "list_folders",
@@ -126,6 +127,7 @@
       "search",
       "get_activity",
       "get_digest",
+      "get_proposals",
       "list_projects",
       "get_project",
       "list_folders",
@@ -171,6 +173,7 @@
       "get_activity",
       "get_digest",
       "revert_changes",
+      "get_proposals",
       "list_projects",
       "get_project",
       "list_folders",
@@ -400,6 +403,26 @@
                 ],
                 "type": "object"
               },
+              "approvals": {
+                "description": "For an agent: which of its changes wait for the person's approval\n(`off`, `destructive` or `all_writes`); such a change returns\n`pending_approval` with the proposal's ID. Left out for the person.",
+                "oneOf": [
+                  {
+                    "const": "off",
+                    "description": "None: the agent's profile decides alone.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "destructive",
+                    "description": "Changes that move items to the trash or delete for good.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "all_writes",
+                    "description": "Every change.",
+                    "type": "string"
+                  }
+                ]
+              },
               "profile": {
                 "description": "The agent's profile, after the workspace's cap; left out for the\nperson.",
                 "oneOf": [
@@ -475,6 +498,84 @@
             "additionalProperties": false,
             "description": "The workspace settings.",
             "properties": {
+              "agent_approvals": {
+                "additionalProperties": false,
+                "description": "Which changes of agents wait for the person's approval, per\nprofile, and how long a proposal waits. Only the person sets it, in\nthe app.",
+                "properties": {
+                  "expire_days": {
+                    "description": "Days a proposal waits before it expires, 1 to 365.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "full": {
+                    "description": "For full agents.",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "read_only": {
+                    "description": "For read-only agents: `off` (their changes are refused) or\n`all_writes` (they may propose the changes a standard agent makes).",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "standard": {
+                    "description": "For standard agents.",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "read_only",
+                  "standard",
+                  "full",
+                  "expire_days"
+                ],
+                "type": "object"
+              },
               "agent_confirmations": {
                 "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
                 "type": "boolean"
@@ -605,6 +706,7 @@
               "agent_max_profile",
               "agent_confirmations",
               "agent_limits",
+              "agent_approvals",
               "timer_reminder_hours"
             ],
             "type": "object"
@@ -1231,6 +1333,10 @@
                   ],
                   "type": "object"
                 },
+                "approved_by_person": {
+                  "description": "Whether the agent proposed this change and the person approved it\nlater.",
+                  "type": "boolean"
+                },
                 "at": {
                   "description": "When (RFC 3339, UTC).",
                   "type": "string"
@@ -1727,6 +1833,11 @@
                           "type": "string"
                         },
                         {
+                          "const": "pending_approval",
+                          "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                          "type": "string"
+                        },
+                        {
                           "const": "busy",
                           "description": "Another program kept the workspace locked; trying again later works.",
                           "type": "string"
@@ -1836,6 +1947,11 @@
                               {
                                 "const": "rate_limited",
                                 "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pending_approval",
+                                "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                                 "type": "string"
                               },
                               {
@@ -2502,6 +2618,410 @@
         "type": "object"
       },
       "title": "Revert changes",
+      "toolset": "workspace"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Your proposed changes"
+      },
+      "covers": [
+        "proposal.list",
+        "proposal.get"
+      ],
+      "description": "Lists the changes you proposed that wait for, or got, the person's decision, newest first. When the workspace says your changes need approval (get_workspace shows `caller.approvals`), a changing tool returns a `pending_approval` error with a proposal ID instead of making the change: the change is kept, with a preview of what it would change, until the person approves it (it then runs as you, and `group` is its history group) or rejects it (`reason` says why). Don't send a pending change again. Filter by `status` (\"pending\", \"approved\", \"rejected\", \"expired\"), `session` (\"current\" for this session) or `ids`. Subscribe to glyphkeel://proposals to hear when one is decided. Example: get_proposals {\"status\": \"pending\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which proposals to list.",
+        "properties": {
+          "ids": {
+            "description": "Only these proposals, by ID.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "At most this many, newest first (default 50, at most 200).",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session": {
+            "description": "Only proposals of this agent session (an ID, or `current` for an\nagent's own).",
+            "type": "string"
+          },
+          "status": {
+            "description": "Only proposals with this status.",
+            "oneOf": [
+              {
+                "const": "pending",
+                "description": "Waiting for the person.",
+                "type": "string"
+              },
+              {
+                "const": "approving",
+                "description": "The person approved it and it is running now. One that stays so\n(`interrupted`) was stopped while it ran: whether it changed\nanything shows in the activity log.",
+                "type": "string"
+              },
+              {
+                "const": "approved",
+                "description": "The person approved it and it ran.",
+                "type": "string"
+              },
+              {
+                "const": "rejected",
+                "description": "The person rejected it.",
+                "type": "string"
+              },
+              {
+                "const": "expired",
+                "description": "Nobody decided in time.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "title": "ProposalListInput",
+        "type": "object"
+      },
+      "name": "get_proposals",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "Proposals, newest first.",
+        "properties": {
+          "items": {
+            "description": "The proposals.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A change an agent proposed.",
+              "properties": {
+                "agent": {
+                  "additionalProperties": false,
+                  "description": "The agent.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person, agent or automation rule.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "automation",
+                          "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "changes": {
+                  "description": "What it would change, as the preview found it.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "One item a proposal would change, with each field before and after, as\nthe preview found it when the agent proposed it.",
+                    "properties": {
+                      "entity": {
+                        "description": "What kind of item.",
+                        "type": "string"
+                      },
+                      "fields": {
+                        "additionalProperties": {
+                          "additionalProperties": false,
+                          "description": "One field's change. A side is left out when the field had no value.",
+                          "properties": {
+                            "after": {
+                              "description": "The value after."
+                            },
+                            "before": {
+                              "description": "The value before."
+                            },
+                            "truncated": {
+                              "description": "Whether a long text value was cut to its first 500 characters, as\nin every list; the item itself holds the whole text.",
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "description": "The changed fields.",
+                        "type": "object"
+                      },
+                      "id": {
+                        "description": "The item's ID; for an item the change creates, the ID the preview\ngave it (the real one differs).",
+                        "type": "string"
+                      },
+                      "project": {
+                        "description": "The item's project, if any.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "entity",
+                      "id",
+                      "fields"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "claimed_at": {
+                  "description": "For one being approved: when the approval started.",
+                  "type": "string"
+                },
+                "conflicts": {
+                  "description": "For a waiting proposal: the fields that changed since, which\napproving would overwrite. Empty when nothing changed.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A field that changed since the agent proposed the change.",
+                    "properties": {
+                      "entity": {
+                        "description": "What kind of item.",
+                        "type": "string"
+                      },
+                      "field": {
+                        "description": "The field.",
+                        "type": "string"
+                      },
+                      "id": {
+                        "description": "The item's ID.",
+                        "type": "string"
+                      },
+                      "now": {
+                        "description": "Its value now."
+                      },
+                      "then": {
+                        "description": "Its value when the agent proposed the change."
+                      }
+                    },
+                    "required": [
+                      "entity",
+                      "id",
+                      "field"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "description": "When the agent proposed it (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "decided_at": {
+                  "description": "When the person decided, or when it expired.",
+                  "type": "string"
+                },
+                "decided_by": {
+                  "additionalProperties": false,
+                  "description": "Who decided.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person, agent or automation rule.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "automation",
+                          "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "expires_at": {
+                  "description": "When it expires while nobody decides.",
+                  "type": "string"
+                },
+                "group": {
+                  "description": "The history group of the approved change, for revert.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The proposal's ID.",
+                  "type": "string"
+                },
+                "input": {
+                  "description": "The operation's input, as the agent sent it."
+                },
+                "interrupted": {
+                  "description": "For one being approved: whether the program running it stopped\nbefore it ended (it has run for more than ten minutes). It is never\nrun again by itself; the person can only reject it.",
+                  "type": "boolean"
+                },
+                "last_error": {
+                  "description": "Why the last approval failed, when it went back to waiting.",
+                  "type": "string"
+                },
+                "op": {
+                  "description": "The operation it runs (`task.update`).",
+                  "type": "string"
+                },
+                "previewed": {
+                  "description": "Whether the change could be previewed: changes that read or write\nfiles outside the workspace are kept without a preview.",
+                  "type": "boolean"
+                },
+                "profile": {
+                  "description": "The profile the agent asked for.",
+                  "oneOf": [
+                    {
+                      "const": "read-only",
+                      "description": "Reads only.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "standard",
+                      "description": "Reads, changes and moves to the trash; nothing permanent.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "full",
+                      "description": "Everything except operations on the application itself.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "project": {
+                  "description": "The project of what it changes, if any.",
+                  "type": "string"
+                },
+                "reason": {
+                  "description": "Why the person rejected it.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "The agent session it came from.",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "Where it stands.",
+                  "oneOf": [
+                    {
+                      "const": "pending",
+                      "description": "Waiting for the person.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "approving",
+                      "description": "The person approved it and it is running now. One that stays so\n(`interrupted`) was stopped while it ran: whether it changed\nanything shows in the activity log.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "approved",
+                      "description": "The person approved it and it ran.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "rejected",
+                      "description": "The person rejected it.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "expired",
+                      "description": "Nobody decided in time.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "summary": {
+                  "description": "What the operation does, in one sentence.",
+                  "type": "string"
+                },
+                "task": {
+                  "additionalProperties": false,
+                  "description": "The task it changes, as it is now; left out when it changes no\ntask or the task is gone.",
+                  "properties": {
+                    "id": {
+                      "description": "The task's ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key (`TM-41`).",
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "key",
+                    "title"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "op",
+                "summary",
+                "input",
+                "status",
+                "created_at",
+                "expires_at",
+                "agent",
+                "profile",
+                "changes",
+                "previewed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pending": {
+            "description": "How many of the caller's proposals wait for the person: an agent's\nown, or every agent's for the person.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total": {
+            "description": "How many match in all.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "pending"
+        ],
+        "title": "ProposalList",
+        "type": "object"
+      },
+      "title": "Your proposed changes",
       "toolset": "workspace"
     },
     {
@@ -15452,6 +15972,11 @@
                               "type": "string"
                             },
                             {
+                              "const": "pending_approval",
+                              "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                              "type": "string"
+                            },
+                            {
                               "const": "busy",
                               "description": "Another program kept the workspace locked; trying again later works.",
                               "type": "string"
@@ -15649,6 +16174,11 @@
                               {
                                 "const": "rate_limited",
                                 "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pending_approval",
+                                "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                                 "type": "string"
                               },
                               {
@@ -16220,6 +16750,11 @@
                         "type": "string"
                       },
                       {
+                        "const": "pending_approval",
+                        "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                        "type": "string"
+                      },
+                      {
                         "const": "busy",
                         "description": "Another program kept the workspace locked; trying again later works.",
                         "type": "string"
@@ -16417,6 +16952,11 @@
                         {
                           "const": "rate_limited",
                           "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pending_approval",
+                          "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                           "type": "string"
                         },
                         {
@@ -17246,6 +17786,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "pending_approval",
+                            "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -17443,6 +17988,11 @@
                             {
                               "const": "rate_limited",
                               "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "pending_approval",
+                              "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                               "type": "string"
                             },
                             {
@@ -18280,6 +18830,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "pending_approval",
+                            "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -18477,6 +19032,11 @@
                             {
                               "const": "rate_limited",
                               "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "pending_approval",
+                              "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                               "type": "string"
                             },
                             {
@@ -19052,6 +19612,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "pending_approval",
+                            "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -19249,6 +19814,11 @@
                             {
                               "const": "rate_limited",
                               "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "pending_approval",
+                              "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                               "type": "string"
                             },
                             {
@@ -19632,6 +20202,11 @@
                         {
                           "const": "rate_limited",
                           "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pending_approval",
+                          "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                           "type": "string"
                         },
                         {
@@ -20164,6 +20739,11 @@
                   {
                     "const": "rate_limited",
                     "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pending_approval",
+                    "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                     "type": "string"
                   },
                   {
@@ -60399,6 +60979,10 @@
                         ],
                         "type": "object"
                       },
+                      "approved_by_person": {
+                        "description": "Whether the agent proposed this change and the person approved it\nlater.",
+                        "type": "boolean"
+                      },
                       "at": {
                         "description": "When (RFC 3339, UTC).",
                         "type": "string"
@@ -61335,6 +61919,11 @@
                           "type": "string"
                         },
                         {
+                          "const": "pending_approval",
+                          "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                          "type": "string"
+                        },
+                        {
                           "const": "busy",
                           "description": "Another program kept the workspace locked; trying again later works.",
                           "type": "string"
@@ -61435,6 +62024,11 @@
                               {
                                 "const": "rate_limited",
                                 "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pending_approval",
+                                "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                                 "type": "string"
                               },
                               {
@@ -62501,6 +63095,10 @@
                   ],
                   "type": "object"
                 },
+                "approved_by_person": {
+                  "description": "Whether the agent proposed this change and the person approved it\nlater.",
+                  "type": "boolean"
+                },
                 "at": {
                   "description": "When (RFC 3339, UTC).",
                   "type": "string"
@@ -63437,6 +64035,11 @@
                     "type": "string"
                   },
                   {
+                    "const": "pending_approval",
+                    "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
+                    "type": "string"
+                  },
+                  {
                     "const": "busy",
                     "description": "Another program kept the workspace locked; trying again later works.",
                     "type": "string"
@@ -63537,6 +64140,11 @@
                         {
                           "const": "rate_limited",
                           "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pending_approval",
+                          "description": "The change was not made: the workspace keeps it as a proposal that\nwaits for the person's approval; `details.proposal` is its ID.",
                           "type": "string"
                         },
                         {
@@ -76028,6 +76636,84 @@
             "additionalProperties": false,
             "description": "All settings, after the change.",
             "properties": {
+              "agent_approvals": {
+                "additionalProperties": false,
+                "description": "Which changes of agents wait for the person's approval, per\nprofile, and how long a proposal waits. Only the person sets it, in\nthe app.",
+                "properties": {
+                  "expire_days": {
+                    "description": "Days a proposal waits before it expires, 1 to 365.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "full": {
+                    "description": "For full agents.",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "read_only": {
+                    "description": "For read-only agents: `off` (their changes are refused) or\n`all_writes` (they may propose the changes a standard agent makes).",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "standard": {
+                    "description": "For standard agents.",
+                    "oneOf": [
+                      {
+                        "const": "off",
+                        "description": "None: the agent's profile decides alone.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "destructive",
+                        "description": "Changes that move items to the trash or delete for good.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "all_writes",
+                        "description": "Every change.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "read_only",
+                  "standard",
+                  "full",
+                  "expire_days"
+                ],
+                "type": "object"
+              },
               "agent_confirmations": {
                 "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
                 "type": "boolean"
@@ -76158,6 +76844,7 @@
               "agent_max_profile",
               "agent_confirmations",
               "agent_limits",
+              "agent_approvals",
               "timer_reminder_hours"
             ],
             "type": "object"

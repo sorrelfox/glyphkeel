@@ -59,6 +59,10 @@ import {
   type OpMap,
   OP_SAFETY,
   type Priority,
+  type Proposal,
+  type ProposalApproveInput,
+  type ProposalApproveResult,
+  type ProposalOutcome,
   type Project,
   type ProjectChange,
   type ProjectIcon,
@@ -101,6 +105,7 @@ import { moveDependents, scheduleOf } from "./schedule";
 import { type FakeHost, type NewTask } from "./host";
 import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
 import { templateHandlers } from "./templates";
+import { chosenProposals, conflictsOf, decided, expireDays, listProposals, ProposalRefusal, rejectProposals, shownProposal, statusAt, storedProposal } from "./proposals";
 import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRun, run as ruleRun, updateRule, type RuleEvent } from "./automation";
 
 /** The Gantt chart's layout until the person changes it. */
@@ -141,6 +146,8 @@ const MAX_TITLE = 500;
 /** The limits on agent sessions, and the engine's defaults: no limit on new tasks. */
 const AGENT_LIMITS: readonly AgentLimit[] = ["writes_per_minute", "new_tasks_per_day", "trash_items_per_call", "trash_items_per_hour", "read_burst", "reads_per_minute", "read_mb_per_minute"];
 const DEFAULT_AGENT_LIMITS: Readonly<AgentLimits> = { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50, read_burst: 60, reads_per_minute: 600, read_mb_per_minute: 8 };
+/** No approvals: a workspace's setting until the person turns them on. */
+const DEFAULT_APPROVALS: Readonly<Settings["agent_approvals"]> = { read_only: "off", standard: "off", full: "off", expire_days: 14 };
 const MAX_DEPTH = 3;
 const PROJECT_ICON_NAMES: ReadonlySet<string> = new Set(PROJECT_ICONS);
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/;
@@ -302,6 +309,9 @@ export class FakeWorkspace {
     if (op === "history.undo" || op === "history.redo") {
       return this.undoOrRedo(op);
     }
+    if (op === "proposal.approve") {
+      return this.refusing(() => this.approveProposals(input as ProposalApproveInput));
+    }
     const handler = (this.handlers as Record<string, ((input: unknown) => unknown) | undefined>)[op];
     if (!handler) {
       fail("not_found", `There is no operation "${op}".`);
@@ -341,9 +351,169 @@ export class FakeWorkspace {
       this.record(before, "automation.run", group, one.changes, { actor: { kind: "automation", name: one.name }, via: by?.via ?? "app" });
       answer.changes.push(...one.changes);
     }
-    this.undoStack.push({ state: before, op, group });
-    this.redoStack = [];
+    // Decisions on proposals are no Undo step, as in the engine.
+    if (!op.startsWith("proposal.")) {
+      this.undoStack.push({ state: before, op, group });
+      this.redoStack = [];
+    }
     return { output: withGroup(answer.output, group), changes: { group, seq: this.state.seq, changes: answer.changes } };
+  }
+
+  /** Runs `work`, with a proposal's refusal as the engine's error. */
+  private refusing<T>(work: () => T): T {
+    try {
+      return work();
+    } catch (error: unknown) {
+      if (error instanceof ProposalRefusal) {
+        fail(error.code, error.message, { details: error.details });
+      }
+      throw error;
+    }
+  }
+
+  /** A task's key by its ID, while it exists. */
+  private keyOfId = (taskId: string): string | undefined => {
+    const task = this.state.tasks.find((candidate) => candidate.id === taskId);
+    return task && this.keyOf(task);
+  };
+
+  /**
+   * Keeps an agent's call as a proposal instead of making it, as the engine
+   * does when the workspace says the agent's changes need approval: the
+   * operation runs once to see what it would change, and that is taken back.
+   * Returns the proposal's ID. For tests and the sample data.
+   */
+  propose(op: string, input: unknown, agent: { name: string; session: string }, at: Date = this.today()): string {
+    const handler = (this.handlers as Record<string, ((input: unknown) => unknown) | undefined>)[op];
+    if (!handler) {
+      fail("not_found", `There is no operation "${op}".`);
+    }
+    const before = structuredClone(this.state);
+    this.byAgent = true;
+    let changes: Proposal["changes"] = [];
+    let taskId: string | undefined;
+    let projectId: string | undefined;
+    try {
+      const answer = handler(structuredClone(input) ?? {});
+      if (isResult(answer)) {
+        changes = answer.changes.map((change) => {
+          const project = this.state.projects.find((candidate) => candidate.key === change.project);
+          return { entity: change.entity, id: change.id, fields: recordedFields(before, this.state, change, (task) => this.keyOf(task)), ...some("project", project?.id) };
+        });
+        projectId = changes.find((change) => change.project !== undefined)?.project;
+        const first = changes.find((change) => !(change.entity === "task" && "created" in change.fields));
+        if (first) {
+          taskId = this.taskOfEntry({ entity: first.entity, id: first.id } as ActivityEntry)?.id;
+        }
+      }
+    } finally {
+      this.state = before;
+      this.byAgent = false;
+    }
+    const id = `p-${String((this.state.proposals?.length ?? 0) + 1)}`;
+    const task = taskId === undefined ? undefined : this.state.tasks.find((candidate) => candidate.id === taskId);
+    const summary = `Run ${op}.`;
+    const proposal: Proposal = {
+      id,
+      op,
+      summary,
+      input,
+      status: "pending",
+      created_at: at.toISOString(),
+      expires_at: at.toISOString(),
+      agent: { kind: "agent", name: agent.name },
+      session: agent.session,
+      profile: "standard",
+      ...some("project", projectId),
+      ...(task ? { task: { id: task.id, key: this.keyOf(task), title: task.title } } : {}),
+      changes,
+      previewed: true,
+    };
+    this.state.proposals = [...(this.state.proposals ?? []), proposal];
+    return id;
+  }
+
+  /** Puts a proposal in the state an approval left it in, for the sample data and tests. */
+  setProposal(id: string, patch: Partial<Pick<Proposal, "status" | "claimed_at" | "last_error">>): void {
+    Object.assign(storedProposal(this.state, id), patch);
+  }
+
+  /**
+   * `proposal.approve`: each chosen proposal runs as its agent, oldest
+   * first, through `call`, so it has its own history group and Undo step,
+   * and its history says the person approved it. One that changed since (and
+   * isn't forced) or fails now stays waiting and says why.
+   */
+  private approveProposals(input: ProposalApproveInput): FakeAnswer {
+    const now = this.today();
+    const rows = chosenProposals(this.state, input, now);
+    const items: ProposalOutcome[] = [];
+    const changes: EntityChange[] = [];
+    let last: { group: string; seq: number } | undefined;
+    for (const row of rows) {
+      const days = expireDays(this.state);
+      const status = statusAt(row, now, days);
+      const refusal =
+        status !== "pending"
+          ? decided(row, status)
+          : input.force !== true && conflictsOf(this.state, row).length > 0
+            ? new ProposalRefusal("conflict", `Since proposal ${row.id} was made, fields it changes were changed again.`, { proposal: row.id, message_id: "proposal-stale", args: { id: row.id, count: String(conflictsOf(this.state, row).length) } })
+            : undefined;
+      if (refusal) {
+        items.push({ approved: false, error: { code: refusal.code, message: refusal.message, details: refusal.details }, proposal: shownProposal(this.state, row, now, this.keyOfId) });
+        continue;
+      }
+      // Marked approved before it runs, so that undoing the change leaves the decision as it is, as in the engine.
+      row.status = "approved";
+      row.decided_at = now.toISOString();
+      row.decided_by = { kind: "user", name: "You" };
+      try {
+        const answer = this.call(row.op, structuredClone(row.input), { actor: { kind: "agent", name: row.agent.name }, via: "mcp" });
+        const group = answer.changes?.group ?? `g-${String(this.state.seq)}`;
+        // The stored row is in the state the call kept.
+        const kept = storedProposal(this.state, row.id);
+        kept.group = group;
+        delete kept.last_error;
+        for (const entry of this.state.activity) {
+          if (entry.group === group) {
+            entry.approved_by_person = true;
+            if (row.session !== undefined) {
+              entry.session = row.session;
+            }
+          }
+        }
+        this.state.activity.push({
+          actor: { kind: "agent", name: row.agent.name },
+          approved_by_person: true,
+          at: now.toISOString(),
+          entity: "proposal",
+          fields: { status: { before: "pending", after: "approved" } },
+          group,
+          id: row.id,
+          op: row.op,
+          seq: this.state.seq,
+          via: "mcp",
+          ...some("session", row.session),
+        });
+        changes.push(...(answer.changes?.changes ?? []), { entity: "proposal", id: row.id, fields: ["status"] });
+        last = answer.changes ? { group: answer.changes.group, seq: answer.changes.seq } : last;
+        items.push({ approved: true, proposal: shownProposal(this.state, kept, now, this.keyOfId) });
+      } catch (error: unknown) {
+        const kept = storedProposal(this.state, row.id);
+        kept.status = "pending";
+        delete kept.decided_at;
+        delete kept.decided_by;
+        if (!(error instanceof FakeError)) {
+          throw error;
+        }
+        // Back to waiting, saying why, as the engine does: it stores the error's text.
+        // eslint-disable-next-line no-restricted-syntax -- stored as data, as the engine stores it; not shown from here
+        kept.last_error = error.error.message;
+        items.push({ approved: false, error: error.error, proposal: shownProposal(this.state, kept, now, this.keyOfId) });
+      }
+    }
+    const output: ProposalApproveResult = { items, approved: items.filter((item) => item.approved).length };
+    return last ? { output, changes: { ...last, changes } } : { output };
   }
 
   /**
@@ -371,7 +541,8 @@ export class FakeWorkspace {
   private settingsNow(): Settings {
     const settings = this.state.settings;
     const saved = (settings as Partial<Settings>).agent_limits;
-    return { ...settings, agent_limits: { ...(saved ?? DEFAULT_AGENT_LIMITS) } };
+    const approvals = (settings as Partial<Settings>).agent_approvals;
+    return { ...settings, agent_limits: { ...(saved ?? DEFAULT_AGENT_LIMITS) }, agent_approvals: { ...(approvals ?? DEFAULT_APPROVALS) } };
   }
 
   /** Adds one command's changes to the activity log. */
@@ -2921,6 +3092,9 @@ export class FakeWorkspace {
       return { items, total: all.length, ...(end < all.length ? { next_cursor: String(end) } : {}) };
     },
     "agent.sessions": () => ({ items: [], total: 0 }),
+    "proposal.list": (input) => listProposals(this.state, input, this.today(), this.keyOfId),
+    "proposal.get": ({ id }) => this.refusing(() => shownProposal(this.state, storedProposal(this.state, id), this.today(), this.keyOfId)),
+    "proposal.reject": (input) => this.refusing(() => rejectProposals(this.state, input, this.today(), this.keyOfId)),
     "project.list": ({ include_archived }) => {
       const ordered: FakeProject[] = [];
       const visit = (parent: string | null) => {
@@ -3691,6 +3865,19 @@ export class FakeWorkspace {
       if (typeof patch.confirmations === "boolean" && patch.confirmations !== before.agent_confirmations) {
         this.state.settings.agent_confirmations = patch.confirmations;
         changed.push("agent_confirmations");
+      }
+      const approvals = patch.approvals ?? undefined;
+      if (approvals !== undefined) {
+        if (approvals.read_only === "destructive") {
+          fail("invalid", "Read-only agents propose every change or none: use off or all_writes.", { details: { path: "approvals.read_only", message_id: "proposal-read-only-mode" } });
+        }
+        if (!Number.isInteger(approvals.expire_days) || approvals.expire_days < 1 || approvals.expire_days > 365) {
+          fail("invalid", `approvals.expire_days must be from 1 to 365; got ${String(approvals.expire_days)}.`, { details: { path: "approvals.expire_days" } });
+        }
+        if (JSON.stringify(approvals) !== JSON.stringify(before.agent_approvals)) {
+          this.state.settings.agent_approvals = { ...approvals };
+          changed.push("agent_approvals");
+        }
       }
       return { output: { changed, settings: this.settingsNow() }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },

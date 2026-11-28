@@ -564,3 +564,8 @@
   margin: 0;
   color: var(--fg-muted);
 }
+
+/* A group of rows marked for tests, laid out as if the rows stood alone. */
+.contents {
+  display: contents;
+}

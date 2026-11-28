@@ -70,15 +70,19 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   dashboard: ["dashboard.list"],
   // Automation rules: their list, the one shown and the run log.
   automation_rule: ["automation.list", "automation.get", "automation.runs"],
+  // Proposals: the Approvals screen and the sidebar's count.
+  proposal: ["proposal.list", "proposal.get"],
   wiki_page: ["trash.list", "wiki.search", "wiki.get", "wiki.list", "wiki.history", "description.revision", "search.query", "markdown.render", ...LINKS],
 };
 
 /**
  * Every committed change shows in the activity log and the digest, and
  * may have set automation rules off. A dashboard's widgets read any of the workspace's
- * data, so each re-reads its value: one call per widget on screen.
+ * data, so each re-reads its value: one call per widget on screen. A
+ * waiting proposal shows what changed since it was made, which any change
+ * can alter.
  */
-const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get"];
+const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get", "proposal.list", "proposal.get"];
 
 /**
  * The query prefixes to invalidate for one event. A kind of item without an

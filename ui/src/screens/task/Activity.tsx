@@ -606,6 +606,11 @@ function HistoryList({
                   {t("history-confirmed-by-you")}
                 </span>
               )}
+              {entry.approved_by_person === true && (
+                <span className={classes("faint", styles.small)} data-testid="history-approved">
+                  {t("history-approved-by-you")}
+                </span>
+              )}
             </div>
             {first && revertible(entry) && !readOnly && (
               <Button className="btn flat icon sm" aria-label={t("history-revert", { time: moment(entry.at) })} onPress={() => { revert(entry.group); }}>

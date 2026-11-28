@@ -520,6 +520,29 @@ fn raising_what_agents_may_do_asks_natively_and_lowering_does_not() {
     assert_eq!(refused.code, ErrorCode::Forbidden);
     assert_eq!(confirmations(&workspace), false);
     assert_eq!(asked.load(Ordering::SeqCst), 3);
+
+    // Making agents' changes wait goes through; letting them run without
+    // the approval again asks.
+    let approvals = |standard: &str, days: u32| {
+        json!({ "max_profile": "full", "approvals": {
+            "read_only": "all_writes", "standard": standard, "full": "off", "expire_days": days } })
+    };
+    workspace
+        .call("agent.policy.update", approvals("all_writes", 14), None)
+        .unwrap();
+    workspace
+        .call("agent.policy.update", approvals("all_writes", 30), None)
+        .unwrap();
+    assert_eq!(asked.load(Ordering::SeqCst), 3);
+    let refused = workspace
+        .call("agent.policy.update", approvals("destructive", 30), None)
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::Forbidden);
+    assert_eq!(asked.load(Ordering::SeqCst), 4);
+    let standard =
+        workspace.call("settings.get", Value::Null, None).unwrap()["agent_approvals"]["standard"]
+            .clone();
+    assert_eq!(standard, "all_writes");
     workspace.close();
 }
 

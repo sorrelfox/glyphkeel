@@ -29,7 +29,7 @@ use crate::context::{ConfirmRequest, Confirmation, Context};
 use crate::events::{self, Bus};
 use crate::failure::{Failure, store_error};
 use crate::messages;
-use crate::ops::{history as history_ops, settings};
+use crate::ops::{history as history_ops, proposal as proposal_ops, settings};
 use crate::registry::{CommandFn, Entry, Env, Handler, QueryCtx, QueryFn, Registry};
 use crate::time::{Clock, system_clock};
 use crate::write::{CommandMeta, WriteCtx};
@@ -152,6 +152,8 @@ pub struct Engine {
     commit: Mutex<()>,
     pub(crate) upgraded: AtomicBool,
     undo: Mutex<UndoStacks>,
+    /// Held while proposals are approved.
+    approvals: Mutex<()>,
     pending_reads: Mutex<HashMap<Id, i64>>,
     /// Reads refused by each session's read limits, not yet recorded, and
     /// when the session's count was last written.
@@ -304,6 +306,7 @@ impl Engine {
             commit: Mutex::new(()),
             upgraded: AtomicBool::new(false),
             undo: Mutex::new(UndoStacks::default()),
+            approvals: Mutex::new(()),
             pending_reads: Mutex::new(HashMap::new()),
             pending_limited: Mutex::new(HashMap::new()),
             jobs: Mutex::new(Jobs {
@@ -431,28 +434,96 @@ impl Engine {
             .parts
             .map(|parts| parts(&input).into_iter().filter_map(descriptor).collect())
             .unwrap_or_default();
-        let profile = self.authorize(ctx, entry.desc, &parts)?;
+        let (profile, proposing) = self.authorize(ctx, entry.desc, &parts)?;
         self.confirm(ctx, entry.desc, &parts, &input)?;
+        if proposing {
+            return Err(match self.propose(ctx, entry, input) {
+                Ok(pending) | Err(pending) => pending,
+            });
+        }
 
         match &entry.handler {
             Handler::Query(f) => self.run_query(ctx, profile, f, input),
             Handler::Command(f) => {
                 let request = request_key(entry.desc, ctx, &input);
-                self.execute_once(ctx, entry.desc.id, Arc::clone(f), input, request)
+                let f = if ctx.approved.is_some() {
+                    proposal_ops::settling(f)
+                } else {
+                    Arc::clone(f)
+                };
+                self.execute_once(ctx, entry.desc.id, f, input, request)
                     .map(|(output, _)| output)
             }
-            Handler::Engine(f) => f(self, ctx, input),
+            Handler::Engine(f) => {
+                if ctx.approved.is_none() {
+                    return f(self, ctx, input);
+                }
+                // Claimed first, so no other program runs it too; given
+                // back when it fails, marked approved when it ran.
+                proposal_ops::claim(self, ctx)?;
+                match f(self, ctx, input) {
+                    Ok(output) => {
+                        proposal_ops::settle_after(self, ctx, &output)?;
+                        Ok(output)
+                    }
+                    Err(e) => {
+                        if let Err(again) = proposal_ops::release(self, ctx, &e) {
+                            tracing::warn!(error = %again.message, "a failed approval stays claimed");
+                        }
+                        Err(e)
+                    }
+                }
+            }
         }
     }
 
-    /// Who may run `desc` (and each of the `parts` it runs), and the
-    /// agent's effective profile.
+    /// Keeps an agent's change as a proposal for the person instead of
+    /// making it: `Ok` with the `pending_approval` answer, or why it can't
+    /// be proposed (its input or the status rules refuse it).
+    fn propose(&self, ctx: &Context, entry: &Entry, input: Value) -> Result<OpError, OpError> {
+        let desc = entry.desc;
+        let request = request_key(desc, ctx, &input).map(|(caller, id)| format!("{caller} {id}"));
+        let handler = match &entry.handler {
+            Handler::Command(f) => Some(Arc::clone(f)),
+            Handler::Query(_) | Handler::Engine(_) => None,
+        };
+        let f: CommandFn = Arc::new(move |w, _| {
+            proposal_ops::create(w, desc, handler.as_ref(), &input, request.as_deref())
+        });
+        let ctx = ctx.clone().proposing();
+        let (output, _) = self.execute(&ctx, "proposal.create", f, Value::Null)?;
+        let id = output["id"].as_str().unwrap_or_default();
+        Ok(proposal_ops::pending(id))
+    }
+
+    /// Serializes approvals in this process, so one proposal never runs
+    /// twice side by side.
+    pub(crate) fn lock_approvals(&self) -> MutexGuard<'_, ()> {
+        self.approvals
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Puts `group` on the Undo stack, for a change the person made in the
+    /// app through another caller (an approved proposal).
+    pub(crate) fn push_undo(&self, group: Id) {
+        let mut stacks = self.lock_undo();
+        stacks.undo.push(group);
+        if stacks.undo.len() > UNDO_DEPTH {
+            stacks.undo.remove(0);
+        }
+        stacks.redo.clear();
+    }
+
+    /// Who may run `desc` (and each of the `parts` it runs), the agent's
+    /// effective profile, and whether the agent's change waits for the
+    /// person's approval instead of running.
     fn authorize(
         &self,
         ctx: &Context,
         desc: &OpDescriptor,
         parts: &[&'static OpDescriptor],
-    ) -> Result<Option<Profile>, OpError> {
+    ) -> Result<(Option<Profile>, bool), OpError> {
         if desc.is_app_only() {
             let reachable = match ctx.via {
                 Via::App => !ctx.is_agent(),
@@ -468,14 +539,33 @@ impl Engine {
             }
         }
         if !ctx.is_agent() {
-            return Ok(None);
+            return Ok((None, false));
         }
-        let cap = self
+        let settings = self
             .store
             .read(|tx| settings::load(tx).map_err(Failure::from))
-            .map_err(OpError::from)?
-            .agent_max_profile;
+            .map_err(OpError::from)?;
+        let cap = settings.agent_max_profile;
         let profile = ctx.agent_profile_under(cap);
+        // A change the person allowed when asked, or one carrying out an
+        // approved proposal, runs; any other change the approvals setting
+        // covers for this profile is kept as a proposal, and a read-only
+        // agent then proposes what a standard one may do.
+        let riskiest = std::iter::once(desc)
+            .chain(parts.iter().copied())
+            .map(|d| d.safety)
+            .max()
+            .unwrap_or(desc.safety);
+        let proposing = desc.kind == OpKind::Command
+            && !ctx.person_confirmed
+            && ctx.approved.is_none()
+            && !ctx.proposing
+            && settings.agent_approvals.mode(profile).covers(riskiest);
+        let profile = if proposing {
+            ctx.clone().proposing().agent_profile_under(cap)
+        } else {
+            profile
+        };
         let refused = std::iter::once(desc)
             .chain(parts.iter().copied())
             .find(|d| !profile.allows(d.safety));
@@ -495,7 +585,7 @@ impl Engine {
             };
             Err(messages::hint(refusal, hint, &[]).with_detail("profile", profile.as_str()))
         } else {
-            Ok(Some(profile))
+            Ok((Some(profile), proposing))
         }
     }
 
@@ -688,6 +778,7 @@ impl Engine {
         if ctx.via == Via::App
             && !ctx.is_agent()
             && !op.starts_with("history.")
+            && !op.starts_with("proposal.")
             && op != "automation.run"
         {
             let mut stacks = self.lock_undo();

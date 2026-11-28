@@ -314,6 +314,7 @@ fn profiles_and_the_workspace_cap() {
             &AgentPolicyPatch {
                 max_profile: Profile::ReadOnly,
                 confirmations: None,
+                approvals: None,
             },
         )
         .unwrap();
@@ -411,6 +412,7 @@ fn permanent_operations_need_a_confirmation_inside_the_call() {
             &AgentPolicyPatch {
                 max_profile: Profile::Full,
                 confirmations: None,
+                approvals: None,
             },
         )
         .unwrap();
@@ -434,6 +436,7 @@ fn permanent_operations_need_a_confirmation_inside_the_call() {
             &AgentPolicyPatch {
                 max_profile: Profile::ReadOnly,
                 confirmations: None,
+                approvals: None,
             },
         )
         .unwrap();

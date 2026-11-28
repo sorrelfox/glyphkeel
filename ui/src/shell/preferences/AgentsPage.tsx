@@ -14,7 +14,7 @@ import { failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { opPrefix } from "../../data/queries";
 import { skippedReason, useFailureToast } from "../../data/safety";
 import { Switch } from "../../components/Switch";
-import { type AgentLimit, type AgentLimitsPatch, type AgentSession, type Profile } from "../../generated/ops";
+import { type AgentApprovals, type AgentLimit, type AgentLimitsPatch, type AgentSession, type ApprovalMode, type Profile } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { httpSnippet, PORT_MAX, PORT_MIN, servesAgentHttp, useAgentHttp, useChangeAgentHttp } from "../../ipc/agentHttp";
 import { canAddAgentFolders, useAgentFolders, useAppSettings } from "../../ipc/appSettings";
@@ -33,8 +33,9 @@ const BARE_COMMAND: readonly string[] = ["glyphkeel"];
 /**
  * Agents & CLI: where the command-line tool is (and a link to install it),
  * the set-up to copy into common MCP clients, the local HTTP endpoint for
- * clients that can't start a program, the most an agent may do and whether
- * agents may ask you to allow more, the
+ * clients that can't start a program, the most an agent may do, whether
+ * agents may ask you to allow more and which of their changes wait for your
+ * approval, the
  * folders whose files agents may name by path, the limits on each agent session (only the person changes them, here), and
  * the agent sessions, each of which can be reverted.
  */
@@ -421,8 +422,63 @@ function PolicyGroup() {
           {t(settings.data.agent_confirmations ? "agents-ask-on" : "agents-ask-off")}
         </Switch>
       </Row>
+      <ApprovalRows
+        approvals={settings.data.agent_approvals}
+        onChange={(approvals) => {
+          update.mutate(
+            { max_profile: current, approvals },
+            {
+              onSettled: () => {
+                void queryClient.invalidateQueries({ queryKey: opPrefix("settings.get") });
+              },
+            },
+          );
+        }}
+      />
       <Row label={t("agents-raise")} about={t("agents-raise-about")} />
     </Group>
+  );
+}
+
+/** The modes each profile offers: read-only agents propose all their changes or none. */
+const APPROVAL_MODES: Readonly<Record<Profile, readonly ApprovalMode[]>> = {
+  "read-only": ["off", "all_writes"],
+  standard: ["off", "destructive", "all_writes"],
+  full: ["off", "destructive", "all_writes"],
+};
+
+/** Which agents' changes wait for approval, by profile, and the days a proposal waits. */
+function ApprovalRows({ approvals, onChange }: { approvals: AgentApprovals; onChange: (approvals: AgentApprovals) => void }) {
+  const t = useT();
+  const field = (profile: Profile): "read_only" | "standard" | "full" => (profile === "read-only" ? "read_only" : profile);
+  return (
+    <div className={styles.contents} data-approval-rows="">
+      <Row label={t("agents-approvals")} about={t("agents-approvals-about")} />
+      {PROFILES.map((profile) => (
+        <Row key={profile} label={t(`agents-approvals-${profile}`)}>
+          <Select<ApprovalMode>
+            label={t(`agents-approvals-${profile}`)}
+            value={approvals[field(profile)]}
+            options={APPROVAL_MODES[profile].map((mode) => ({ id: mode, label: t(`agents-approvals-${mode.replace("_", "-")}`) }))}
+            onChange={(mode) => {
+              onChange({ ...approvals, [field(profile)]: mode });
+            }}
+          />
+        </Row>
+      ))}
+      <Row label={t("agents-approvals-days")} about={t("agents-approvals-days-about")}>
+        <NumberSetting
+          label={t("agents-approvals-days")}
+          value={approvals.expire_days}
+          min={1}
+          max={365}
+          unit={t("agents-approvals-days-unit", { count: approvals.expire_days })}
+          onSave={(expire_days) => {
+            onChange({ ...approvals, expire_days });
+          }}
+        />
+      </Row>
+    </div>
   );
 }
 

@@ -113,6 +113,10 @@ pub struct ActivityEntry {
     /// through the agent's client.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub confirmed_by_person: bool,
+    /// Whether the agent proposed this change and the person approved it
+    /// later.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub approved_by_person: bool,
 }
 
 /// A task as the activity log names it.

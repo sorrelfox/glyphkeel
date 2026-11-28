@@ -21,6 +21,7 @@ import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen
 import { FlowReportsScreen } from "./screens/reports/FlowReports";
 import { TimeReportScreen } from "./screens/time/TimeReport";
 import { ActivityScreen } from "./screens/safety/ActivityScreen";
+import { ApprovalsScreen } from "./screens/approvals/ApprovalsScreen";
 import { TrashScreen } from "./screens/safety/TrashScreen";
 import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
@@ -122,6 +123,9 @@ const activityRoute = createRoute({
   component: ActivityScreen,
 });
 
+/** Changes agents proposed, waiting for the person's approval. */
+const approvalsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/approvals", component: ApprovalsScreen });
+
 /** A project's board; `task` is the task open in the panel beside it. */
 export const boardRoute = createRoute({
   getParentRoute: () => shellRoute,
@@ -202,7 +206,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, dashboardsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, dashboardsRoute, trashRoute, activityRoute, approvalsRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**

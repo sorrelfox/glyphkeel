@@ -94,7 +94,7 @@ export function materialize(state: FakeState, agent: string, nextId: (prefix: st
   }
 }
 
-const TASK_FIELDS: Record<string, (task: FakeTask) => unknown> = {
+export const TASK_FIELDS: Record<string, (task: FakeTask) => unknown> = {
   title: (task) => task.title,
   description: (task) => task.description,
   status: (task) => task.statusId,
@@ -184,6 +184,12 @@ export function recordedFields(before: FakeState, after: FakeState, change: Enti
       const now = after.relations.find((relation) => relation.id === change.id);
       const link = (relation: typeof old) => relation && { from: relation.from, to: relation.to, kind: relation.kind };
       return { link: pair(link(old), link(now)) };
+    }
+    case "proposal": {
+      // A proposal is recorded by its status: proposed, approved or rejected.
+      const old = before.proposals?.find((proposal) => proposal.id === change.id);
+      const now = after.proposals?.find((proposal) => proposal.id === change.id);
+      return { status: pair(old?.status, now?.status), ...(now?.reason !== undefined && old?.reason === undefined ? { reason: pair(undefined, now.reason) } : {}) };
     }
     default:
       return Object.fromEntries(change.fields.map((field) => [field, {}]));

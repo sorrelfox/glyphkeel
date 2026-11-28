@@ -16,6 +16,7 @@ use std::time::Duration;
 use gk_api::Profile;
 use gk_api::ops::agent::{AgentLimits, AgentLimitsPatch};
 use gk_api::ops::common::{Actor, ActorKind, Via};
+use gk_api::ops::proposal::{AgentApprovals, ApprovalMode};
 use gk_api::{Changed, EntityChange, OpError, Origin};
 use gk_engine::{ConfirmRequest, Confirmation, Context, Engine, EngineConfig, system_clock};
 use gk_store::{WatcherHandle, WorkspaceLayout};
@@ -41,6 +42,25 @@ const LIMITS_OP: &str = "agent.limits.update";
 /// Whether going from `current` to `wanted` lets agents do more.
 fn raises(current: Profile, wanted: Profile) -> bool {
     wanted > current
+}
+
+/// How much of a mode waits for the person: more is stricter.
+const fn strictness(mode: ApprovalMode) -> u8 {
+    match mode {
+        ApprovalMode::Off => 0,
+        ApprovalMode::Destructive => 1,
+        ApprovalMode::AllWrites => 2,
+    }
+}
+
+/// Whether going from `current` to `wanted` lets standard or full agents
+/// make changes without the person's approval that needed it before. A
+/// read-only agent allowed to propose makes no change itself, so that
+/// setting never loosens anything.
+fn loosens(current: &AgentApprovals, wanted: &AgentApprovals) -> bool {
+    [Profile::Standard, Profile::Full]
+        .into_iter()
+        .any(|p| strictness(wanted.mode(p)) < strictness(current.mode(p)))
 }
 
 /// The workspace the app has open, or why it couldn't open it. Every call
@@ -91,6 +111,8 @@ struct Background {
     stop: Arc<AtomicBool>,
     jobs: Option<JoinHandle<()>>,
     reminders: Option<reminders::Running>,
+    /// Shows new proposals of agents; ends with the engine.
+    _proposals: Option<JoinHandle<()>>,
 }
 
 impl Workspace {
@@ -315,7 +337,8 @@ impl Workspace {
         result
     }
 
-    /// Raising the most an agent may do needs the person's native
+    /// Raising the most an agent may do, or letting agents' changes run
+    /// without the approval they needed, needs the person's native
     /// confirmation, so that script in the page can't widen what agents
     /// may do. Lowering it, or setting it again, doesn't ask.
     fn confirm_raise(&self, engine: &Engine, input: &Value) -> Result<(), OpError> {
@@ -343,7 +366,15 @@ impl Workspace {
             .unwrap_or(true);
         let confirmations_on =
             !asks_now && input.get("confirmations").and_then(Value::as_bool) == Some(true);
-        if !raises(current, wanted) && !confirmations_on {
+        let approvals_now = settings
+            .get("agent_approvals")
+            .and_then(|a| serde_json::from_value::<AgentApprovals>(a.clone()).ok())
+            .unwrap_or_default();
+        let approvals_off = input
+            .get("approvals")
+            .and_then(|a| serde_json::from_value::<AgentApprovals>(a.clone()).ok())
+            .is_some_and(|wanted| loosens(&approvals_now, &wanted));
+        if !raises(current, wanted) && !confirmations_on && !approvals_off {
             return Ok(());
         }
         self.ask(POLICY_OP, input, "confirm-agent-raise-refused")
@@ -453,7 +484,8 @@ impl Workspace {
         self.windows.unsubscribe(label);
     }
 
-    /// Starts showing reminders through `notifier`, until the workspace
+    /// Starts showing reminders, and new proposals of agents, through
+    /// `notifier`, until the workspace
     /// closes. Runs whether or not a window is open.
     pub(crate) fn start_reminders(&self, notifier: Arc<dyn Notifier>) {
         lock(&self.reopen).notifier = Some(Arc::clone(&notifier));
@@ -467,6 +499,8 @@ impl Workspace {
         if background.reminders.is_some() {
             return;
         }
+        background._proposals =
+            crate::proposal_notices::start(engine.subscribe(), Arc::clone(&notifier));
         background.reminders = reminders::start(
             Arc::downgrade(&engine),
             engine.subscribe(),
@@ -570,6 +604,7 @@ fn start(
             stop,
             jobs,
             reminders: None,
+            _proposals: None,
         },
     ))
 }
