@@ -61,6 +61,20 @@ notification-missed-many-body = { $more ->
    *[other] They came due while Glyphkeel was closed: { $keys }, …
     }
 
+## The notification of the digest at the start
+
+# Shown once when the app starts, if agents changed something since the
+# person last dismissed the digest on Today.
+notification-digest = { $sessions ->
+    [one] An agent changed things while you were away
+   *[other] { $sessions } agents changed things while you were away
+    }
+# $changes counts the items agents changed; the title names the sessions.
+notification-digest-body = { $changes ->
+    [one] One change. Today shows what it was.
+   *[other] { $changes } changes. Today shows what they were.
+    }
+
 ## The command-line tool
 
 cli-install-nothing = There is no command-line tool to install: the shell finds it already, or it didn't come with the app.

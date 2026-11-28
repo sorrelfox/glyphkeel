@@ -74,11 +74,11 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
 };
 
 /**
- * Every committed change shows in the activity log, and may have set
- * automation rules off. A dashboard's widgets read any of the workspace's
+ * Every committed change shows in the activity log and the digest, and
+ * may have set automation rules off. A dashboard's widgets read any of the workspace's
  * data, so each re-reads its value: one call per widget on screen.
  */
-const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget"];
+const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget", "digest.get"];
 
 /**
  * The query prefixes to invalidate for one event. A kind of item without an

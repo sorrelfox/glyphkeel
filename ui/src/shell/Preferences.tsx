@@ -508,6 +508,16 @@ function NotificationsPage() {
             }}
           />
         </Row>
+        <Row label={t("preferences-digest-notification")} about={t("preferences-digest-notification-about")}>
+          <Switch
+            aria-label={t("preferences-digest-notification")}
+            isDisabled={!app.data || !app.data.notifications}
+            isSelected={app.data?.digest_notification ?? false}
+            onChange={(digest_notification) => {
+              updateApp({ digest_notification });
+            }}
+          />
+        </Row>
       </Group>
       <Group title={t("preferences-reminders")}>
         {settings.isError && <Failure message={failureText(t, settings.error)} />}

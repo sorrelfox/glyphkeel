@@ -1384,7 +1384,9 @@ pub(crate) fn field_removed(
 // ---------------------------------------------------------------------
 // The run log
 
-fn run_row(r: &gk_store::rusqlite::Row<'_>) -> gk_store::rusqlite::Result<AutomationRun> {
+pub(crate) fn run_row(
+    r: &gk_store::rusqlite::Row<'_>,
+) -> gk_store::rusqlite::Result<AutomationRun> {
     let result: String = r.get(4)?;
     let trigger: String = r.get(5)?;
     let error: Option<String> = r.get(10)?;

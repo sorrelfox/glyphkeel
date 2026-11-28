@@ -122,6 +122,8 @@ The safety class decides who may run an operation:
 | `reminder.due` | read | app, command line, MCP | `get_reminders` | `glyphkeel reminder due` |
 | `reminder.acknowledge` | write | app, command line, MCP | `acknowledge_reminders` | `glyphkeel reminder ack <ids>` |
 | `today.get` | read | app, command line, MCP | `get_today` | `glyphkeel today` |
+| `digest.get` | read | app, command line, MCP | `get_digest` | `glyphkeel digest show` |
+| `digest.dismiss` | app | app, command line | — | `glyphkeel digest dismiss` |
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
@@ -851,6 +853,20 @@ Input: `ReminderAckInput`. Output: `ReminderAcknowledged`. Schemas: [catalog.sch
 What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar.
 
 Input: `TodayInput`. Output: `Today`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `digest.get`
+
+What changed without the person since a moment (by default since they last looked): agent sessions with their changes and tasks, automation rules with their runs and failures, reminders and tasks that came due, and changes through the command line (for an agent, also the person's changes in the app), with counts.
+
+Input: `DigestInput`. Output: `Digest`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `digest.dismiss`
+
+Mark the digest as seen up to a moment, so that the next one starts there.
+
+Input: `DigestDismissInput`. Output: `DigestDismissed`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It moves the person's own marker of what they have seen; an agent that moved it would hide its changes from the person.
 
 ## `board.get`
 

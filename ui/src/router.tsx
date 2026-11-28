@@ -114,7 +114,13 @@ const dashboardsRoute = createRoute({
 const trashRoute = createRoute({ getParentRoute: () => shellRoute, path: "/trash", component: TrashScreen });
 
 /** The workspace's activity: every change, newest first. */
-const activityRoute = createRoute({ getParentRoute: () => shellRoute, path: "/activity", component: ActivityScreen });
+const activityRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/activity",
+  // `session`: only the changes of one agent session, as the digest opens it.
+  validateSearch: (search: Record<string, unknown>): { session?: string } => (typeof search.session === "string" && search.session !== "" ? { session: search.session } : {}),
+  component: ActivityScreen,
+});
 
 /** A project's board; `task` is the task open in the panel beside it. */
 export const boardRoute = createRoute({

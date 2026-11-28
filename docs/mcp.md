@@ -40,6 +40,13 @@ A good first step for an agent is `get_workspace`, which describes the
 workspace, its rules and what the agent may do, and `get_agent_brief` for the
 project it works on.
 
+To catch up at the start of a session, an agent calls `get_digest`: what the
+person, other agents, automation rules and the command line changed since the
+end of its previous session of the same name (or since `since`, or else in the
+last day), grouped like the digest on Today, with counts. An agent limited to a
+project sees only that project's part. Agents can read the digest but not mark
+it as seen: that is the person's.
+
 ## Profiles
 
 A profile sets how far an agent may go. Each tool has a safety class: it reads,
@@ -278,6 +285,11 @@ needs.
 
 Every change an agent makes is recorded with the agent's name and its session.
 
+- **While you were away** at the top of Today sums up what agents changed since
+  you last marked it as seen: each session with its client, its number of
+  changes and the tasks it touched, with **Revert session** and **Open in
+  Activity** ([Today](guide/search.md#while-you-were-away)). **Inbox** in the
+  sidebar counts its entries.
 - **Activity** in the sidebar, filtered to **Agents**, shows what agents changed.
   Each change has **Revert**.
 - Preferences › Agents & CLI › **Agent sessions** lists each session: the
@@ -291,6 +303,7 @@ Every change an agent makes is recorded with the agent's name and its session.
 From the command line:
 
 ```sh
+glyphkeel digest show
 glyphkeel agents sessions
 glyphkeel revert --session <id> --dry-run
 glyphkeel revert --session <id>

@@ -18,6 +18,7 @@ import { useDayFormat } from "../board/CardView";
 import { dueState } from "../board/model";
 import { useMomentFormat } from "../task/Activity";
 import { TaskPanel } from "../task/TaskPanel";
+import { DigestPanel } from "./DigestPanel";
 import styles from "./Today.module.css";
 
 const route = getRouteApi("/shell/");
@@ -49,9 +50,11 @@ const taskRow = (task: ListedTask, detail?: ReactNode): Row => ({ key: task.key,
 const projectOf = (key: string) => key.slice(0, key.lastIndexOf("-"));
 
 /**
- * Today: overdue tasks, tasks due today and tasks in progress across the
- * active projects, then today's reminders, agents' claims, the last day's
- * changes and the timer. A row opens its task in the panel on the right.
+ * Today: the digest of what changed while the person was away (when it
+ * holds anything), then overdue tasks, tasks due today and tasks in
+ * progress across the active projects, today's reminders, agents' claims,
+ * the last day's changes and the timer. A row opens its task in the panel
+ * on the right.
  */
 export function TodayScreen() {
   const { task } = route.useSearch();
@@ -62,7 +65,10 @@ export function TodayScreen() {
   };
   return (
     <div className={styles.layout}>
-      <div className={styles.scroll}>{today.data ? <TodayLists today={today.data} openTask={task} onOpen={open} /> : <div aria-busy="true" />}</div>
+      <div className={styles.scroll}>
+        <DigestPanel onOpen={open} />
+        {today.data ? <TodayLists today={today.data} openTask={task} onOpen={open} /> : <div aria-busy="true" />}
+      </div>
       {task !== undefined && (
         <TaskPanel
           key={task}

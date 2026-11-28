@@ -476,6 +476,14 @@ impl Workspace {
         );
     }
 
+    /// Says once, through `notifier`, that agents changed something since
+    /// the digest was last dismissed.
+    pub(crate) fn notify_digest(&self, notifier: Arc<dyn Notifier>) {
+        if let Ok(engine) = self.engine() {
+            crate::digest::notify_at_start(Arc::downgrade(&engine), notifier);
+        }
+    }
+
     /// Stops the background work and closes the engine, checkpointing the
     /// log. Calls still running keep the engine alive; then it closes when
     /// the last one ends, without the checkpoint.

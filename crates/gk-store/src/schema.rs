@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 22;
+pub const SCHEMA_VERSION: i64 = 23;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -118,6 +118,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 22,
         sql: include_str!("../migrations/0022_project_folders.sql"),
+    },
+    Migration {
+        version: 23,
+        sql: include_str!("../migrations/0023_digest.sql"),
     },
 ];
 
@@ -1203,5 +1207,30 @@ mod tests {
             rusqlite::params![vec![9u8; 16]],
         );
         assert!(bad.is_err(), "a project names a folder that exists");
+    }
+
+    #[test]
+    fn version_23_keeps_one_mark_per_person_and_indexes_history_by_time() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..23], |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 23);
+        let mark = |person: &str, mark: &str, at: i64| {
+            conn.execute(
+                "INSERT INTO personal_marks (person, mark, at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![person, mark, at],
+            )
+        };
+        mark("me", "digest_seen", 1).unwrap();
+        mark("someone", "digest_seen", 2).unwrap();
+        assert!(mark("me", "digest_seen", 3).is_err(), "one mark per person");
+        assert!(mark("me", "other", 3).is_err(), "known marks only");
+        let index: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'index' AND name = 'activity_at'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(index, 1);
     }
 }

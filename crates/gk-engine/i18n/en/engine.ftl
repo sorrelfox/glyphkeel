@@ -849,6 +849,11 @@ reminder-at-or-days = Give either `at` or `days_before_due`.
 reminder-at-or-days-hint = To remove the reminder, use reminder.clear.
 reminder-ack-count = Acknowledge 1 to { $max } reminders at once.
 
+## The digest
+
+digest-not-a-moment = "{ $text }" is neither a moment nor a day.
+digest-moment-hint = Write a moment as 2026-11-24 09:00 (local time) or in RFC 3339, or a day such as yesterday, -3d or 2026-11-20.
+
 ## Export and import
 
 transfer-store-entry-failed = Can't store { $path }: { $error }.

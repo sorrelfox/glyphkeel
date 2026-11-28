@@ -227,6 +227,21 @@ Example: get_activity {\"session\": \"current\", \"limit\": 20}",
         idempotent: true,
     },
     McpTool {
+        name: "get_digest",
+        toolset: Toolset::Workspace,
+        title: "Catch up on changes",
+        description: "Summarizes what changed since a moment, grouped: agent sessions (name, \
+client, number of changes, tasks touched), automation rules (runs, failures, the run log), \
+reminders and tasks that came due, and the person's changes in the app and through the command \
+line, with counts; your own session is left out. Left out, \
+`since` is the end of your previous session of the same name, else the last 24 hours. Use it at \
+the start of a session to catch up on what the person and other agents did; follow up with \
+get_activity for the details. Example: get_digest {\"since\": \"yesterday\"}",
+        main: "digest.get",
+        covers: &["digest.get"],
+        idempotent: true,
+    },
+    McpTool {
         name: "revert_changes",
         toolset: Toolset::Workspace,
         title: "Revert changes",
@@ -2062,6 +2077,7 @@ mod tests {
                 "get_workspace",
                 "search",
                 "get_activity",
+                "get_digest",
                 "list_projects",
                 "get_project",
                 "list_folders",
