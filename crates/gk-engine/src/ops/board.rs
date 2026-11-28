@@ -423,6 +423,7 @@ impl Colours {
                             default_sort: Vec::new(),
                         },
                     );
+                    let compiled = super::query::with_schedule(q.tx, &checked, compiled)?;
                     let ids = super::query::matching_ids(q.tx, &compiled)?
                         .into_iter()
                         .map(|id| id.to_string())

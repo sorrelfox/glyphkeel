@@ -106,7 +106,7 @@
   grid-template-columns:
     var(--gantt-col-key, 5em) minmax(4em, 1fr) var(--gantt-col-claim, 6em)
     var(--gantt-col-start, 5.5em) var(--gantt-col-due, 5.5em)
-    var(--gantt-col-progress, 3.5em);
+    var(--gantt-col-progress, 3.5em) var(--gantt-extra,);
   column-gap: 8px;
   align-items: center;
   padding-inline: 12px;
@@ -741,4 +741,115 @@
 .milestoneDone .milestoneTitle {
   color: var(--fg-muted);
   text-decoration: line-through;
+}
+
+/* ---------- the critical path ---------- */
+
+/* Critical bars: the critical colour, a heavier outline and stripes, so
+   that they stand out without colour too. */
+.bar.critical .body,
+.bar.critical .diamond,
+.bar.critical .bracket {
+  stroke: var(--danger);
+  stroke-width: 2;
+}
+
+.bar.critical.shapeSummary rect {
+  fill: var(--danger);
+}
+
+.stripe {
+  fill: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.link.criticalLink,
+.lagSpan.criticalLink {
+  stroke: var(--danger);
+  stroke-width: 2.5;
+}
+
+.criticalHead {
+  fill: var(--danger);
+}
+
+.criticalCell {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ---------- baselines ---------- */
+
+/* The baseline's dates: a thin bar under the live one. */
+.baselineGhost {
+  fill: color-mix(in srgb, var(--fg-muted) 55%, transparent);
+  stroke: var(--fg-muted);
+  stroke-width: 0.75;
+  pointer-events: none;
+}
+
+/* Slip: later in the danger colour, earlier in the success colour; the
+   sign says which, so the colour is never the only sign. */
+.late {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.early {
+  color: var(--success);
+}
+
+.newMark {
+  padding-inline: 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-s);
+  color: var(--accent);
+  font-size: var(--fs-small);
+}
+
+.removed {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: var(--fs-small);
+}
+
+.removed summary {
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.removed ul {
+  margin: 4px 0 0;
+  padding-inline-start: 1.25em;
+  max-block-size: 10em;
+  overflow: auto;
+}
+
+.baselineForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.baselineField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.baselineError {
+  margin: 0;
+  color: var(--danger);
+}
+
+.menuChoice {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.menuHeader {
+  padding: 4px 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
 }

@@ -67,6 +67,8 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get", "board.get_across"],
   // Templates: their lists, and the one shown.
   template: ["template.list", "template.get"],
+  // Schedule baselines: their list, and the chart's ghost bars and slip.
+  baseline: ["baseline.list", "schedule.get", "task.search"],
   // Project folders: their list, and the projects' folders in the tree.
   project_folder: ["folder.list", "project.list", "board.get_across"],
   // Dashboards: their list; each widget's value comes with every change (see ALWAYS).

@@ -77159,6 +77159,18 @@
         "additionalProperties": false,
         "description": "Which tasks to schedule.",
         "properties": {
+          "baseline": {
+            "description": "Compare with this baseline of the project (its ID or name): each\ntask gets its baseline dates and slip, and the tasks the baseline\nhad that are gone are listed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "critical": {
+            "default": false,
+            "description": "Only the tasks on the critical path (and the parents they roll up\nto). Every task carries its slack either way.",
+            "type": "boolean"
+          },
           "from": {
             "description": "Leave out tasks that end before this day: `YYYY-MM-DD` or a natural\ndate such as `today` or `-2w`.",
             "type": [
@@ -77185,6 +77197,13 @@
               "null"
             ]
           },
+          "target": {
+            "description": "The end the critical path counts back from: a day (`YYYY-MM-DD` or\na natural date), a milestone's task key (its due date) or the name\nof one of the project's versions (its due date). Left out: the\nlatest finish of the tasks shown.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "to": {
             "description": "Leave out tasks that begin after this day, written as for `from`.",
             "type": [
@@ -77201,6 +77220,26 @@
       "mcp_tool": "get_schedule",
       "output": {
         "$defs": {
+          "BaselineDates": {
+            "additionalProperties": false,
+            "description": "A task's dates in a baseline, and how far it moved since.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date then.",
+                "type": "string"
+              },
+              "slip_days": {
+                "description": "How many calendar days later it ends now than then (its due date,\nor its start without one); negative when earlier. Left out when it\nhas no dates now.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "Its start date then.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -77247,6 +77286,47 @@
               "agent",
               "session",
               "until"
+            ],
+            "type": "object"
+          },
+          "CriticalPath": {
+            "additionalProperties": false,
+            "description": "The critical path of the tasks shown.",
+            "properties": {
+              "end": {
+                "description": "The day the latest times count back from: the target asked for, or\nthe plan's own finish.",
+                "type": "string"
+              },
+              "finish": {
+                "description": "The earliest day the plan can finish.",
+                "type": "string"
+              },
+              "left_out": {
+                "description": "The tasks left out, and why; open tasks without dates and estimate\nare listed here, the first 200.",
+                "items": {
+                  "$ref": "#/$defs/LeftOutTask"
+                },
+                "type": "array"
+              },
+              "tasks": {
+                "description": "The critical tasks' keys, in the order of the chart's rows.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "working_days_per_week": {
+                "description": "Working days per week, from the workspace settings.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "end",
+              "finish",
+              "working_days_per_week",
+              "tasks"
             ],
             "type": "object"
           },
@@ -77343,6 +77423,25 @@
             ],
             "type": "object"
           },
+          "LeftOutTask": {
+            "additionalProperties": false,
+            "description": "A task the critical path leaves out.",
+            "properties": {
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/$defs/TimingLeftOut",
+                "description": "Why."
+              }
+            },
+            "required": [
+              "key",
+              "reason"
+            ],
+            "type": "object"
+          },
           "ReadOnlyReason": {
             "description": "Why a task's dates can't be changed from the chart.",
             "oneOf": [
@@ -77352,6 +77451,77 @@
                 "type": "string"
               }
             ]
+          },
+          "RemovedTask": {
+            "additionalProperties": false,
+            "description": "A task a baseline has that the schedule no longer shows: deleted, moved\nto another project, or without dates now.",
+            "properties": {
+              "deleted": {
+                "description": "Whether the task is deleted (in the trash or gone), rather than\nonly without dates or out of view.",
+                "type": "boolean"
+              },
+              "due_date": {
+                "description": "Its due date then.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key when the baseline was saved.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its start date then.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title then.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "deleted"
+            ],
+            "type": "object"
+          },
+          "ScheduleBaseline": {
+            "additionalProperties": false,
+            "description": "The baseline a schedule is compared with.",
+            "properties": {
+              "created_at": {
+                "description": "When it was saved (RFC 3339).",
+                "type": "string"
+              },
+              "id": {
+                "description": "The baseline's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "removed": {
+                "description": "The tasks it has that the schedule doesn't show, the first 200.",
+                "items": {
+                  "$ref": "#/$defs/RemovedTask"
+                },
+                "type": "array"
+              },
+              "removed_total": {
+                "default": 0,
+                "description": "How many such tasks there are.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "created_at",
+              "removed_total"
+            ],
+            "type": "object"
           },
           "ScheduleDependency": {
             "additionalProperties": false,
@@ -77498,6 +77668,10 @@
             "additionalProperties": false,
             "description": "One row of the chart.",
             "properties": {
+              "baseline": {
+                "$ref": "#/$defs/BaselineDates",
+                "description": "Its dates in the baseline compared with, when one is and has it."
+              },
               "blocked": {
                 "description": "A task that blocks it is still open.",
                 "type": "boolean"
@@ -77547,6 +77721,10 @@
                 },
                 "type": "array"
               },
+              "new_since_baseline": {
+                "description": "Added after the baseline compared with was saved: it has no dates\nthere.",
+                "type": "boolean"
+              },
               "overdue": {
                 "description": "Open and due before today.",
                 "type": "boolean"
@@ -77589,6 +77767,10 @@
               "summary": {
                 "$ref": "#/$defs/DayRange",
                 "description": "For a task with subtasks: from the earliest start to the latest due\ndate among it and all its subtasks, at every level."
+              },
+              "timing": {
+                "$ref": "#/$defs/TaskTiming",
+                "description": "Its place on the critical path; for a parent, rolled up from its\nsubtasks. Left out for tasks the path leaves out."
               },
               "title": {
                 "description": "Its title.",
@@ -77640,6 +77822,61 @@
               "category"
             ],
             "type": "object"
+          },
+          "TaskTiming": {
+            "additionalProperties": false,
+            "description": "A task's place on the critical path, in days (`YYYY-MM-DD`) and working\ndays. Working days are the workspace's days per week, from Monday.",
+            "properties": {
+              "critical": {
+                "description": "On the critical path: no slack, or less.",
+                "type": "boolean"
+              },
+              "earliest_finish": {
+                "description": "The earliest day it can finish.",
+                "type": "string"
+              },
+              "earliest_start": {
+                "description": "The earliest day it can begin, after the tasks that block it.",
+                "type": "string"
+              },
+              "latest_finish": {
+                "description": "The latest day it can finish without moving the end target.",
+                "type": "string"
+              },
+              "latest_start": {
+                "description": "The latest day it can begin without moving the end target.",
+                "type": "string"
+              },
+              "slack_days": {
+                "description": "Total slack in working days: how far it can slip without moving the\nend target; negative when the target can't be met.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "earliest_start",
+              "earliest_finish",
+              "latest_start",
+              "latest_finish",
+              "slack_days",
+              "critical"
+            ],
+            "type": "object"
+          },
+          "TimingLeftOut": {
+            "description": "Why a task has no place on the critical path.",
+            "oneOf": [
+              {
+                "const": "no_dates_or_estimate",
+                "description": "It has neither dates nor an estimate.",
+                "type": "string"
+              },
+              {
+                "const": "dependency_loop",
+                "description": "It is in a loop of tasks that block each other.",
+                "type": "string"
+              }
+            ]
           },
           "UnscheduledTask": {
             "additionalProperties": false,
@@ -77693,6 +77930,10 @@
                 "$ref": "#/$defs/StatusRef",
                 "description": "Its status."
               },
+              "timing": {
+                "$ref": "#/$defs/TaskTiming",
+                "description": "Its place on the critical path, from its estimate; left out when\nit has no estimate."
+              },
               "title": {
                 "description": "Its title.",
                 "type": "string"
@@ -77720,6 +77961,14 @@
         "additionalProperties": false,
         "description": "The schedule of a project or a query.",
         "properties": {
+          "baseline": {
+            "$ref": "#/$defs/ScheduleBaseline",
+            "description": "The baseline compared with, when one was asked for."
+          },
+          "critical_path": {
+            "$ref": "#/$defs/CriticalPath",
+            "description": "The critical path of the tasks shown; left out when none has dates\nor an estimate."
+          },
           "dependencies": {
             "description": "The `blocks` links between the tasks shown.",
             "items": {
@@ -77777,7 +78026,7 @@
       },
       "output_name": "Schedule",
       "safety": "read",
-      "summary": "The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends."
+      "summary": "The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, problems such as a task starting before its blocker ends, each task's slack on the critical path, and its slip against a baseline."
     },
     {
       "app_reason": "It previews a drag in the Gantt chart while the pointer moves; agents and scripts change dates with update_task and move_dependents, whose answer lists the tasks that moved.",
@@ -78295,6 +78544,580 @@
       "output_name": "GanttLayoutChange",
       "safety": "write",
       "summary": "Change the zoom level, table or column widths, grouping or the \"also move dependents\" switch of a project's Gantt chart, or go back to the default layout."
+    },
+    {
+      "cli": "baseline list <project>",
+      "exposure": "data",
+      "id": "baseline.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which baselines to list.",
+        "properties": {
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "BaselineListInput",
+        "type": "object"
+      },
+      "input_name": "BaselineListInput",
+      "kind": "query",
+      "mcp_tool": "list_baselines",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Baseline": {
+            "additionalProperties": false,
+            "description": "A saved baseline.",
+            "properties": {
+              "created_at": {
+                "description": "When it was saved (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "id": {
+                "description": "The baseline's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in the project (ignoring case).",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many tasks it holds.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "updated_at": {
+                "description": "When it was last renamed, or saved (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project",
+              "name",
+              "tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A project's baselines, newest first.",
+        "properties": {
+          "items": {
+            "description": "The baselines.",
+            "items": {
+              "$ref": "#/$defs/Baseline"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many there are.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BaselineList",
+        "type": "object"
+      },
+      "output_name": "BaselineList",
+      "safety": "read",
+      "summary": "A project's schedule baselines, newest first: each one's name, how many tasks it holds, and who saved it when."
+    },
+    {
+      "cli": "baseline create <project>",
+      "exposure": "data",
+      "id": "baseline.create",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new baseline of a project's current plan.",
+        "properties": {
+          "name": {
+            "description": "The baseline's name, unique in the project (1 to 100 characters).",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID). Its tasks with dates are saved, at every\nlevel of subtasks; its sub-projects' are not.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "name"
+        ],
+        "title": "BaselineCreateInput",
+        "type": "object"
+      },
+      "input_name": "BaselineCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_baseline",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Baseline": {
+            "additionalProperties": false,
+            "description": "A saved baseline.",
+            "properties": {
+              "created_at": {
+                "description": "When it was saved (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "id": {
+                "description": "The baseline's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in the project (ignoring case).",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many tasks it holds.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "updated_at": {
+                "description": "When it was last renamed, or saved (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project",
+              "name",
+              "tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A baseline after a change.",
+        "properties": {
+          "baseline": {
+            "$ref": "#/$defs/Baseline",
+            "description": "The baseline after the change (before it, for a deletion)."
+          },
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseline"
+        ],
+        "title": "BaselineChange",
+        "type": "object"
+      },
+      "output_name": "BaselineChange",
+      "safety": "write",
+      "summary": "Save a project's current plan as a named baseline: every dated task's start and due date. Compare with it through the schedule's baseline and the query field slip."
+    },
+    {
+      "cli": "baseline rename <project>",
+      "exposure": "data",
+      "id": "baseline.rename",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new name for a baseline.",
+        "properties": {
+          "baseline": {
+            "description": "The baseline: its ID or its name.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its new name, unique in the project.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "baseline",
+          "name"
+        ],
+        "title": "BaselineRenameInput",
+        "type": "object"
+      },
+      "input_name": "BaselineRenameInput",
+      "kind": "command",
+      "mcp_tool": "update_baseline",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Baseline": {
+            "additionalProperties": false,
+            "description": "A saved baseline.",
+            "properties": {
+              "created_at": {
+                "description": "When it was saved (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "id": {
+                "description": "The baseline's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in the project (ignoring case).",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many tasks it holds.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "updated_at": {
+                "description": "When it was last renamed, or saved (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project",
+              "name",
+              "tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A baseline after a change.",
+        "properties": {
+          "baseline": {
+            "$ref": "#/$defs/Baseline",
+            "description": "The baseline after the change (before it, for a deletion)."
+          },
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseline"
+        ],
+        "title": "BaselineChange",
+        "type": "object"
+      },
+      "output_name": "BaselineChange",
+      "safety": "write",
+      "summary": "Rename a baseline of a project."
+    },
+    {
+      "cli": "baseline delete <project>",
+      "exposure": "data",
+      "id": "baseline.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One baseline.",
+        "properties": {
+          "baseline": {
+            "description": "The baseline: its ID or its name.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "baseline"
+        ],
+        "title": "BaselineRef",
+        "type": "object"
+      },
+      "input_name": "BaselineRef",
+      "kind": "command",
+      "mcp_tool": "delete_baseline",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Baseline": {
+            "additionalProperties": false,
+            "description": "A saved baseline.",
+            "properties": {
+              "created_at": {
+                "description": "When it was saved (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "id": {
+                "description": "The baseline's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in the project (ignoring case).",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many tasks it holds.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "updated_at": {
+                "description": "When it was last renamed, or saved (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "project",
+              "name",
+              "tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A baseline after a change.",
+        "properties": {
+          "baseline": {
+            "$ref": "#/$defs/Baseline",
+            "description": "The baseline after the change (before it, for a deletion)."
+          },
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseline"
+        ],
+        "title": "BaselineChange",
+        "type": "object"
+      },
+      "output_name": "BaselineChange",
+      "safety": "write",
+      "summary": "Delete a baseline of a project; the tasks stay as they are. Revert brings it back."
     },
     {
       "cli": "wiki list",

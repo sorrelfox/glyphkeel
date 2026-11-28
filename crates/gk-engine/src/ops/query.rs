@@ -293,6 +293,40 @@ pub(crate) fn sql_params(params: &[Param]) -> impl Iterator<Item = Sql> + '_ {
     })
 }
 
+/// Hands `compiled` the critical path's facts when `checked` asks for them
+/// (`is:critical`, `slack`): every project's critical path, worked out on
+/// its own.
+pub(crate) fn with_schedule(
+    tx: &Transaction<'_>,
+    checked: &Checked,
+    mut compiled: Compiled,
+) -> Result<Compiled, Failure> {
+    if !checked.uses_schedule() {
+        return Ok(compiled);
+    }
+    let projects: Vec<Id> = {
+        let mut stmt = tx.prepare_cached("SELECT id FROM projects WHERE deleted_at IS NULL")?;
+        stmt.query_map([], |r| id_at(r, 0))?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|p| crate::scope::sees(*p))
+            .collect()
+    };
+    let facts = super::schedule::slack_of_projects(tx, &projects, checked.today)?;
+    let list: Vec<serde_json::Value> = facts
+        .iter()
+        .map(|(id, slack, critical)| {
+            serde_json::json!([
+                gk_core::hex(id.as_bytes()).to_ascii_uppercase(),
+                slack,
+                u8::from(*critical)
+            ])
+        })
+        .collect();
+    compiled.provide_schedule(&serde_json::Value::Array(list).to_string());
+    Ok(compiled)
+}
+
 /// The IDs of the tasks `compiled` matches, in order.
 pub(crate) fn matching_ids(tx: &Transaction<'_>, compiled: &Compiled) -> Result<Vec<Id>, Failure> {
     let sql = compiled.ids();
@@ -484,6 +518,7 @@ pub(crate) fn compile_search(
             default_sort,
         },
     );
+    let compiled = with_schedule(tx, &checked, compiled)?;
     Ok((gk_query::print(&query), compiled))
 }
 

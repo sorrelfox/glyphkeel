@@ -370,6 +370,7 @@ fn bulk(w: &mut WriteCtx<'_>, input: BulkUpdateInput) -> Result<BulkResult, Fail
                     default_sort: Vec::new(),
                 },
             );
+            let compiled = super::query::with_schedule(w.tx(), &checked, compiled)?;
             super::query::matching_ids(w.tx(), &compiled)?
         }
     };

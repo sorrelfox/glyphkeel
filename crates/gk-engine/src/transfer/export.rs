@@ -16,10 +16,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::model::{
-    Activity, AgentSession, Attachment, AutomationLine, Claim, Comment, CommentRevision, Counts,
-    DashboardLine, FolderLine, Label, Layout, Manifest, ManifestProject, Modules, Project,
-    ProjectFile, Relation, Revision, SavedView, SeriesLine, Sprint, Status, Task, TaskType,
-    TemplateLine, TimeEntry, Version, WikiPage,
+    Activity, AgentSession, Attachment, AutomationLine, BaselineLine, BaselineTaskLine, Claim,
+    Comment, CommentRevision, Counts, DashboardLine, FolderLine, Label, Layout, Manifest,
+    ManifestProject, Modules, Project, ProjectFile, Relation, Revision, SavedView, SeriesLine,
+    Sprint, Status, Task, TaskType, TemplateLine, TimeEntry, Version, WikiPage,
 };
 use super::sink::{Seal, Sink};
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -252,6 +252,29 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             })
         },
     )?;
+    let mut baselines = Vec::new();
+    for (bid, r) in crate::ops::baseline::rows(tx, id)? {
+        let tasks = crate::ops::baseline::entries(tx, bid)?
+            .into_iter()
+            .map(|e| BaselineTaskLine {
+                task: e.task,
+                key: e.key,
+                title: e.title,
+                start_date: e.start,
+                due_date: e.due,
+                milestone: e.milestone,
+            })
+            .collect();
+        baselines.push(BaselineLine {
+            id: bid.to_string(),
+            name: r.name,
+            created_at: r.created_at,
+            created_by_kind: r.created_by_kind,
+            created_by_name: r.created_by_name,
+            updated_at: r.updated_at,
+            tasks,
+        });
+    }
     let views = all(
         tx,
         "SELECT id, view_kind, name, description, query, columns, sort, group_by, totals,
@@ -710,6 +733,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             labels,
             versions,
             sprints,
+            baselines,
             views,
             layouts,
             key_aliases,

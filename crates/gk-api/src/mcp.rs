@@ -1836,11 +1836,59 @@ its sub-projects) or a `query`, or both: dated tasks as a tree with `depth`, eac
 may begin the day after its blocker's due date), how many tasks depend on each, and `problems`: \
 starts before its blocker ends, a loop of blocking tasks, a subtask outside its parent's dates, \
 overdue, a start without a due date. `from` and `to` leave out tasks entirely before or after \
-those days. Dates are changed with update_task (`move_dependents: true` also moves the tasks \
-that depend on it later, as far as they must) or bulk_update_tasks; links with link_tasks. \
-Example: get_schedule {\"project\": \"TM\", \"query\": \"is:open\", \"from\": \"today\"}",
+those days. Each task's `timing` gives its place on the critical path in working days: earliest \
+and latest start and finish, `slack_days` and `critical`; `critical_path` names the critical \
+tasks and the end it counts back from (`target`: a day, a milestone's key or a version name; \
+default the latest finish). `critical: true` keeps only the critical tasks. `baseline` (a name \
+from list_baselines) adds each task's baseline dates and `slip_days`, marks tasks added since \
+and lists the removed ones. Dates are changed with update_task (`move_dependents: true` also \
+moves the tasks that depend on it later, as far as they must) or bulk_update_tasks; links with \
+link_tasks. Example: get_schedule {\"project\": \"TM\", \"query\": \"is:open\", \"from\": \"today\"}",
         main: "schedule.get",
         covers: &["schedule.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "list_baselines",
+        toolset: Toolset::Schedule,
+        title: "List schedule baselines",
+        description: "Lists a `project`'s baselines, newest first: saved snapshots of its plan \
+(each dated task's start and due date) with `name`, how many `tasks` and who saved it when. \
+Compare with one through get_schedule's `baseline`, or in a query: `slip>3d` against the newest \
+baseline, `baseline:\"Plan A\" slip>3d` against a named one. Example: list_baselines {\"project\": \"TM\"}",
+        main: "baseline.list",
+        covers: &["baseline.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_baseline",
+        toolset: Toolset::Schedule,
+        title: "Save a schedule baseline",
+        description: "Saves a `project`'s current plan as a baseline with a `name` unique in the \
+project: every dated task's start and due date, to see later how far the plan slipped. Only \
+save baselines the person asked for. Example: create_baseline {\"project\": \"TM\", \"name\": \"Plan A\"}",
+        main: "baseline.create",
+        covers: &["baseline.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_baseline",
+        toolset: Toolset::Schedule,
+        title: "Rename a schedule baseline",
+        description: "Renames a `baseline` (ID or name) of a `project` to `name`. \
+Example: update_baseline {\"project\": \"TM\", \"baseline\": \"Plan A\", \"name\": \"Kick-off plan\"}",
+        main: "baseline.rename",
+        covers: &["baseline.rename"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_baseline",
+        toolset: Toolset::Schedule,
+        title: "Delete a schedule baseline",
+        description: "Deletes a `baseline` (ID or name) of a `project`; tasks don't change. \
+revert_changes brings it back. Example: delete_baseline {\"project\": \"TM\", \"baseline\": \"Plan A\"}",
+        main: "baseline.delete",
+        covers: &["baseline.delete"],
         idempotent: true,
     },
     McpTool {
@@ -2229,6 +2277,7 @@ mod tests {
                 "get_wiki_page",
                 "get_wiki_history",
                 "get_schedule",
+                "list_baselines",
                 "read_attachment",
                 "list_trash",
                 "list_backups",

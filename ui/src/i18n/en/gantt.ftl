@@ -25,6 +25,66 @@ gantt-group-by-label = Label
 gantt-group-by-status = Status
 gantt-group-by-claim = Claimed by
 gantt-group-by-none = None
+# Highlights the tasks that decide the end date.
+gantt-critical-path = Critical path
+gantt-critical-summary =
+    { $count ->
+        [0] No task is critical: the plan can finish on { $finish }, before { $end }.
+        [one] One critical task. The plan can finish on { $finish }; the critical path counts back from { $end }.
+       *[other] { $count } critical tasks. The plan can finish on { $finish }; the critical path counts back from { $end }.
+    }{ $left ->
+        [0] {""}
+        [one] {" "}One task has neither dates nor an estimate and is left out.
+       *[other] {" "}{ $left } tasks have neither dates nor an estimate and are left out.
+    }
+# A baseline is a saved copy of the plan's dates, to compare the plan with.
+activity-entity-baseline = Baseline
+gantt-baseline = Baseline
+gantt-baseline-button = Baseline: { $name }
+gantt-baseline-none = None
+gantt-baseline-save = Save baseline…
+gantt-baseline-show-label = Show
+gantt-baseline-show-none = None
+gantt-baseline-show =
+    { $tasks ->
+        [one] { $name } (one task)
+       *[other] { $name } ({ $tasks } tasks)
+    }
+gantt-baseline-save-title = Save a baseline
+gantt-baseline-rename = Rename shown baseline…
+gantt-baseline-delete = Delete shown baseline…
+gantt-baseline-rename-title = Rename the baseline
+gantt-baseline-rename-button = Rename
+gantt-baseline-renamed = Baseline renamed to “{ $name }”.
+gantt-baseline-delete-title = Delete the baseline “{ $name }”?
+gantt-baseline-delete-body =
+    { $count ->
+        [one] Its saved dates of one task are deleted; the task itself stays as it is. Undo brings the baseline back.
+       *[other] Its saved dates of { $count } tasks are deleted; the tasks themselves stay as they are. Undo brings the baseline back.
+    }
+gantt-baseline-delete-button = Delete baseline
+gantt-baseline-deleted = Baseline “{ $name }” deleted.
+gantt-baseline-save-about = The start and due date of every task with dates in this project are kept under this name, to compare the plan with later.
+gantt-baseline-name = Name
+gantt-baseline-default-name = Plan of { $date }
+gantt-baseline-save-button = Save
+gantt-baseline-saved =
+    { $count ->
+        [one] Baseline “{ $name }” saved with one task.
+       *[other] Baseline “{ $name }” saved with { $count } tasks.
+    }
+gantt-baseline-removed =
+    { $count ->
+        [one] One task of “{ $name }” is no longer in the plan
+       *[other] { $count } tasks of “{ $name }” are no longer in the plan
+    }
+gantt-baseline-removed-deleted = { $key } { $title }, { $dates }: deleted
+gantt-baseline-removed-undated = { $key } { $title }, { $dates }: no longer has dates here
+gantt-baseline-removed-more =
+    { $count ->
+        [one] and one more
+       *[other] and { $count } more
+    }
 gantt-export = Export
 gantt-export-png = PNG image
 gantt-export-print = Print or save as PDF
@@ -46,6 +106,12 @@ gantt-col-start = Start
 gantt-col-due = Due
 gantt-col-progress = %
 gantt-col-progress-label = Progress
+# Working days a task can slip without moving the end date.
+gantt-col-slack = Slack
+# How many days later a task ends than in the baseline.
+gantt-col-slip = Slip
+# In the slip column: the task was added after the baseline was saved.
+gantt-new = New
 # The agent session working on the task, while its claim lasts.
 gantt-col-claim = Claimed by
 gantt-claim-until = Claimed by { $agent } until { $until }
@@ -219,3 +285,59 @@ gantt-export-title = { $project }: { $range }
 gantt-export-file = { $project } Gantt chart { $date }.png
 gantt-exported = Saved the chart as { $file }
 gantt-export-failed = The picture of the chart couldn't be made; it may be too large. Try a coarser zoom.
+
+## Critical path and baselines, in a row's name and a bar's tooltip
+
+gantt-row-critical =
+    { $sign ->
+        [early] { $row }, critical, { $days ->
+            [one] one working day behind
+           *[other] { $days } working days behind
+        }
+       *[other] { $row }, critical
+    }
+gantt-row-slack =
+    { $days ->
+        [one] { $row }, one working day of slack
+       *[other] { $row }, { $days } working days of slack
+    }
+gantt-row-slip =
+    { $sign ->
+        [late] { $days ->
+            [one] { $row }, one day later than the baseline
+           *[other] { $row }, { $days } days later than the baseline
+        }
+        [early] { $days ->
+            [one] { $row }, one day earlier than the baseline
+           *[other] { $row }, { $days } days earlier than the baseline
+        }
+       *[other] { $row }, as in the baseline
+    }
+gantt-row-new = { $row }, new since the baseline
+gantt-tip-critical =
+    { $sign ->
+        [early] { $days ->
+            [one] Critical: one working day behind the end date
+           *[other] Critical: { $days } working days behind the end date
+        }
+       *[other] Critical: no slack
+    }
+gantt-tip-slack =
+    { $days ->
+        [one] Slack: one working day
+       *[other] Slack: { $days } working days
+    }
+gantt-tip-baseline = Baseline: { $dates }
+gantt-tip-slip =
+    { $sign ->
+        [late] { $days ->
+            [one] One day later
+           *[other] { $days } days later
+        }
+        [early] { $days ->
+            [one] One day earlier
+           *[other] { $days } days earlier
+        }
+       *[other] On the baseline's dates
+    }
+gantt-tip-new = New since the baseline

@@ -105,6 +105,9 @@ pub(crate) struct ProjectFile {
     /// The project's sprints.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) sprints: Vec<Sprint>,
+    /// The project's schedule baselines, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) baselines: Vec<BaselineLine>,
     pub(crate) views: Vec<SavedView>,
     pub(crate) layouts: Vec<Layout>,
     /// Earlier keys of the project, which still find it.
@@ -359,6 +362,35 @@ pub(crate) struct Label {
     pub(crate) name: String,
     pub(crate) hue: String,
     pub(crate) rank: String,
+}
+
+/// A schedule baseline of the project: its dated tasks when it was saved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BaselineLine {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
+    pub(crate) tasks: Vec<BaselineTaskLine>,
+}
+
+/// One task of a baseline: the task's ID (which may no longer exist), its
+/// key and title then, and its dates then.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BaselineTaskLine {
+    pub(crate) task: String,
+    pub(crate) key: String,
+    pub(crate) title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) start_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) due_date: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) milestone: bool,
 }
 
 /// A version (release) of the project.

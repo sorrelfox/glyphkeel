@@ -33,7 +33,7 @@ use super::{
     lookup, project, relation, reminder, settings, sprint, task, time, trash, version, view, wiki,
     work_kind,
 };
-use super::{automation, dashboard, folder, recurrence, template};
+use super::{automation, baseline, dashboard, folder, recurrence, template};
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -428,6 +428,8 @@ pub(crate) fn current(
         (automation::ENTITY, automation::RECORD) => automation::raw(tx, id)?,
         (dashboard::ENTITY, dashboard::RECORD) => dashboard::raw(tx, id)?,
         (folder::ENTITY, folder::RECORD) => folder::raw(tx, id)?,
+        (baseline::ENTITY, baseline::RECORD) => baseline::raw(tx, id)?,
+        (baseline::ENTITY, baseline::TASKS) => baseline::raw_tasks(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (sprint::ENTITY, sprint::RECORD) => sprint::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
@@ -562,6 +564,9 @@ fn apply(
             Ok(())
         }
         (folder::ENTITY, folder::RECORD) => folder::apply(w, id, value),
+        (baseline::ENTITY, baseline::RECORD | baseline::TASKS) => {
+            baseline::apply(w, id, project, field, value)
+        }
         (version::ENTITY, version::RECORD) => {
             let before = version::raw(w.tx(), id)?;
             version::write_raw(w, id, value.as_ref())?;

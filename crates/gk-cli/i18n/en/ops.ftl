@@ -1338,7 +1338,12 @@ op-dashboard-remove-widget--widget = The widget: its ID, or its place in the gri
 
 ## glyphkeel schedule
 
-op-schedule-get = The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.
+op-schedule-get = The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, problems such as a task starting before its blocker ends, each task's slack on the critical path, and its slip against a baseline.
+op-schedule-get--baseline = Compare with this baseline of the project (its ID or name): each
+    task gets its baseline dates and slip, and the tasks the baseline
+    had that are gone are listed.
+op-schedule-get--critical = Only the tasks on the critical path (and the parents they roll up
+    to). Every task carries its slack either way.
 op-schedule-get--from = Leave out tasks that end before this day: `YYYY-MM-DD` or a natural
     date such as `today` or `-2w`.
 op-schedule-get--include-subprojects = With `project`: its sub-projects' tasks too. Off unless asked.
@@ -1346,7 +1351,36 @@ op-schedule-get--project = The project (key or ID). Give this, `query`, or both.
 op-schedule-get--query = Only the tasks matching this query (`is:open label:release`); with
     `project`, inside that project. Its `sort:` orders the top-level
     rows; by default they go by start date, then due date.
+op-schedule-get--target = The end the critical path counts back from: a day (`YYYY-MM-DD` or
+    a natural date), a milestone's task key (its due date) or the name
+    of one of the project's versions (its due date). Left out: the
+    latest finish of the tasks shown.
 op-schedule-get--to = Leave out tasks that begin after this day, written as for `from`.
+
+## glyphkeel baseline list <project>
+
+op-baseline-list = A project's schedule baselines, newest first: each one's name, how many tasks it holds, and who saved it when.
+op-baseline-list--project = The project (key or ID).
+
+## glyphkeel baseline create <project>
+
+op-baseline-create = Save a project's current plan as a named baseline: every dated task's start and due date. Compare with it through the schedule's baseline and the query field slip.
+op-baseline-create--name = The baseline's name, unique in the project (1 to 100 characters).
+op-baseline-create--project = The project (key or ID). Its tasks with dates are saved, at every
+    level of subtasks; its sub-projects' are not.
+
+## glyphkeel baseline rename <project>
+
+op-baseline-rename = Rename a baseline of a project.
+op-baseline-rename--baseline = The baseline: its ID or its name.
+op-baseline-rename--name = Its new name, unique in the project.
+op-baseline-rename--project = The project (key or ID).
+
+## glyphkeel baseline delete <project>
+
+op-baseline-delete = Delete a baseline of a project; the tasks stay as they are. Revert brings it back.
+op-baseline-delete--baseline = The baseline: its ID or its name.
+op-baseline-delete--project = The project (key or ID).
 
 ## glyphkeel wiki list
 
