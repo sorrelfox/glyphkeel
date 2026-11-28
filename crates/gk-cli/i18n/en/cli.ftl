@@ -212,6 +212,20 @@ cli-board-lane-parent = { $key } { $title }
 cli-board-columns = Columns
 # With swimlanes: a column within a lane, and how many of the lane's cards it holds.
 cli-board-lane-column = { $name } ({ $count })
+# The board across projects, as `board all` prints it.
+cli-board-across-heading = My work
+# The board across projects narrowed by a query.
+cli-board-across-query = Query: { $query }
+# The board across projects kept to the projects of a folder.
+cli-board-across-folder = Folder: { $folder }
+# A column of the board across projects: a status category.
+cli-board-category = { $category ->
+        [todo] To do
+        [in_progress] In progress
+       *[done] Done
+    }
+# A card on the board across projects: its status in its own project.
+cli-board-status = [{ $status }]
 
 ## Dashboards, as `dashboard show` prints them
 

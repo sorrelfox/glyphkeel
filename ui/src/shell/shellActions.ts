@@ -5,13 +5,13 @@ import { keysOf, type Action, type ActionGroup } from "../actions/actions";
 import { appWindow } from "../ipc/window";
 import { focusRegion } from "./regions";
 
-export type View = "today" | "all-tasks" | "time" | "reports" | "dashboards" | "search" | "project" | "trash" | "activity" | "approvals";
+export type View = "today" | "my-work" | "all-tasks" | "time" | "reports" | "dashboards" | "search" | "project" | "trash" | "activity" | "approvals";
 
 export interface ShellCommands {
   openPalette: () => void;
   /** Shows the quick-add window; null where there is none (a plain browser). */
   quickAdd: (() => void) | null;
-  setView: (view: "today" | "all-tasks" | "time" | "reports" | "dashboards" | "trash" | "activity" | "approvals") => void;
+  setView: (view: "today" | "my-work" | "all-tasks" | "time" | "reports" | "dashboards" | "trash" | "activity" | "approvals") => void;
   /** Shows the open project as a board, a list, a calendar, a Gantt chart or the wiki; null outside a project. */
   projectView: ((view: "board" | "list" | "calendar" | "gantt" | "wiki") => void) | null;
   toggleSidebar: () => void;
@@ -50,6 +50,7 @@ export function shellActions(commands: ShellCommands): Action[] {
   const actions = [
     action("palette.open", "action-palette", "navigation", commands.openPalette),
     action("nav.today", "action-today", "navigation", () => { commands.setView("today"); }),
+    action("nav.myWork", "action-my-work", "navigation", () => { commands.setView("my-work"); }),
     action("nav.allTasks", "action-all-tasks", "navigation", () => { commands.setView("all-tasks"); }),
     action("nav.timeReport", "action-time-report", "navigation", () => { commands.setView("time"); }),
     action("nav.reports", "action-reports", "navigation", () => { commands.setView("reports"); }),

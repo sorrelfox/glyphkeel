@@ -28,6 +28,10 @@ pub enum ViewKind {
     Gantt,
     /// The calendar.
     Calendar,
+    /// The board across projects ("My work"); always a view of the whole
+    /// workspace. Its `group_by` is what the swimlanes group by, and it can
+    /// keep to the projects of one `folder`.
+    BoardAcross,
 }
 
 impl ViewKind {
@@ -39,6 +43,7 @@ impl ViewKind {
             Self::Board => "board",
             Self::Gantt => "gantt",
             Self::Calendar => "calendar",
+            Self::BoardAcross => "board_across",
         }
     }
 }
@@ -65,12 +70,17 @@ pub struct SavedView {
     /// The order when the query has no `sort:` (`due,-priority`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
-    /// The field rows are grouped by.
+    /// The field rows are grouped by; for a board across projects, what
+    /// its swimlanes group by.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<String>,
     /// The columns totalled (`estimate`, `spent`, `remaining`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub totals: Vec<String>,
+    /// For a board across projects: the folder whose projects it shows, by
+    /// name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// Shown first when its screen opens.
     pub is_default: bool,
     /// Its place among the views.
@@ -132,12 +142,18 @@ pub struct ViewCreateInput {
     /// The order when the query has no `sort:`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
-    /// The field rows are grouped by.
+    /// The field rows are grouped by; for a board across projects, what
+    /// its swimlanes group by (`project`, `priority`, `label`, `sprint`,
+    /// `type`, `parent` or `none`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<String>,
     /// The columns totalled.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub totals: Vec<String>,
+    /// For a board across projects: only the projects of this folder (ID
+    /// or name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// Make it the screen's default view.
     #[serde(default)]
     pub is_default: bool,
@@ -157,6 +173,8 @@ pub enum ViewField {
     GroupBy,
     /// The totals.
     Totals,
+    /// The folder of a board across projects.
+    Folder,
 }
 
 /// Changes to a saved view; fields left out keep their value.
@@ -189,6 +207,9 @@ pub struct ViewUpdateInput {
     /// New totals.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub totals: Option<Vec<String>>,
+    /// For a board across projects: another folder (ID or name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// Make it, or stop it being, the screen's default view.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_default: Option<bool>,

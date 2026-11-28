@@ -2059,7 +2059,7 @@ mod tests {
             "the flows rebuild dist/ after the bundle check"
         );
         assert!(ui[flows].ends_with(
-            "wiki, gantt, calendar, planning, windows, fields, roadmap, reports, sprints, dashboards, folders, layout, csv, depth, a11y, lock, digest, swimlanes, approvals"
+            "wiki, gantt, calendar, planning, windows, fields, roadmap, reports, sprints, dashboards, folders, layout, csv, depth, a11y, lock, digest, swimlanes, approvals, mywork"
         ));
         assert_eq!(Step::GenCheck.to_string(), "cargo xtask gen --check");
     }

@@ -4,6 +4,30 @@
 // Generated from the operation catalog by `cargo xtask gen`. Do not edit:
 // change the catalog in crates/gk-api and run `cargo xtask gen` again.
 
+/** A project with cards on the board across projects. */
+export type AcrossProject = {
+  /** Its colour. */
+  hue: Hue;
+  /** Its key. */
+  key: string;
+  /** Its name. */
+  name: string;
+  /** Its statuses in order. A card dropped into a column moves to the first of them in that column's category; when there are several, people choose. */
+  statuses: AcrossStatus[];
+};
+
+/** A status a card can move to on the board across projects. */
+export type AcrossStatus = {
+  /** Its category: the column it shows in. */
+  category: Category;
+  /** Its colour. */
+  hue: Hue;
+  /** The status's ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+};
+
 /** What an action does. */
 export type ActionKind = "set_fields" | "add_label" | "remove_label" | "move_to_status" | "add_comment" | "create_subtask" | "create_linked_task" | "notify";
 
@@ -660,6 +684,40 @@ export type Board = {
   project: string;
 };
 
+/** The board across projects: one column for each status category (to do, in progress, done), whatever the projects call their statuses. */
+export type BoardAcross = {
+  /** The columns: to do, in progress and done. A column's `id` is its category; its `statuses` give each project's first status of that category, where a dropped card goes. Cards carry their `status`. */
+  columns: Column[];
+  /** The folder the board is limited to, by name. */
+  folder?: string;
+  /** Closed cards older than this many days are counted in `older`, not listed, unless `show_older`. */
+  hide_done_after_days: number;
+  /** The swimlanes in order, the lane without a value last; empty without swimlanes. Each card names its lane. */
+  lanes?: Swimlane[];
+  /** What the swimlanes group by. */
+  lanes_by: LaneBy;
+  /** The projects of the cards, with their statuses. */
+  projects: AcrossProject[];
+  /** The query, in its normal form; empty for every task. */
+  query: string;
+  /** The saved view it was read from, by ID. */
+  view?: string;
+};
+
+/** Which board across projects to read: the open work of every active project (the caller's own project and those below it, for a caller limited to one), with closed work of the last days. */
+export type BoardAcrossInput = {
+  /** Only the projects of this folder (ID or name), with their sub-projects. */
+  folder?: string | null;
+  /** Group the cards into swimlanes by this; default: `project`. */
+  lanes?: LaneBy | null;
+  /** Only the tasks this query matches, such as `label:bug due<+7d`; empty: every task. */
+  query?: string | null;
+  /** Show every closed card, however old. */
+  show_older?: boolean;
+  /** A saved view of the board across projects (ID or name): its query, folder and swimlanes, which the fields below override. */
+  view?: string | null;
+};
+
 /** Which board to read. */
 export type BoardGetInput = {
   /** Show the sub-projects' tasks too; default: as the layout says. */
@@ -877,6 +935,8 @@ export type Card = {
   sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
+  /** Its status, on the board across projects, where a column holds several statuses; left out on a project's board. */
+  status?: CardStatus;
   /** When it entered its status. */
   status_entered_at: string;
   /** Its subtasks: closed and all. */
@@ -915,6 +975,16 @@ export type CardEdge = {
   /** The colour. */
   hue: Hue;
   /** What it stands for: the type's or label's name, the priority, or the rule's name (its query when it has none). */
+  name: string;
+};
+
+/** The status a card is in, as the board across projects shows it. */
+export type CardStatus = {
+  /** Its colour. */
+  hue: Hue;
+  /** The status's ID. */
+  id: string;
+  /** Its name. */
   name: string;
 };
 
@@ -2698,7 +2768,7 @@ export type LabelUpdateInput = {
 };
 
 /** What the board's swimlanes group the cards by. */
-export type LaneBy = "none" | "parent" | "priority" | "label" | "sprint" | "type" | "field";
+export type LaneBy = "none" | "parent" | "priority" | "label" | "sprint" | "type" | "field" | "project";
 
 /** A layout after a change. */
 export type LayoutChange = {
@@ -2740,7 +2810,7 @@ export type LayoutUpdateInput = {
   include_subprojects?: boolean | null;
   /** The select custom field the lanes group by, by name or as `cf.<query name>`. */
   lane_field?: string | null;
-  /** What the swimlanes group the cards by: `none`, `parent`, `priority`, `label`, `sprint`, `type` or `field` (with `lane_field`). */
+  /** What the swimlanes group the cards by: `none`, `parent`, `priority`, `label`, `sprint`, `type`, `project` or `field` (with `lane_field`). */
   lanes?: LaneBy | null;
   /** The column order, by status name or ID; columns left out follow in project order. */
   order?: string[] | null;
@@ -4037,7 +4107,9 @@ export type SavedView = {
   created_at: string;
   /** What it is for. */
   description?: string;
-  /** The field rows are grouped by. */
+  /** For a board across projects: the folder whose projects it shows, by name. */
+  folder?: string;
+  /** The field rows are grouped by; for a board across projects, what its swimlanes group by. */
   group_by?: string;
   /** Its ID. */
   id: string;
@@ -4789,15 +4861,15 @@ export type Swimlane = {
   counts: Record<string, number>;
   /** The lane of the cards without a value; it comes last. */
   empty: boolean;
-  /** Its colour, for a type or label. */
+  /** Its colour, for a type, label or project. */
   hue?: Hue;
-  /** The lane's ID: the priority, the option, or the ID of the type, label, sprint or parent task; `none` for the lane of the cards without a value. */
+  /** The lane's ID: the priority, the option, the project's key, or the ID of the type, label, sprint or parent task; `none` for the lane of the cards without a value. */
   id: string;
   /** The parent task's key, for a lane of a parent. */
   key?: string;
-  /** Its name: the priority, the type's, label's, sprint's or option's name, or the parent's title; empty for the lane without a value. */
+  /** Its name: the priority, the type's, label's, sprint's, project's or option's name, or the parent's title; empty for the lane without a value. */
   name: string;
-  /** Whether cards can be dropped into it to take its value; a completed sprint can't take tasks. */
+  /** Whether cards can be dropped into it to take its value; a completed sprint can't take tasks, and a card never changes project this way. */
   settable: boolean;
   /** What a card dropped into the lane gets, as `task.move`'s `changes` take it: the priority, the type's or label's name, the sprint's or parent's ID, or the option; left out for the lane without a value. */
   value?: string;
@@ -6184,7 +6256,9 @@ export type ViewCreateInput = {
   columns?: string[];
   /** What it is for. */
   description?: string | null;
-  /** The field rows are grouped by. */
+  /** For a board across projects: only the projects of this folder (ID or name). */
+  folder?: string | null;
+  /** The field rows are grouped by; for a board across projects, what its swimlanes group by (`project`, `priority`, `label`, `sprint`, `type`, `parent` or `none`). */
   group_by?: string | null;
   /** Make it the screen's default view. */
   is_default?: boolean;
@@ -6211,10 +6285,10 @@ export type ViewDeleteInput = {
 };
 
 /** A view field that can be cleared. */
-export type ViewField = "description" | "columns" | "sort" | "group_by" | "totals";
+export type ViewField = "description" | "columns" | "sort" | "group_by" | "totals" | "folder";
 
 /** Which screen a view is for. */
-export type ViewKind = "list" | "board" | "gantt" | "calendar";
+export type ViewKind = "list" | "board" | "gantt" | "calendar" | "board_across";
 
 /** Saved views, in order. */
 export type ViewList = {
@@ -6242,6 +6316,8 @@ export type ViewUpdateInput = {
   columns?: string[] | null;
   /** A new description. */
   description?: string | null;
+  /** For a board across projects: another folder (ID or name). */
+  folder?: string | null;
   /** A new grouping. */
   group_by?: string | null;
   /** Make it, or stop it being, the screen's default view. */
@@ -6943,6 +7019,7 @@ export interface OpMap {
   "digest.get": { input: DigestInput; output: Digest; safety: "read"; kind: "query" };
   "digest.dismiss": { input: DigestDismissInput; output: DigestDismissed; safety: "app"; kind: "command" };
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
+  "board.get_across": { input: BoardAcrossInput; output: BoardAcross; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
   "view.list": { input: ViewListInput; output: ViewList; safety: "read"; kind: "query" };
@@ -7139,6 +7216,7 @@ export const OP_SAFETY = {
   "digest.get": "read",
   "digest.dismiss": "app",
   "board.get": "read",
+  "board.get_across": "read",
   "layout.get": "read",
   "layout.update": "write",
   "view.list": "read",
@@ -7268,6 +7346,8 @@ export function makeOps(call: Call) {
     board: {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts. (read) */
       get: (input: OpMap["board.get"]["input"]) => call("board.get", input),
+      /** The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default. (read) */
+      getAcross: (input: OpMap["board.get_across"]["input"] = {}) => call("board.get_across", input),
     },
     checklist: {
       /** Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text. (write) */

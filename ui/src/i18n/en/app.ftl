@@ -649,6 +649,10 @@ card-move-to = Move to
 card-priority = Priority
 card-copy-key = Copy key
 card-blocked = Blocked
+# On a board across projects: the project a card belongs to, said with its coloured mark.
+card-project = Project { $name }
+# Said before the status chip on a board across projects.
+card-status = Status
 card-claimed = { $agent }
 card-claimed-label = Claimed by { $agent }
 card-comments =

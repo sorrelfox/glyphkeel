@@ -11,7 +11,8 @@ import { type Card, type CardField } from "../../data/catalog";
 import { useFieldText } from "../../data/fields";
 import { useOp } from "../../data/hooks";
 import { inApp, thumbnailUrl } from "../../ipc/files";
-import { type CardCover, type CustomField } from "../../generated/ops";
+import { ProjectMark } from "../../components/ProjectMark";
+import { type CardCover, type CustomField, type Hue } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useDurations } from "../../data/time";
 import { dueState } from "./model";
@@ -29,6 +30,8 @@ interface CardViewProps extends HTMLAttributes<HTMLElement> {
   ghost?: boolean;
   /** The card that follows the pointer. */
   lifted?: boolean;
+  /** On a board across projects: the card's project, shown by its colour and name. */
+  project?: { name: string; hue: Hue } | undefined;
   style?: CSSProperties;
 }
 
@@ -128,7 +131,7 @@ function Cover({ cover }: { cover: CardCover }) {
  * value; then comments, files and time spent, when there are any.
  */
 export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView(
-  { card, fields, custom = [], compact, today, selected = false, ghost = false, lifted = false, className, ...rest },
+  { card, fields, custom = [], compact, today, selected = false, ghost = false, lifted = false, project, className, ...rest },
   ref,
 ) {
   const t = useT();
@@ -235,6 +238,7 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
           card; the spaces keep the parts apart in the name. */}
       <div className={styles.cardTop}>
         <TypeGlyph glyph={card.type.glyph} label={card.type.name} />{" "}
+        {project && <ProjectMark hue={project.hue} label={t("card-project", { name: project.name })} />}{" "}
         <span className="key">{card.key}</span>{" "}
         {card.recurring === true && <RecurringMark />}{" "}
         {card.blocked && !closed && <span className="chip hue-red">{t("card-blocked")}</span>}{" "}
@@ -248,6 +252,14 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       </div>{" "}
       {edgeText !== undefined && <span className={styles.hiddenText}>{edgeText} </span>}
       <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>{" "}
+      {card.status && (
+        <div className={styles.cardLabels}>
+          <span className={`chip hue-${card.status.hue}`} data-status={card.status.name}>
+            <span className={styles.hiddenText}>{t("card-status")} </span>
+            {card.status.name}
+          </span>
+        </div>
+      )}{" "}
       {labels.length > 0 && (
         <div className={styles.cardLabels}>
           {labels.map((label) => (

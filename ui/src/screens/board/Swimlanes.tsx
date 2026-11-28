@@ -51,7 +51,8 @@ export interface SwimlanesProps {
   /** The column whose Add task field is open. */
   adding: string | null;
   templates: readonly TemplateSummary[];
-  onAdd: (column: string) => void;
+  /** Opens a column's Add task field; without it, the columns have none. */
+  onAdd?: ((column: string) => void) | undefined;
   onCreate: (column: string, title: string, template: string | null) => void;
   onStopAdding: () => void;
   onScroller: (cell: string, run: ((index: number) => void) | null) => void;
@@ -93,6 +94,7 @@ function ColumnHead({ column, index, columnMenu, adding, templates, onAdd, onCre
   // Limits are the column's, whatever the lanes: they warn on its total.
   const over = limit !== undefined && column.total > limit;
   const under = min !== undefined && column.total < min;
+  const menu = columnMenu(data.id, index);
   return (
     <section className={classes("lane", styles.swimColumn)} aria-label={laneLabel(t, data.name, column.total, limit, min, under)} data-column={data.id}>
       <header className={styles.laneHeader}>
@@ -102,25 +104,29 @@ function ColumnHead({ column, index, columnMenu, adding, templates, onAdd, onCre
           {laneCount(t, column.total, limit, min)}
         </span>
         <div className="grow" />
-        <Button
-          className="btn flat icon sm"
-          aria-label={t("lane-add", { name: data.name })}
-          onPress={() => {
-            onAdd(data.id);
-          }}
-        >
-          <Plus className="ic s" />
-        </Button>
-        <MenuTrigger>
-          <Button className="btn flat icon sm" aria-label={t("lane-menu", { name: data.name })}>
-            <Ellipsis className="ic s dots" />
+        {onAdd && (
+          <Button
+            className="btn flat icon sm"
+            aria-label={t("lane-add", { name: data.name })}
+            onPress={() => {
+              onAdd(data.id);
+            }}
+          >
+            <Plus className="ic s" />
           </Button>
-          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
-            <Menu className="menu">
-              <MenuEntries entries={columnMenu(data.id, index)} />
-            </Menu>
-          </Popover>
-        </MenuTrigger>
+        )}
+        {menu.length > 0 && (
+          <MenuTrigger>
+            <Button className="btn flat icon sm" aria-label={t("lane-menu", { name: data.name })}>
+              <Ellipsis className="ic s dots" />
+            </Button>
+            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+              <Menu className="menu">
+                <MenuEntries entries={menu} />
+              </Menu>
+            </Popover>
+          </MenuTrigger>
+        )}
       </header>
       {adding === data.id && (
         <div className={styles.swimAdd}>

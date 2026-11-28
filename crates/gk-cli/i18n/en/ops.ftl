@@ -1124,6 +1124,18 @@ op-board-get--lanes = Group the cards into swimlanes by this; default: as the la
 op-board-get--project = The project: its key (current or old) or ID.
 op-board-get--show-older = Show every closed card, however old.
 
+## glyphkeel board all
+
+op-board-get-across = The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default.
+op-board-get-across--folder = Only the projects of this folder (ID or name), with their
+    sub-projects.
+op-board-get-across--lanes = Group the cards into swimlanes by this; default: `project`.
+op-board-get-across--query = Only the tasks this query matches, such as `label:bug due<+7d`;
+    empty: every task.
+op-board-get-across--show-older = Show every closed card, however old.
+op-board-get-across--view = A saved view of the board across projects (ID or name): its query,
+    folder and swimlanes, which the fields below override.
+
 ## glyphkeel board layout show <project>
 
 op-layout-get = The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes.
@@ -1152,7 +1164,7 @@ op-layout-update--include-subprojects = Show the sub-projects' tasks too.
 op-layout-update--lane-field = The select custom field the lanes group by, by name or as
     `cf.<query name>`.
 op-layout-update--lanes = What the swimlanes group the cards by: `none`, `parent`, `priority`,
-    `label`, `sprint`, `type` or `field` (with `lane_field`).
+    `label`, `sprint`, `type`, `project` or `field` (with `lane_field`).
 op-layout-update--order = The column order, by status name or ID; columns left out follow in
     project order.
 op-layout-update--project = The project: its key (current or old) or ID.
@@ -1174,7 +1186,11 @@ op-view-list--project = The views of this project (key or ID); left out: the vie
 op-view-create = Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals.
 op-view-create--columns = The columns shown, in order.
 op-view-create--description = What it is for.
-op-view-create--group-by = The field rows are grouped by.
+op-view-create--folder = For a board across projects: only the projects of this folder (ID
+    or name).
+op-view-create--group-by = The field rows are grouped by; for a board across projects, what
+    its swimlanes group by (`project`, `priority`, `label`, `sprint`,
+    `type`, `parent` or `none`).
 op-view-create--is-default = Make it the screen's default view.
 op-view-create--kind = The screen; default: the list.
 op-view-create--name = Its name, unique among the views of its project and screen.
@@ -1189,6 +1205,7 @@ op-view-update = Rename a saved view, change its query, columns, order, grouping
 op-view-update--clear = Fields to clear.
 op-view-update--columns = New columns.
 op-view-update--description = A new description.
+op-view-update--folder = For a board across projects: another folder (ID or name).
 op-view-update--group-by = A new grouping.
 op-view-update--is-default = Make it, or stop it being, the screen's default view.
 op-view-update--name = A new name.

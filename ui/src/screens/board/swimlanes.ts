@@ -16,6 +16,9 @@ export const EMPTY_LANE = "none";
 /** The groupings the toolbar offers, custom fields aside. */
 export const LANE_KINDS = ["none", "parent", "priority", "label", "sprint", "type"] as const satisfies readonly LaneBy[];
 
+/** The groupings the board across projects offers: by project first, its default. */
+export const ACROSS_LANE_KINDS = ["project", "none", "parent", "priority", "label", "sprint", "type"] as const satisfies readonly LaneBy[];
+
 /** Between a lane's ID and a column's in a cell's ID: no ID holds it. */
 const SEPARATOR = "\u001f";
 
@@ -78,6 +81,10 @@ export interface Refusal {
  * lane without a value it loses every label, so it lands there.
  */
 export function laneChanges(by: LaneBy, laneField: string, card: Card, from: Swimlane | undefined, to: Swimlane, name: string): { changes: MoveChanges } | { refused: Refusal } {
+  if (by === "project") {
+    // A card changes project by a move of its own, never by a drop.
+    return { refused: { id: "swimlane-refused-project", args: { key: card.key, lane: name } } };
+  }
   if (!to.settable) {
     return { refused: { id: "swimlane-refused-closed", args: { lane: name } } };
   }

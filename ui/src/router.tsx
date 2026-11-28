@@ -26,6 +26,7 @@ import { TrashScreen } from "./screens/safety/TrashScreen";
 import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
 import { TodayScreen } from "./screens/today/TodayScreen";
+import { MyWorkScreen } from "./screens/mywork/MyWorkScreen";
 import { wikiSearch, WikiScreen } from "./screens/wiki/WikiScreen";
 import { WikiWindowScreen } from "./screens/wiki/WikiWindow";
 import { offersFirstRun } from "./shell/FirstRun";
@@ -82,6 +83,17 @@ const taskSearch = (search: Record<string, unknown>): { task?: string } =>
 
 /** Today; `task` is the task open in the panel beside it. */
 const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", validateSearch: taskSearch, component: TodayScreen });
+
+/** My work: the board across projects; `view` the saved view shown, `task` the task open beside it. */
+const myWorkRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/my-work",
+  validateSearch: (search: Record<string, unknown>): { view?: string; task?: string } => ({
+    ...(typeof search.view === "string" && search.view !== "" ? { view: search.view } : {}),
+    ...taskSearch(search),
+  }),
+  component: MyWorkScreen,
+});
 
 /** The search page: the text, filters and the task open beside the results. */
 const searchRoute = createRoute({ getParentRoute: () => shellRoute, path: "/search", validateSearch: searchParams, component: SearchScreen });
@@ -206,7 +218,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, dashboardsRoute, trashRoute, activityRoute, approvalsRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, myWorkRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, dashboardsRoute, trashRoute, activityRoute, approvalsRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**

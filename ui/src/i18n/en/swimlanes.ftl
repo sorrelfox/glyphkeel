@@ -12,6 +12,7 @@ lanes-by-priority = Priority
 lanes-by-label = Label
 lanes-by-sprint = Sprint
 lanes-by-type = Type
+lanes-by-project = Project
 # The section of the select custom fields; their names are the person's own words.
 lanes-by-fields = Custom fields
 
@@ -55,6 +56,7 @@ swimlane-cell =
 swimlane-refused-closed = Cards can't be moved into { $lane }: the sprint is completed.
 swimlane-refused-own-parent = { $key } can't go into its own lane: a task can't be its own parent.
 swimlane-refused-other-project = { $key } can't go into { $lane }: a parent must be in the task's own project.
+swimlane-refused-project = { $key } can't go into { $lane }: a task moves to another project from its own menu, not by dragging.
 
 # Moving a card with swimlanes: the lane is said with the column.
 swimlane-move-done = { $key } moved to { $column } in lane { $lane }

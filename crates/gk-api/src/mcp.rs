@@ -1442,11 +1442,29 @@ compact cards. `include_subprojects: true` adds the sub-projects' tasks, matchin
 status name. Closed cards older than the layout's limit are counted, not listed, unless \
 `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and \
 their `cover` image when the layout sets them. With swimlanes (the layout's, or `lanes`: parent, \
-priority, label, sprint, type, or field with `lane_field`), `lanes` lists each lane with its \
+priority, label, sprint, type, project, or field with `lane_field`), `lanes` lists each lane with its \
 `counts` per column ID and total, the lane without a value last, and each card names its `lane`. \
 Example: get_board {\"project\": \"TM\", \"lanes\": \"priority\"}",
         main: "board.get",
         covers: &["board.get", "layout.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_board_across",
+        toolset: Toolset::Views,
+        title: "Get the board across projects",
+        description: "Returns the open work of every active project on one board (the person's \
+\"My work\"), with a column for each status category: `todo`, `in_progress` and `done` (closed in \
+the last two weeks; older ones are counted in the column's `older` unless `show_older: true`). \
+Each card has its `project` and its real `status`; each column's `statuses` gives every \
+project's first status of that category, and `projects` lists the projects' statuses, so a \
+card can be moved with move_task to the right status of its own project. Narrow it with a \
+`query` (as for search_tasks), a sidebar `folder`, or a saved `view` of kind `board_across` \
+(list_views). Swimlanes by project by default (`lanes`: project, priority, label, sprint, type, \
+parent or none). Archived projects are left out. \
+Example: get_board_across {\"query\": \"priority>=high\"}",
+        main: "board.get_across",
+        covers: &["board.get_across"],
         idempotent: true,
     },
     McpTool {
@@ -1459,7 +1477,7 @@ priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_a
 `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, \
 or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), \
 `covers` (off, chosen, first_image), the swimlanes (`lanes`: none, parent, priority, label, \
-sprint, type, or field with `lane_field`, a select field; which lanes are collapsed is the \
+sprint, type, project, or field with `lane_field`, a select field; which lanes are collapsed is the \
 person's own setting in the app), or `reset` to the project's layout. It never changes the \
 project's statuses. Only change the layout when the person asked. \
 Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
@@ -1485,8 +1503,9 @@ Example: list_views {\"project\": \"TM\"}",
         title: "Save a view",
         description: "Saves a query as a named view of a `project` or of the whole workspace, with \
 optional `columns`, `sort`, `group_by`, `totals` and `is_default`. The query must be valid; \
-relative dates in it are evaluated whenever the view is opened. Only save views the person asked \
-for. \
+relative dates in it are evaluated whenever the view is opened. A view of `kind: board_across` \
+(the board across projects) belongs to the whole workspace, may keep to a `folder`, and its \
+`group_by` is what its swimlanes group by. Only save views the person asked for. \
 Example: create_view {\"name\": \"Due this week\", \"project\": \"TM\", \"query\": \
 \"is:open due:this-week\", \"sort\": \"due\"}",
         main: "view.create",
@@ -2150,6 +2169,7 @@ mod tests {
                 "get_reminders",
                 "get_today",
                 "get_board",
+                "get_board_across",
                 "list_views",
                 "list_dashboards",
                 "get_dashboard",

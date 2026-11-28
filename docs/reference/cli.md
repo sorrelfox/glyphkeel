@@ -26,6 +26,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel backup restore <name>` | `backup.restore` | Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart. |
 | `glyphkeel backup verify <name>` | `backup.verify` | Check a backup: the database copy's integrity and every stored file it needs. |
 | `glyphkeel board <project>` | `board.get` | A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state, compact cards and the swimlanes with their counts. |
+| `glyphkeel board all` | `board.get_across` | The open work of every active project on one board: a column for each status category (to do, in progress, recently done), cards with their project and real status, filtered by a query or a folder, in swimlanes by project by default. |
 | `glyphkeel board layout set <project>` | `layout.update` | Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers, swimlanes and older closed cards, or reset to the project's layout. |
 | `glyphkeel board layout show <project>` | `layout.get` | The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours, covers and swimlanes. |
 | `glyphkeel comment add <key>` | `comment.add` | Add a Markdown comment to a task, optionally answering another. |

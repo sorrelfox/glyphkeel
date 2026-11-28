@@ -143,3 +143,76 @@ fn the_board_shows_swimlanes_by_priority_and_keeps_them_in_the_layout() {
     let json = ws.json(&["board", "GK", "--lanes", "none"]);
     assert!(json.get("lanes").is_none());
 }
+
+#[test]
+fn board_all_shows_the_work_of_every_project_by_category() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["project", "create", "--name", "Home", "--key", "HM"]);
+    ws.ok(&[
+        "-q",
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "Crash on start",
+        "--priority",
+        "high",
+    ]);
+    ws.ok(&[
+        "-q",
+        "task",
+        "create",
+        "--project",
+        "HM",
+        "--title",
+        "Paint the door",
+        "--status",
+        "Review",
+    ]);
+
+    let text = ws.ok(&["board", "--all"]);
+    assert!(text.starts_with("My work\n"), "{text}");
+    assert!(
+        text.contains("\nColumns\n  To do (1 task)\n  In progress (1 task)\n  Done (0 tasks)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "\nLane: Glyphkeel (1 task)\n  To do (1)\n    GK-1  Crash on start  [Backlog]\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "\nLane: Home (1 task)\n  In progress (1)\n    HM-1  Paint the door  [Review]\n"
+        ),
+        "{text}"
+    );
+
+    // A query narrows it; `board all` is the same command.
+    let text = ws.ok(&[
+        "board",
+        "all",
+        "--query",
+        "priority>=high",
+        "--lanes",
+        "none",
+    ]);
+    assert!(text.contains("Query: priority>=high\n"), "{text}");
+    assert!(
+        text.contains("\nTo do (1 task)\n  GK-1  Crash on start  [Backlog]\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nIn progress (0 tasks)\n  no cards\n"),
+        "{text}"
+    );
+
+    let json = ws.json(&["board", "--all", "--query", "project:HM"]);
+    assert_eq!(json["columns"][1]["cards"][0]["key"], "HM-1");
+    assert_eq!(json["lanes_by"], "project");
+    // A mistake in the query is a usage error with its place.
+    ws.fails(1, &["board", "--all", "--query", "label:"]);
+}

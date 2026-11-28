@@ -14,7 +14,7 @@ import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { motionReduced } from "../../appearance/appearance";
 import { Select } from "../../components/Select";
 import { type Card } from "../../data/catalog";
-import { type CustomField, type TemplateSummary } from "../../generated/ops";
+import { type CustomField, type Hue, type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { CardView } from "./CardView";
 import { keepMounted, type LaneData } from "./dnd";
@@ -36,6 +36,8 @@ export interface CardHandlers {
   /** Keys the card handles itself before drag and drop sees them; true when handled. */
   onKey: (key: string, event: KeyboardEvent<HTMLElement>) => boolean;
   onMenu: (key: string, at: { clientX: number; clientY: number } | Element) => void;
+  /** On a board across projects: the card's project, shown on it. */
+  projectOf?: (card: Card) => { name: string; hue: Hue } | undefined;
 }
 
 interface SortableCardProps {
@@ -69,6 +71,7 @@ export function SortableCard({ card, handlers, sortable, dropDisabled }: Sortabl
       custom={handlers.custom}
       compact={handlers.compact}
       today={handlers.today}
+      project={handlers.projectOf?.(card)}
       selected={handlers.selected === card.key}
       ghost={isDragging}
       style={{ transform: CSS.Translate.toString(transform), transition }}
@@ -110,8 +113,10 @@ interface LaneProps {
   /** The dragged card is over this lane. */
   hot: boolean;
   adding: boolean;
+  /** The column's menu; none without entries. */
   menu: readonly MenuEntry[];
-  onAdd: () => void;
+  /** Opens the Add task field; without it, the column has none. */
+  onAdd?: (() => void) | undefined;
   /** Task templates the Add task field offers. */
   templates?: readonly TemplateSummary[];
   /** A new task: its title, and the template it starts from (the title may then be empty). */
@@ -177,19 +182,23 @@ export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot,
           {laneCount(t, lane.total, limit, min)}
         </span>
         <div className="grow" />
-        <Button className="btn flat icon sm" aria-label={t("lane-add", { name: column.name })} onPress={onAdd}>
-          <Plus className="ic s" />
-        </Button>
-        <MenuTrigger>
-          <Button className="btn flat icon sm" aria-label={t("lane-menu", { name: column.name })}>
-            <Ellipsis className="ic s dots" />
+        {onAdd && (
+          <Button className="btn flat icon sm" aria-label={t("lane-add", { name: column.name })} onPress={onAdd}>
+            <Plus className="ic s" />
           </Button>
-          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
-            <Menu className="menu">
-              <MenuEntries entries={menu} />
-            </Menu>
-          </Popover>
-        </MenuTrigger>
+        )}
+        {menu.length > 0 && (
+          <MenuTrigger>
+            <Button className="btn flat icon sm" aria-label={t("lane-menu", { name: column.name })}>
+              <Ellipsis className="ic s dots" />
+            </Button>
+            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+              <Menu className="menu">
+                <MenuEntries entries={menu} />
+              </Menu>
+            </Popover>
+          </MenuTrigger>
+        )}
       </header>
       {reason !== undefined && active !== null && (
         <p className={styles.laneRule} role="note" aria-label={t("lane-rule-closed", { name: column.name, reason })}>
@@ -227,10 +236,12 @@ function LaneFooter({ lane, adding, templates, onAdd, onCreate, onStopAdding, on
       {adding ? (
         <AddTaskField name={lane.column.name} templates={templates ?? []} onCreate={onCreate} onStop={onStopAdding} />
       ) : (
-        <button type="button" className="add" onClick={onAdd}>
-          <Plus className="ic s" />
-          <span>{t("lane-add-task")}</span>
-        </button>
+        onAdd && (
+          <button type="button" className="add" onClick={onAdd}>
+            <Plus className="ic s" />
+            <span>{t("lane-add-task")}</span>
+          </button>
+        )
       )}
     </>
   );

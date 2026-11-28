@@ -87,7 +87,7 @@ function Picker<T extends string>({ label, icon, options, value, onChange }: Pic
   );
 }
 
-function MenuButton({ label, children, entries, on = false, icon }: { label: string; children: ReactNode; entries: readonly MenuEntry[]; on?: boolean; icon?: boolean }) {
+export function MenuButton({ label, children, entries, on = false, icon }: { label: string; children: ReactNode; entries: readonly MenuEntry[]; on?: boolean; icon?: boolean }) {
   return (
     <MenuTrigger>
       <Button className={classes("btn", on ? "on" : "flat", icon && "icon")} aria-label={label}>

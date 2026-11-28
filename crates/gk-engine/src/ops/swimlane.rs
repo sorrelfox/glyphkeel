@@ -9,8 +9,8 @@
 //! (the project's types and open sprints, a select field's values, the
 //! parents' titles) are read once for the whole board. Priorities, types,
 //! open sprints and a select field's options always have their lane, so a
-//! card can be dropped into one that is empty yet; labels, parents and
-//! completed sprints have one while a card shows them. With sub-projects,
+//! card can be dropped into one that is empty yet; labels, parents,
+//! projects and completed sprints have one while a card shows them. With sub-projects,
 //! types and labels are matched by name, as columns are by status name.
 
 use std::collections::{BTreeMap, HashMap};
@@ -89,6 +89,8 @@ pub(crate) struct Lanes {
     by_name: HashMap<String, String>,
     /// A select field's value of each task, by task ID.
     values: HashMap<String, String>,
+    /// For lanes by project: each project's place, name and colour, by key.
+    projects: HashMap<String, (usize, String, Hue)>,
 }
 
 impl Lanes {
@@ -103,8 +105,28 @@ impl Lanes {
         let mut fixed = Vec::new();
         let mut by_name = HashMap::new();
         let mut values = HashMap::new();
+        let mut known = HashMap::new();
         match by {
             LaneBy::None | LaneBy::Label | LaneBy::Parent => {}
+            LaneBy::Project => {
+                let mut stmt =
+                    tx.prepare_cached("SELECT key, name, hue FROM projects WHERE id = ?1")?;
+                for (i, p) in projects.iter().enumerate() {
+                    let row = stmt
+                        .query_map([b(*p)], |r| {
+                            Ok((
+                                r.get::<_, String>(0)?,
+                                r.get::<_, String>(1)?,
+                                r.get::<_, String>(2)?,
+                            ))
+                        })?
+                        .next()
+                        .transpose()?;
+                    if let Some((key, name, hue)) = row {
+                        known.insert(key, (i, name, parse_enum(&hue).unwrap_or(Hue::Grey)));
+                    }
+                }
+            }
             LaneBy::Priority => {
                 for p in [
                     Priority::Urgent,
@@ -176,6 +198,7 @@ impl Lanes {
             fixed,
             by_name,
             values,
+            projects: known,
         })
     }
 
@@ -249,6 +272,23 @@ impl Lanes {
                     named: false,
                 };
                 (Some(parent.to_owned()), Some(draft))
+            }
+            LaneBy::Project => {
+                let (order, name, hue) = self.projects.get(&card.project).cloned().unwrap_or((
+                    usize::MAX,
+                    card.project.clone(),
+                    Hue::Grey,
+                ));
+                let mut l = lane(card.project.clone(), name, None);
+                l.hue = Some(hue);
+                // A card changes project by a move of its own, never by a drop.
+                l.settable = false;
+                let draft = Draft {
+                    lane: l,
+                    order: format!("{order:020}"),
+                    named: false,
+                };
+                (Some(card.project.clone()), Some(draft))
             }
             LaneBy::Field => {
                 let Some(value) = self.values.get(&card.id) else {
@@ -325,8 +365,8 @@ impl Lanes {
         // Completed sprints follow the open ones, as a type or label only
         // a sub-project has follows those of the board's own project.
         fixed.extend(found.into_iter().map(|d| d.lane));
-        // Every task has a type: no lane without one.
-        if self.by != LaneBy::Type || has_empty {
+        // Every task has a type and a project: no lane without one.
+        if !matches!(self.by, LaneBy::Type | LaneBy::Project) || has_empty {
             fixed.push(empty);
         }
         for l in &mut fixed {

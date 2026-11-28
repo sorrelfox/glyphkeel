@@ -22,7 +22,7 @@ How to use the desktop app.
 | [Getting started](guide/getting-started.md) | Installing on Linux and Windows, the first start, the window |
 | [Projects and sub-projects](guide/projects.md) | Projects, keys, statuses, task types, labels, parts, archiving |
 | [Tasks](guide/tasks.md) | Creating tasks, the task panel, descriptions, checklists, subtasks, links, comments, files |
-| [The board](guide/board.md) | Columns, cards, drag and drop, your own layout, WIP limits |
+| [The board](guide/board.md) | Columns, cards, drag and drop, your own layout, WIP limits, My work across projects |
 | [The list and saved views](guide/list.md) | The task list, filters, grouping, bulk changes, CSV and JSON export |
 | [Calendar and Gantt chart](guide/calendar-and-gantt.md) | Dates on a calendar, the schedule, dependencies and milestones |
 | [The wiki](guide/wiki.md) | Pages, links, macros, page templates, export and import |

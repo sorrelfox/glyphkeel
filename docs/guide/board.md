@@ -77,7 +77,9 @@ name of what colours the edge (`edge: Urgent bugs`) and the cover's file name
 
 **Swimlanes** in the board's toolbar adds horizontal lanes across the
 columns, so one board can be read by **Epic or parent**, **Priority**,
-**Label**, **Sprint**, **Type** or a select custom field. **None** goes back
+**Label**, **Sprint**, **Type** or a select custom field (and, from the
+command line or an agent, by **Project**, for a board with its
+sub-projects). **None** goes back
 to plain columns.
 
 - Each lane has a header with its name and its number of tasks, and each of
@@ -111,6 +113,52 @@ and then each lane with its columns and cards; `glyphkeel board layout set TM
 (each lane with its counts by column, each card naming its lane), set them
 with `set_board_layout`, and move a card into a lane with `move_task` and its
 `changes`.
+
+## Working across projects
+
+**My work** in the sidebar, under Today, is one board for the work of every
+active project, so you don't have to open each project. The command palette
+opens it too (**My work**).
+
+- Its columns are the status categories, **To do**, **In progress** and
+  **Done**, because projects name their statuses differently. **Done** shows
+  the tasks closed in the last two weeks; older ones are counted under the
+  column, and **Show older** brings them in.
+- Each card shows its project's colour and its real status as a chip, such
+  as **Review** in the **In progress** column.
+- The board is split into a lane for each project. **Swimlanes** in the
+  toolbar groups it by priority, label, sprint, type or parent instead, or
+  not at all. Which lanes are collapsed is your own setting, kept on this
+  computer.
+- Dragging a card into another column moves it to its project's status of
+  that category. When the project has several (**In progress** and **Review**
+  by default), a small menu asks which. The status's rules still apply: a
+  column the card can't enter says why while you drag (for example
+  "Fill in first: Estimate"), and a move the engine refuses goes back with
+  its message. One Undo takes a move back. From the keyboard, Alt+Left and
+  Alt+Right move the selected card, and its menu has **Move to** with every
+  status of its project. A card stays in its lane: it changes project from
+  its own panel, not by dragging.
+- Archived projects are left out. An agent limited to one project sees only
+  that project and the ones below it.
+
+Narrow the board with the query field, which completes fields and names as
+in the [list](list.md) (`project:TM label:bug due<+7d`), and with the quick
+toggles **Due this week**, **In an active sprint** and **High priority**,
+which add their condition to the query. **All projects** in the toolbar
+keeps the board to the projects of one sidebar folder.
+
+**Save as…** keeps the query, the folder and the swimlanes as a view of the
+whole workspace, so several such boards can exist, such as "Work" and
+"Home" for two folders. Saved views show under **My work** in the sidebar
+and in the view menu at the toolbar's start, where they are renamed, made
+the default (the one My work opens with) or deleted.
+
+From the command line, `glyphkeel board --all` (or `glyphkeel board all`)
+prints the board across projects, with `--query`, `--folder`, `--lanes` and
+`--view` (a saved view's name). `glyphkeel view create --kind board_across`
+saves one. Agents read it with `get_board_across`, and move a card with
+`move_task` to the status its column names for the card's project.
 
 ## Filtering
 

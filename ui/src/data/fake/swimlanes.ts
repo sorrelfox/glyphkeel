@@ -3,7 +3,8 @@
 
 // The board's swimlanes in the fake engine, as the engine groups them:
 // priorities, types, open sprints and a select field's options always have
-// their lane; labels, parents and completed sprints while a card shows them;
+// their lane; labels, parents, projects and completed sprints while a card
+// shows them;
 // the lane of the cards without a value comes last (a type always has one).
 // Types and labels are matched by name across sub-projects.
 
@@ -114,6 +115,14 @@ export function assignLanes(columns: Column[], sources: LaneSources): Swimlane[]
           }
           break;
         }
+        case "project": {
+          // A card changes project by a move of its own, never by a drop.
+          const at = sources.projects.findIndex((project) => project.key === card.project);
+          const project = sources.projects[at];
+          id = card.project;
+          draft = { lane: { ...lane(card.project, project?.name ?? card.project, undefined), hue: project?.hue ?? "grey", settable: false }, order: String(at < 0 ? 999_999 : at).padStart(6, "0"), named: false };
+          break;
+        }
         case "field": {
           const value = sources.field && task?.fields?.[sources.field.id];
           if (typeof value === "string") {
@@ -143,7 +152,7 @@ export function assignLanes(columns: Column[], sources: LaneSources): Swimlane[]
   }
   found.sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : a.lane.id < b.lane.id ? -1 : 1));
   const lanes = [...fixed, ...found.map((each) => each.lane)];
-  if (by !== "type" || hasEmpty) {
+  if ((by !== "type" && by !== "project") || hasEmpty) {
     lanes.push({ ...lane(EMPTY_LANE, "", undefined), empty: true });
   }
   for (const each of lanes) {

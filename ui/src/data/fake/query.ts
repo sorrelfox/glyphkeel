@@ -1235,8 +1235,15 @@ export type ViewProblem = { code: "invalid" | "not_found" | "conflict"; message:
 
 /** `view.create`; the new list of views, or the problem. */
 export function createView(views: SavedView[], input: ViewCreateInput, now: string): SavedView | ViewProblem {
-  const kind = input.kind ?? "list";
   const project = input.project ?? undefined;
+  // A board view of the whole workspace is the board across projects.
+  const kind = input.kind === "board" && project === undefined ? "board_across" : (input.kind ?? "list");
+  if (kind === "board_across" && project !== undefined) {
+    return { code: "invalid", message: "A view of the board across projects belongs to the whole workspace: leave out `project`." };
+  }
+  if (input.folder && kind !== "board_across") {
+    return { code: "invalid", message: "Only a view of the board across projects keeps to a folder." };
+  }
   const name = input.name.trim();
   if (name === "") {
     return { code: "invalid", message: "A view needs a name." };
@@ -1260,6 +1267,7 @@ export function createView(views: SavedView[], input: ViewCreateInput, now: stri
     ...(input.group_by ? { group_by: input.group_by } : {}),
     ...(input.totals ? { totals: input.totals } : {}),
     ...(input.description ? { description: input.description } : {}),
+    ...(input.folder ? { folder: input.folder } : {}),
   };
   if (view.is_default) {
     for (const other of views) {
@@ -1299,6 +1307,9 @@ export function updateView(views: SavedView[], input: ViewUpdateInput, now: stri
   }
   if (input.totals) {
     view.totals = input.totals;
+  }
+  if (input.folder) {
+    view.folder = input.folder;
   }
   if (input.is_default !== null && input.is_default !== undefined) {
     if (input.is_default) {

@@ -266,6 +266,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     digest::DIGEST_GET,
     digest::DIGEST_DISMISS,
     board::BOARD_GET,
+    board::BOARD_GET_ACROSS,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,
     view::VIEW_LIST,

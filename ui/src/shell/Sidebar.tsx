@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useNavigate } from "@tanstack/react-router";
-import { ChartArea, Clock, FolderPlus, History, Inbox, LayoutDashboard, List, Plus, ShieldCheck, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { ChartArea, Clock, FolderPlus, History, Inbox, LayoutDashboard, List, Plus, ShieldCheck, SlidersHorizontal, SquareKanban, Sun, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { useAction } from "../actions/ActionsProvider";
@@ -10,6 +10,7 @@ import { Kbd } from "../components/Kbd";
 import { classes } from "../classes";
 import { useCounts, useProjects } from "../data/board";
 import { useInboxCount } from "../data/digest";
+import { useSavedViews } from "../data/list";
 import { usePendingProposals } from "../data/proposals";
 import { folderOfProject, useFolders } from "../data/folders";
 import { useSidebarCounts } from "../data/today";
@@ -18,6 +19,7 @@ import { dragRegion, type TitleBar } from "../start";
 import { FolderDialog, type FolderRequest } from "../screens/project/FolderDialog";
 import { type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectTree } from "../screens/project/ProjectTree";
+import { NO_VIEW, viewOfSearch } from "../screens/mywork/MyWorkScreen";
 import { DIGEST_HEADING } from "../screens/today/DigestPanel";
 import { type View } from "./shellActions";
 import { SidebarSearch } from "./SidebarSearch";
@@ -43,7 +45,8 @@ interface SidebarProps {
  * The sidebar, top to bottom: the search field (typing suggests tasks,
  * projects and actions; Enter opens the search page with its text; the
  * command palette keeps its own key), Inbox (the digest of what changed
- * while the person was away, at the top of Today) with its count, Today and All
+ * while the person was away, at the top of Today) with its count, Today, My
+ * work (the board across projects) with its saved views under it, All
  * tasks with their counts, the dashboards, the time report, the reports, the activity, the approvals (with how many changes of agents wait), the project tree (with its folders and the buttons for a new folder and a new project), the
  * timer chip while a timer runs, then Trash and Preferences.
  *
@@ -53,6 +56,7 @@ interface SidebarProps {
 export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject, onImportCsv }: SidebarProps) {
   const t = useT();
   const today = useAction("nav.today");
+  const myWork = useAction("nav.myWork");
   const allTasks = useAction("nav.allTasks");
   const timeReport = useAction("nav.timeReport");
   const reports = useAction("nav.reports");
@@ -84,6 +88,10 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
       });
     });
   };
+  // My work's saved views, under its entry; the one open is marked.
+  const myWorkViews = useSavedViews(undefined, "board_across").views ?? [];
+  const search = useRouterState({ select: (state) => state.location.search as { view?: unknown } });
+  const openView = view === "my-work" ? viewOfSearch(myWorkViews, typeof search.view === "string" ? search.view : undefined) : undefined;
   // Until Today's counts are in, the project tree's.
   const allCount = sidebarCounts?.open ?? counts?.all;
 
@@ -112,6 +120,42 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
             </span>
           )}
         </button>
+        <button
+          type="button"
+          className={classes("nav", view === "my-work" && openView === undefined && "on")}
+          aria-current={view === "my-work" && openView === undefined ? "page" : undefined}
+          onClick={() => {
+            if (myWorkViews.some((each) => each.is_default)) {
+              // The entry is the whole board; a default view opens from its own entry.
+              void navigate({ to: "/my-work", search: { view: NO_VIEW } });
+            } else {
+              myWork.run();
+            }
+          }}
+        >
+          <SquareKanban className="ic" />
+          <span>{t("view-my-work")}</span>
+        </button>
+        {myWorkViews.length > 0 && (
+          <ul className={styles.navViews} aria-label={t("sidebar-my-work-views")}>
+            {myWorkViews.map((each) => (
+              <li key={each.id}>
+                <button
+                  type="button"
+                  className={classes("nav", openView?.id === each.id && "on")}
+                  aria-current={openView?.id === each.id ? "page" : undefined}
+                  data-view={each.id}
+                  onClick={() => {
+                    void navigate({ to: "/my-work", search: { view: each.id } });
+                  }}
+                >
+                  {/* The view's name is the person's own words. */}
+                  <span className="truncate">{each.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <button type="button" className={classes("nav", view === "all-tasks" && "on")} aria-current={view === "all-tasks" ? "page" : undefined} onClick={allTasks.run}>
           <List className="ic" />
           <span>{t("view-all-tasks")}</span>

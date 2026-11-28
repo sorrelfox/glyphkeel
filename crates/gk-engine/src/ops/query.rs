@@ -286,7 +286,7 @@ pub(crate) fn sort_keys(
     Ok(checked.sort)
 }
 
-fn sql_params(params: &[Param]) -> impl Iterator<Item = Sql> + '_ {
+pub(crate) fn sql_params(params: &[Param]) -> impl Iterator<Item = Sql> + '_ {
     params.iter().map(|p| match p {
         Param::Int(n) => Sql::Integer(*n),
         Param::Text(t) => Sql::Text(t.clone()),

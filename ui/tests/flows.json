@@ -193,6 +193,12 @@
       "ports": { "ui": 5326 }
     },
     {
+      "name": "mywork",
+      "config": "playwright.mywork.config.ts",
+      "about": "My work across projects against the engine: the status chooser, Undo, status rules, saved views after a reload",
+      "ports": { "ui": 5340, "bridge": 5341 }
+    },
+    {
       "name": "pseudo",
       "config": "playwright.pseudo.config.ts",
       "about": "screenshots in a pseudo-locale, on the development server (the pseudo suite)",
