@@ -88,6 +88,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.12" date="2026-11-28">
+      <description>
+        <p>Swimlanes on the board, a digest on Today of what changed while you were away, an approval queue for agents' changes, a translated command line that takes comma-separated lists, and view names that make room in long languages.</p>
+      </description>
+    </release>
     <release version="0.1.11" date="2026-11-27">
       <description>
         <p>New projects go into the selected sidebar folder, ticking a checklist item keeps your place, the task list no longer shows a needless horizontal scroll bar over its totals, and browser test flows can run side by side.</p>

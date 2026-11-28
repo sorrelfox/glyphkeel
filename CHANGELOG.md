@@ -5,6 +5,38 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-11-28
+
+### Features
+
+- **Board swimlanes:** split the board into lanes by parent, priority,
+  label, sprint, type or a select custom field. Each lane shows its
+  counts per column and can be collapsed; tasks without a value come
+  last. Dropping a card in another lane sets that field and the status
+  in one change, undone in one step ("Move to lane" from the keyboard,
+  `board --lanes` on the command line).
+- **While you were away:** Today opens with a digest of what agents,
+  automation rules and the command line changed since you last looked,
+  and which tasks became due, with links and one-click revert. The
+  sidebar Inbox shows the count; the digest stays until you mark it as
+  seen (`digest show` and `digest dismiss` on the command line).
+- **Approvals for agents:** a setting per agent profile decides which
+  changes wait for your approval: none, deletions only, or all. The
+  Approvals screen shows each proposal with a before-and-after preview,
+  to approve, reject with a reason, or approve all. Proposals expire
+  after 14 days by default (`proposals` on the command line).
+- **Command line:** usage lines, help headings and argument errors are
+  translated, and timestamps use the language's date and time style.
+  Every list option also takes a comma-separated value.
+- **Queries:** the query field's value hints are translated.
+
+### Fixes
+
+- View names in the header hide whenever the header is crowded, so the
+  project name stays readable in longer languages.
+- Agents can't reach the disk through the folder given when creating a
+  project or applying a template.
+
 ## [0.1.11] - 2026-11-27
 
 ### Features

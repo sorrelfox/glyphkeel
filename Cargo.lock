@@ -1780,7 +1780,7 @@ dependencies = [
 
 [[package]]
 name = "gk-api"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "schemars 1.2.3",
  "serde",
@@ -1789,7 +1789,7 @@ dependencies = [
 
 [[package]]
 name = "gk-app"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "ashpd",
  "futures-util",
@@ -1819,7 +1819,7 @@ dependencies = [
 
 [[package]]
 name = "gk-cli"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "clap",
  "clap_complete",
@@ -1840,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "gk-core"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "icu_casemap",
  "icu_normalizer",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "gk-devbridge"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "gk-engine"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "gk-api",
  "gk-core",
@@ -1896,7 +1896,7 @@ dependencies = [
 
 [[package]]
 name = "gk-markdown"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "ammonia",
  "comrak",
@@ -1908,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "gk-mcp"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bytes",
  "clap",
@@ -1932,7 +1932,7 @@ dependencies = [
 
 [[package]]
 name = "gk-query"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "gk-core",
  "insta",
@@ -1941,7 +1941,7 @@ dependencies = [
 
 [[package]]
 name = "gk-seed"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "clap",
@@ -1952,7 +1952,7 @@ dependencies = [
 
 [[package]]
 name = "gk-store"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "cc",
  "chacha20poly1305",
@@ -6867,7 +6867,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xtask"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "gk-api",
