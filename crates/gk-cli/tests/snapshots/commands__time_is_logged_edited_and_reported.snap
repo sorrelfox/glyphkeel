@@ -2,8 +2,8 @@
 source: crates/gk-cli/tests/commands.rs
 expression: "ws.ok(&[\"time\", \"report\", \"--from\", \"2026-11-23\", \"--to\", \"2026-11-29\"])"
 ---
-KEY   TITLE  DURATION  ENTRY_COUNT  MINUTES
-GK-1  Notes  1h 15m    1            75
+KEY  TITLE  DURATION  ENTRY_COUNT  MINUTES
+GK-1  Notes  1h 15m  1  75
 
 days_per_week: 5
 from: Nov 23, 2026

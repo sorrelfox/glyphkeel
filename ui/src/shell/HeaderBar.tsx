@@ -3,7 +3,8 @@
 
 import { BookOpen, CalendarDays, ChartGantt, ChevronDown, Columns3, IterationCw, List, Menu as MenuIcon, Milestone, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Button, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
 
 import { useAction } from "../actions/ActionsProvider";
 import { ActionMenu, SEPARATOR } from "../components/ActionMenu";
@@ -207,13 +208,60 @@ const VIEWS = [
 
 type ViewId = (typeof VIEWS)[number]["id"];
 
+/** Below this width a cut-off project name counts as squeezed. */
+const PROJECT_NAME_ROOM = 160;
+
+/**
+ * Whether the views' names crowd the header bar: the bar overflows, or the
+ * project's name is cut off short. The names are as long as the language
+ * makes them, so this is measured rather than set at a fixed width. Once
+ * crowded, the names come back when the bar is wider than it was then, or
+ * when the project or the language changes.
+ */
+function useCrowded(views: RefObject<HTMLDivElement | null>, key: string): boolean {
+  // The bar's width when the names stopped fitting, for this project and language.
+  const [since, setSince] = useState<{ key: string; width: number } | undefined>(undefined);
+  const crowded = since?.key === key;
+  const room = crowded ? since.width : 0;
+  useLayoutEffect(() => {
+    const header = views.current?.parentElement;
+    if (!header || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const check = () => {
+      const width = header.clientWidth;
+      if (crowded) {
+        if (width > room) {
+          setSince(undefined);
+        }
+        return;
+      }
+      const name = header.querySelector("h1");
+      const cut = name !== null && name.clientWidth < Math.min(name.scrollWidth, PROJECT_NAME_ROOM);
+      if (header.scrollWidth > width || cut) {
+        setSince({ key, width });
+      }
+    };
+    const observer = new ResizeObserver(check);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+    };
+  }, [views, key, crowded, room]);
+  return crowded;
+}
+
 /**
  * Board, List, Calendar, Gantt, Roadmap, Sprints and Wiki. When the header
- * bar is narrow they lose their names (each keeps a tooltip); narrower still,
- * only the open view stays, and the others are in a menu beside it.
+ * bar is narrow, or their names would crowd out the project's name, they
+ * lose their names (each keeps a tooltip); narrower still, only the open view
+ * stays, and the others are in a menu beside it.
  */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
+  const { locale } = useLocale();
+  const ref = useRef<HTMLDivElement>(null);
+  const crowded = useCrowded(ref, `${project} ${locale}`);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const current: ViewId = VIEWS.find((view) => view.id !== "board" && pathname.endsWith(`/${view.id}`))?.id ?? "board";
@@ -222,7 +270,7 @@ function ViewSwitcher({ project }: { project: string }) {
     void navigate({ to, params: { key: project } });
   };
   return (
-    <div className={classes("seg", styles.views)} role="group" aria-label={t("header-views")}>
+    <div ref={ref} className={classes("seg", styles.views)} role="group" aria-label={t("header-views")} data-crowded={crowded || undefined}>
       {VIEWS.map((view) => (
         <Tooltip key={view.id} text={t(`view-${view.id}`)}>
           <Button

@@ -126,8 +126,14 @@ pub struct QueryField {
     pub ranges: bool,
     /// Whether it can be a sort key.
     pub sortable: bool,
-    /// The values it takes, in words.
+    /// The values it takes, in words (English).
     pub values: String,
+    /// The ID of the message with `values` in words, for showing it in
+    /// another language.
+    pub values_id: String,
+    /// The arguments of that message: the query's own words and examples.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub values_args: BTreeMap<String, String>,
     /// Its fixed values, when it has some.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<String>,

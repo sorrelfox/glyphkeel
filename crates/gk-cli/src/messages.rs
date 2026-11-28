@@ -39,7 +39,7 @@ pub(crate) const LANG_FLAG: &str = "lang";
 /// number format and choosing its plural form.
 const NUMBER_ARGS: &[&str] = &[
     "count", "total", "shown", "limit", "minimum", "columns", "tasks", "created", "closed", "open",
-    "percent", "cycle", "lead", "place",
+    "percent", "cycle", "lead", "place", "given",
 ];
 
 /// Placeables that hold a day (`2026-11-27`), shown in the language's date

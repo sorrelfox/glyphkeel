@@ -3286,8 +3286,12 @@ export type QueryField = {
   ranges: boolean;
   /** Whether it can be a sort key. */
   sortable: boolean;
-  /** The values it takes, in words. */
+  /** The values it takes, in words (English). */
   values: string;
+  /** The arguments of that message: the query's own words and examples. */
+  values_args?: Record<string, string>;
+  /** The ID of the message with `values` in words, for showing it in another language. */
+  values_id: string;
 };
 
 /** A query to read for the query field. */

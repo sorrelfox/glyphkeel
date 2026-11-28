@@ -179,7 +179,7 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
         .subcommand(
             Command::new(OPEN).about(text("cli-open-about", &[])).arg(
                 Arg::new("links")
-                    .value_name("LINK")
+                    .value_name(text("cli-open-links-value", &[]))
                     .num_args(0..)
                     .help(text("cli-open-links-help", &[])),
             ),
@@ -219,12 +219,12 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
         .subcommand(
             Command::new(HELP).about(text("cli-help-about", &[])).arg(
                 Arg::new("commands")
-                    .value_name("COMMAND")
+                    .value_name(text("cli-help-commands-value", &[]))
                     .num_args(0..)
                     .help(text("cli-help-commands-help", &[])),
             ),
         );
-    localize(root, true)
+    localize(root, "glyphkeel", true)
 }
 
 /// An option's help followed by the values it takes.
@@ -236,33 +236,44 @@ pub(crate) fn with_values(help: &str, values: &[String]) -> String {
 }
 
 /// The words clap writes itself, in the chosen language: the headings of
-/// the help, and the help and version options. Clap's own help command is
-/// replaced by [`HELP`], which the program answers itself.
-fn localize(mut cmd: Command, root: bool) -> Command {
+/// the help with their punctuation, the usage lines, and the help and
+/// version options. Clap's own help command is replaced by [`HELP`], which
+/// the program answers itself.
+fn localize(mut cmd: Command, path: &str, root: bool) -> Command {
     let names: Vec<String> = cmd
         .get_subcommands()
         .map(|c| c.get_name().to_owned())
         .collect();
     for name in names {
-        cmd = cmd.mut_subcommand(name, |c| localize(c, false));
+        let sub_path = format!("{path} {name}");
+        cmd = cmd.mut_subcommand(name, |c| localize(c, &sub_path, false));
     }
-    let options = text("cli-help-options", &[]);
-    let arguments = text("cli-help-arguments", &[]);
-    cmd = cmd.mut_args(|a| {
-        let heading = if a.is_positional() {
-            arguments.clone()
-        } else {
-            options.clone()
-        };
-        a.help_heading(heading)
-    });
     let header = clap::builder::styling::Style::new().bold().underline();
-    let usage = text("cli-help-usage", &[]);
+    let heading = |id: &str| format!("{header}{}{header:#}", text(id, &[]));
+    let has_arguments = cmd.get_positionals().any(|a| !a.is_hide_set());
+    let has_commands = cmd.get_subcommands().any(|c| !c.is_hide_set());
+    let mut template = format!(
+        "{{before-help}}{{about-with-newline}}\n{} {{usage}}\n\n",
+        heading("cli-help-usage")
+    );
+    if has_arguments {
+        template.push_str(&format!(
+            "{}\n{{positionals}}\n\n",
+            heading("cli-help-arguments")
+        ));
+    }
+    template.push_str(&format!("{}\n{{options}}", heading("cli-help-options")));
+    if has_commands {
+        template.push_str(&format!(
+            "\n\n{}\n{{subcommands}}",
+            heading("cli-help-commands")
+        ));
+    }
+    template.push_str("{after-help}");
+    let usage = usage(&cmd, path, has_commands);
     cmd = cmd
-        .help_template(format!(
-            "{{before-help}}{{about-with-newline}}\n{header}{usage}{header:#} {{usage}}\n\n{{all-args}}{{after-help}}"
-        ))
-        .subcommand_help_heading(text("cli-help-commands", &[]))
+        .override_usage(usage)
+        .help_template(template)
         .disable_help_subcommand(true);
     // The MCP server reads its own `--help`.
     if !cmd.is_disable_help_flag_set() {
@@ -271,7 +282,6 @@ fn localize(mut cmd: Command, root: bool) -> Command {
                 .short('h')
                 .long(HELP_ARG)
                 .action(ArgAction::Help)
-                .help_heading(options.clone())
                 .help(text("cli-help-help", &[])),
         );
     }
@@ -281,11 +291,46 @@ fn localize(mut cmd: Command, root: bool) -> Command {
                 .short('V')
                 .long(VERSION_ARG)
                 .action(ArgAction::Version)
-                .help_heading(options)
                 .help(text("cli-version-help", &[])),
         );
     }
     cmd
+}
+
+/// The usage line of `cmd`, whose words are `path`: the words for options
+/// and commands in the chosen language, the arguments by their value names
+/// (`glyphkeel task show [OPTIONS] [KEY]...`).
+fn usage(cmd: &Command, path: &str, has_commands: bool) -> String {
+    let mut line = format!("{path} {}", text("cli-usage-options", &[]));
+    for arg in cmd.get_positionals().filter(|a| !a.is_hide_set()) {
+        let name = arg
+            .get_value_names()
+            .and_then(|names| names.first())
+            .map_or_else(|| arg.get_id().as_str().to_uppercase(), ToString::to_string);
+        let many = arg.get_num_args().is_some_and(|n| n.max_values() > 1)
+            || matches!(arg.get_action(), ArgAction::Append);
+        line.push(' ');
+        line.push_str(&if arg.is_required_set() {
+            format!("<{name}>")
+        } else {
+            format!("[{name}]")
+        });
+        if many {
+            line.push_str("...");
+        }
+    }
+    if has_commands {
+        line.push(' ');
+        line.push_str(&text(
+            if cmd.is_subcommand_required_set() {
+                "cli-usage-command"
+            } else {
+                "cli-usage-command-optional"
+            },
+            &[],
+        ));
+    }
+    line
 }
 
 /// The long help of the command `words` name, for `glyphkeel help …`; the
@@ -454,6 +499,10 @@ mod tests {
         add(cmd.get_name());
         for arg in cmd.get_arguments() {
             add(arg.get_id().as_str());
+            add(&arg.get_id().as_str().to_uppercase());
+            for name in arg.get_value_names().unwrap_or_default() {
+                add(name.as_str());
+            }
             if let Some(long) = arg.get_long() {
                 add(long);
             }
@@ -470,11 +519,11 @@ mod tests {
     }
 
     /// Words in plain English left in `text`: runs of ASCII letters that
-    /// are neither machine words nor placeholders in capitals.
+    /// are not machine words (names and value names of commands and
+    /// options).
     fn plain_words(text: &str, machine: &std::collections::BTreeSet<String>) -> Vec<String> {
         text.split(|c: char| !c.is_ascii_alphabetic())
             .filter(|w| !w.is_empty())
-            .filter(|w| !w.chars().all(|c| c.is_ascii_uppercase()))
             .filter(|w| !machine.contains(*w))
             .map(str::to_owned)
             .collect()
@@ -498,8 +547,16 @@ mod tests {
                 let help = cmd.render_long_help().to_string();
                 let short = cmd.render_help().to_string();
                 for text in [help, short] {
-                    // The usage line is clap's syntax: names and placeholders.
-                    for line in text.lines().filter(|l| !l.contains("glyphkeel ")) {
+                    // Usage lines too: only the words for options and
+                    // commands are not names there.
+                    for line in text.lines() {
+                        // Words of clap's that are also machine words
+                        // elsewhere, and punctuation outside a message.
+                        for clap_text in ["[OPTIONS]", "<COMMAND>", "[COMMAND]", "]:"] {
+                            if line.contains(clap_text) {
+                                found.push(format!("{}: {clap_text} in {line:?}", cmd.get_name()));
+                            }
+                        }
                         let plain = plain_words(line, &machine);
                         if !plain.is_empty() {
                             found.push(format!("{}: {plain:?} in {line:?}", cmd.get_name()));

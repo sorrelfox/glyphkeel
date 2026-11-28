@@ -81,44 +81,127 @@ fn usage_error(e: &clap::Error) -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            match usage_text(e) {
-                Some(text) => eprint!("{text}"),
-                None => {
-                    let _ = e.print();
-                }
-            }
+            eprint!("{}", usage_text(e));
             ExitCode::from(1)
         }
     }
 }
 
-/// A usage error in the chosen language, from what clap found; `None` for
-/// the kinds clap tells best itself (in English).
-fn usage_text(e: &clap::Error) -> Option<String> {
+/// A usage error in the chosen language, from what clap found. A command
+/// that only groups others shows its help.
+fn usage_text(e: &clap::Error) -> String {
     use clap::error::{ContextKind, ContextValue};
+    if e.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
+        return e.render().to_string();
+    }
+    let message = usage_message(e);
     let one = |kind| match e.get(kind) {
         Some(ContextValue::String(s)) => Some(s.clone()),
         Some(ContextValue::Strings(v)) => Some(v.join(", ")),
         _ => None,
     };
-    let message = match e.kind() {
-        ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => return Some(e.render().to_string()),
-        ErrorKind::UnknownArgument => messages::text(
-            "cli-usage-unknown-argument",
-            &[("arg", one(ContextKind::InvalidArg)?)],
-        ),
-        ErrorKind::InvalidSubcommand => messages::text(
-            "cli-usage-unknown-command",
-            &[("command", one(ContextKind::InvalidSubcommand)?)],
-        ),
-        ErrorKind::MissingSubcommand => messages::text(
-            "cli-usage-missing-command",
-            &[("command", one(ContextKind::InvalidSubcommand)?)],
-        ),
-        ErrorKind::MissingRequiredArgument => messages::text(
-            "cli-usage-missing-arguments",
-            &[("args", one(ContextKind::InvalidArg)?)],
-        ),
+    let mut out = messages::text("cli-error", &[("message", message)]);
+    out.push('\n');
+    let suggestion = one(ContextKind::SuggestedSubcommand)
+        .or_else(|| one(ContextKind::SuggestedArg))
+        .or_else(|| one(ContextKind::SuggestedValue));
+    if let Some(suggestion) = suggestion {
+        out.push_str(&messages::text(
+            "cli-usage-did-you-mean",
+            &[("suggestion", suggestion)],
+        ));
+        out.push('\n');
+    }
+    if let Some(ContextValue::StyledStr(usage)) = e.get(ContextKind::Usage) {
+        let usage = usage.to_string();
+        let usage = usage.trim().split_once(' ').map_or("", |(_, rest)| rest);
+        out.push('\n');
+        out.push_str(&messages::text(
+            "cli-usage-line",
+            &[("usage", usage.trim().to_owned())],
+        ));
+        out.push('\n');
+    }
+    out.push('\n');
+    out.push_str(&messages::text("cli-usage-more", &[]));
+    out.push('\n');
+    out
+}
+
+/// The message of usage error `e`: the one for its kind with what clap
+/// found filled in, else the kind's message without it, else
+/// `cli-usage-other`.
+fn usage_message(e: &clap::Error) -> String {
+    let id = usage_message_id(e.kind());
+    usage_message_with_context(e).unwrap_or_else(|| match id {
+        "cli-usage-output-failed" => messages::text("cli-usage-output-failed-plain", &[]),
+        id if usage_message_args(id) => messages::text("cli-usage-other", &[]),
+        id => messages::text(id, &[]),
+    })
+}
+
+/// Whether message `id` has placeables, so it can't be shown without what
+/// clap found.
+fn usage_message_args(id: &str) -> bool {
+    !matches!(id, "cli-usage-invalid-utf8" | "cli-usage-other")
+}
+
+/// The message for every kind of usage error clap has.
+fn usage_message_id(kind: ErrorKind) -> &'static str {
+    match kind {
+        ErrorKind::InvalidValue | ErrorKind::ValueValidation | ErrorKind::TooManyValues => {
+            "cli-usage-invalid-value"
+        }
+        ErrorKind::UnknownArgument => "cli-usage-unknown-argument",
+        ErrorKind::InvalidSubcommand => "cli-usage-unknown-command",
+        ErrorKind::NoEquals => "cli-usage-no-equals",
+        ErrorKind::TooFewValues | ErrorKind::WrongNumberOfValues => "cli-usage-value-count",
+        ErrorKind::ArgumentConflict => "cli-usage-conflict",
+        ErrorKind::MissingRequiredArgument => "cli-usage-missing-arguments",
+        ErrorKind::MissingSubcommand => "cli-usage-missing-command",
+        ErrorKind::InvalidUtf8 => "cli-usage-invalid-utf8",
+        ErrorKind::Io | ErrorKind::Format => "cli-usage-output-failed",
+        // Help and version are shown, not reported; a kind a later clap
+        // adds is a mistake on the command line all the same.
+        _ => "cli-usage-other",
+    }
+}
+
+/// The message of `e` with what clap found filled in; `None` when clap
+/// didn't say enough.
+fn usage_message_with_context(e: &clap::Error) -> Option<String> {
+    use clap::error::{ContextKind, ContextValue};
+    let one = |kind| match e.get(kind) {
+        Some(ContextValue::String(s)) => Some(s.clone()),
+        Some(ContextValue::Strings(v)) => Some(v.join(", ")),
+        Some(ContextValue::Number(n)) => Some(n.to_string()),
+        _ => None,
+    };
+    let id = usage_message_id(e.kind());
+    Some(match e.kind() {
+        ErrorKind::UnknownArgument => messages::text(id, &[("arg", one(ContextKind::InvalidArg)?)]),
+        ErrorKind::InvalidSubcommand => {
+            messages::text(id, &[("command", one(ContextKind::InvalidSubcommand)?)])
+        }
+        ErrorKind::MissingSubcommand => {
+            messages::text(id, &[("command", one(ContextKind::InvalidSubcommand)?)])
+        }
+        ErrorKind::MissingRequiredArgument => {
+            messages::text(id, &[("args", one(ContextKind::InvalidArg)?)])
+        }
+        ErrorKind::NoEquals => messages::text(id, &[("arg", one(ContextKind::InvalidArg)?)]),
+        ErrorKind::TooFewValues | ErrorKind::WrongNumberOfValues => {
+            let arg = one(ContextKind::InvalidArg)?;
+            match (
+                one(ContextKind::ExpectedNumValues),
+                one(ContextKind::ActualNumValues),
+            ) {
+                (Some(count), Some(given)) => {
+                    messages::text(id, &[("arg", arg), ("count", count), ("given", given)])
+                }
+                _ => messages::text("cli-usage-wrong-values", &[("arg", arg)]),
+            }
+        }
         ErrorKind::ArgumentConflict => {
             let arg = one(ContextKind::InvalidArg)?;
             match one(ContextKind::PriorArg) {
@@ -147,34 +230,11 @@ fn usage_text(e: &clap::Error) -> Option<String> {
                 }
             }
         }
+        ErrorKind::Io | ErrorKind::Format => {
+            messages::text(id, &[("error", std::error::Error::source(e)?.to_string())])
+        }
         _ => return None,
-    };
-    let mut out = messages::text("cli-error", &[("message", message)]);
-    out.push('\n');
-    let suggestion = one(ContextKind::SuggestedSubcommand)
-        .or_else(|| one(ContextKind::SuggestedArg))
-        .or_else(|| one(ContextKind::SuggestedValue));
-    if let Some(suggestion) = suggestion {
-        out.push_str(&messages::text(
-            "cli-usage-did-you-mean",
-            &[("suggestion", suggestion)],
-        ));
-        out.push('\n');
-    }
-    if let Some(ContextValue::StyledStr(usage)) = e.get(ContextKind::Usage) {
-        let usage = usage.to_string();
-        let usage = usage.trim().split_once(' ').map_or("", |(_, rest)| rest);
-        out.push('\n');
-        out.push_str(&messages::text(
-            "cli-usage-line",
-            &[("usage", usage.trim().to_owned())],
-        ));
-        out.push('\n');
-    }
-    out.push('\n');
-    out.push_str(&messages::text("cli-usage-more", &[]));
-    out.push('\n');
-    Some(out)
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -303,6 +363,7 @@ fn call(
     let layout = workspace::resolve(workspace)?;
     let mut config = EngineConfig::new(Role::Cli);
     config.time_zone = personal_time_zone(tz, &UserSettings::load_default())?;
+    output::set_time_zone(config.time_zone.clone());
     config.agent_folders = gk_engine::AgentFolders::Personal;
     passphrase::unlock(&layout)?;
     let engine = Engine::open(&layout, config)?;
@@ -483,6 +544,104 @@ mod tests {
             "full",
         ]));
         assert_eq!(pre.mcp, Some(os(&["--profile", "full"])));
+    }
+
+    /// Every kind of error clap 4 has.
+    const ALL_KINDS: &[ErrorKind] = &[
+        ErrorKind::InvalidValue,
+        ErrorKind::UnknownArgument,
+        ErrorKind::InvalidSubcommand,
+        ErrorKind::NoEquals,
+        ErrorKind::ValueValidation,
+        ErrorKind::TooManyValues,
+        ErrorKind::TooFewValues,
+        ErrorKind::WrongNumberOfValues,
+        ErrorKind::ArgumentConflict,
+        ErrorKind::MissingRequiredArgument,
+        ErrorKind::MissingSubcommand,
+        ErrorKind::InvalidUtf8,
+        ErrorKind::DisplayHelp,
+        ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand,
+        ErrorKind::DisplayVersion,
+        ErrorKind::Io,
+        ErrorKind::Format,
+    ];
+
+    /// The kinds that are shown rather than reported as a mistake.
+    const SHOWN: &[ErrorKind] = &[
+        ErrorKind::DisplayHelp,
+        ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand,
+        ErrorKind::DisplayVersion,
+    ];
+
+    #[test]
+    fn every_error_kind_has_a_message() {
+        let cli = gk_engine::Messages::new(messages::CLI_FTL);
+        for kind in ALL_KINDS.iter().filter(|k| !SHOWN.contains(k)) {
+            let id = usage_message_id(*kind);
+            assert_ne!(id, "cli-usage-other", "{kind:?} has no message of its own");
+            assert!(cli.has(id), "{kind:?}: no message {id}");
+            // Without what clap found, the message still is in the
+            // chosen language.
+            gk_engine::language::with_language("en-XA", || {
+                let text = usage_text(&clap::Error::raw(*kind, "the English text\n"));
+                assert!(!text.contains("English"), "{kind:?}: {text}");
+                assert!(text.starts_with('['), "{kind:?}: {text}");
+            });
+        }
+    }
+
+    /// Words of plain English in `text`: runs of ASCII letters except the
+    /// ones in `names`.
+    fn plain(text: &str, names: &[&str]) -> Vec<String> {
+        text.split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|w| !w.is_empty() && !names.contains(w))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn usage_errors_are_in_the_chosen_language() {
+        let cases: &[(&[&str], ErrorKind)] = &[
+            (&["task", "list", "--bogus"], ErrorKind::UnknownArgument),
+            (&["tsak"], ErrorKind::InvalidSubcommand),
+            (
+                &["task", "list", "--limit", "x"],
+                ErrorKind::ValueValidation,
+            ),
+            (
+                &["task", "list", "--group-by", "zz"],
+                ErrorKind::InvalidValue,
+            ),
+            (&["task", "list", "--limit"], ErrorKind::InvalidValue),
+            (
+                &["task", "list", "--limit", "1", "--limit", "2"],
+                ErrorKind::ArgumentConflict,
+            ),
+            (&["project", "create"], ErrorKind::MissingRequiredArgument),
+        ];
+        gk_engine::language::with_language("en-XA", || {
+            let ops = commands::op_commands();
+            for (args, kind) in cases {
+                let argv = std::iter::once(&"glyphkeel").chain(args.iter());
+                let err = commands::build(&ops)
+                    .try_get_matches_from(argv)
+                    .expect_err("a usage error");
+                assert_eq!(err.kind(), *kind, "{args:?}");
+                let text = usage_text(&err);
+                let mut names: Vec<&str> = vec!["glyphkeel", "LIMIT", "GROUP", "BY", "NAME", "KEY"];
+                names.extend(
+                    args.iter()
+                        .flat_map(|a| a.split(|c: char| !c.is_ascii_alphabetic())),
+                );
+                names.extend([
+                    "status", "priority", "label", "parent", "due", "week", "project", "type",
+                    "trash", "task", "key", "name",
+                ]);
+                let found = plain(&text, &names);
+                assert!(found.is_empty(), "{args:?}: {found:?} in {text}");
+            }
+        });
     }
 
     fn os(args: &[&str]) -> Vec<OsString> {

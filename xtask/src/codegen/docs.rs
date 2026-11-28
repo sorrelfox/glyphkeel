@@ -96,6 +96,12 @@ of the catalog ([operations.md](operations.md)). Global options: `--workspace`, 
             cell(d.summary)
         );
     }
+    s += "\n## Options with several values\n\n";
+    s += "An option that takes a list (`--labels`, `--options`, `--include`…) takes its values \
+either repeated or separated by commas: `--labels bug --labels ui` and `--labels bug,ui` are the \
+same. Spaces around the values are dropped. Write `\\,` for a comma inside a value \
+(`--labels 'needs\\, maybe'`), or give the input as JSON with `--input`, which is always taken \
+exactly. The same goes for arguments that take several values (`glyphkeel task show TM-1,TM-2`).\n";
     s += "\n## Workspaces\n\n";
     s += "A command works in the workspace `--workspace` names (a name in the data folder, or \
 a folder path), else the one `GLYPHKEEL_WORKSPACE` names, else the one last opened in the app or \
@@ -114,7 +120,8 @@ commands, agents and the app's next start use it |\n";
 language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language \
 chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; \
 on Windows the display language), else English. A message not yet translated shows in English. \
-Numbers and dates in the output for people follow the language. `en-XA` is a pseudo-language for \
+Numbers, dates and times in the output for people follow the language; times are shown in the \
+time zone `--tz` names, else the personal setting, else the system's. `en-XA` is a pseudo-language for \
 testing translations. Machine text stays English: `--json` output (an error's `message`, with \
 its `message_id` and `args` for translating it), command and option names, and everything \
 `glyphkeel mcp` serves to agents.\n";
