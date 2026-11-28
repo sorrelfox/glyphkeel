@@ -68,6 +68,12 @@ added after the start.
 The chart can be read without seeing it: focus it, and the arrow keys go from
 day to day, Home and End to the first and last.
 
+**Burn-up** next to the burndown opens the sprint's burn-up, and **Velocity**
+at the top of the page the project's velocity, on the **Reports** page (see
+[Planning reports](time.md#planning-reports)). Each planned sprint shows the
+work planned for it against the average velocity of the last three sprints:
+a guide, not a limit.
+
 ## Board, list and queries
 
 - The board's **Sprint** filter shows the cards of one or more sprints, or of

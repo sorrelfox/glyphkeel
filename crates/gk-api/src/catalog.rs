@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 
 use crate::ops::{
     agent, backup, board, bulk, comment, csv_import, dashboard, date, description, draft, field,
-    file, history, link, project, query, report, rules, schedule, search, settings, sprint, task,
-    time, today, transfer, trash, version, view, wiki, workspace,
+    file, history, link, planning, project, query, report, rules, schedule, search, settings,
+    sprint, task, time, today, transfer, trash, version, view, wiki, workspace,
 };
 use crate::ops::{automation, digest, folder, proposal, recurrence, task_context, template};
 use crate::schema;
@@ -254,6 +254,9 @@ pub static CATALOG: &[OpDescriptor] = &[
     report::REPORT_CREATED_CLOSED,
     report::REPORT_CUMULATIVE_FLOW,
     report::REPORT_CYCLE_TIME,
+    planning::REPORT_VELOCITY,
+    planning::REPORT_BURNUP,
+    planning::REPORT_ESTIMATES,
     time::TIMER_GET,
     time::TIMER_START,
     time::TIMER_PAUSE,

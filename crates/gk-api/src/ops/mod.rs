@@ -39,6 +39,7 @@ pub mod file;
 pub mod folder;
 pub mod history;
 pub mod link;
+pub mod planning;
 pub mod project;
 pub mod proposal;
 pub mod query;

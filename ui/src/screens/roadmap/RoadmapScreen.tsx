@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { Check, ChevronDown, ChevronRight, Milestone, MoreHorizontal, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Milestone, MoreHorizontal, Plus, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Button, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
 
@@ -139,6 +139,7 @@ function VersionCard({ version, openTask, onOpen, onEdit }: VersionCardProps) {
   const { locale } = useLocale();
   const today = useToday();
   const reopen = useCommand("version.update", { undoable: t("roadmap-reopened", { name: version.name }) });
+  const navigate = useNavigate();
   // Closed versions start folded; the others show their tasks.
   const [expanded, setExpanded] = useState(version.status !== "closed");
   const date = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" });
@@ -166,6 +167,14 @@ function VersionCard({ version, openTask, onOpen, onEdit }: VersionCardProps) {
         {version.inherited === true && <span className="chip outline">{t("roadmap-shared-from", { project: version.project })}</span>}
         {version.inherited !== true && version.sharing === "descendants" && <span className="chip outline">{t("roadmap-shared")}</span>}
         <span className={classes("muted num", styles.dates)}>{dates}</span>
+        <Button
+          className="btn flat sm"
+          aria-label={t("roadmap-burnup-named", { name: version.name })}
+          onPress={() => void navigate({ to: "/reports", search: { report: "burnup", project: version.project, version: version.id } })}
+        >
+          <TrendingUp className="ic s" aria-hidden="true" />
+          {t("roadmap-burnup")}
+        </Button>
         {version.inherited !== true && (
           <MenuTrigger>
             <Button className="btn flat icon sm" aria-label={t("roadmap-version-menu", { name: version.name })}>

@@ -375,3 +375,174 @@ export function BurndownChart({
     </ChartFrame>
   );
 }
+
+// ---------------------------------------------------------------------
+
+export const COMMITTED = "var(--hue-blue)";
+export const COMPLETED = "var(--hue-green)";
+export const AVERAGE = "var(--hue-orange)";
+
+/** A dashed line's swatch, for a forecast. */
+export function DashedSwatch({ colour }: { colour: string }) {
+  return <i className={classes(styles.swatch, styles.swatchLine)} style={{ background: `repeating-linear-gradient(to right, ${colour} 0 4px, transparent 4px 7px)` }} aria-hidden="true" />;
+}
+
+/**
+ * Velocity: per sprint, a hollow bar of the work committed at its start
+ * and a solid bar of the work completed, with the rolling average as a
+ * line. Hollow against solid tells the bars apart without their colours.
+ */
+export function VelocityChart({
+  rows,
+  labels,
+  label,
+  summary,
+  describe,
+  legend,
+  format,
+}: {
+  rows: readonly { committed: number; completed: number; average: number }[];
+  labels: readonly string[];
+  label: string;
+  summary: string;
+  describe: (i: number) => ReactNode;
+  legend: ReactNode;
+  format: (n: number) => string;
+}) {
+  const axis = niceAxis(Math.max(1, ...rows.flatMap((r) => [r.committed, r.completed, r.average])));
+  return (
+    <ChartFrame label={label} summary={summary} count={rows.length} describe={describe} legend={legend}>
+      {({ width, rtl, chosen }) => {
+        const s = slots(rows.length, width, rtl);
+        const y = yScale(axis.max, HEIGHT);
+        const bar = Math.max(1, Math.min(28, s.size * 0.34));
+        const gap = Math.min(3, s.size * 0.04);
+        const offset = (first: boolean) => (first !== rtl ? -bar - gap / 2 : gap / 2);
+        return (
+          <>
+            <Axes width={width} rtl={rtl} max={axis.max} ticks={axis.ticks} format={format} labels={labels} chosen={chosen} />
+            <g aria-hidden="true">
+              {rows.map((r, i) => (
+                <g key={labels[i] ?? i}>
+                  <rect x={s.centre(i) + offset(true)} y={y(r.committed)} width={bar} height={y(0) - y(r.committed)} fill={COMMITTED} fillOpacity={0.18} stroke={COMMITTED} strokeWidth={1.5} data-bar="committed" />
+                  <rect x={s.centre(i) + offset(false)} y={y(r.completed)} width={bar} height={y(0) - y(r.completed)} fill={COMPLETED} data-bar="completed" />
+                </g>
+              ))}
+              <path className={styles.line} d={linePath(rows.map((r, i) => [s.centre(i), y(r.average)]))} stroke={AVERAGE} data-line="average" />
+              {rows.map((r, i) => (
+                <circle key={labels[i] ?? i} cx={s.centre(i)} cy={y(r.average)} r={2.5} fill={AVERAGE} />
+              ))}
+            </g>
+          </>
+        );
+      }}
+    </ChartFrame>
+  );
+}
+
+/**
+ * A burn-up: the scope (all planned work, a thin line that steps up when
+ * work is added), the completed work (a thick line with dots), and the
+ * forecast as a dashed line. Days still to come are left out of the first
+ * two.
+ */
+export function BurnupChart({
+  scope,
+  completed,
+  forecast,
+  labels,
+  label,
+  summary,
+  describe,
+  legend,
+  format,
+}: {
+  scope: readonly (number | undefined)[];
+  completed: readonly (number | undefined)[];
+  /** The forecast line's two ends: day index and value. */
+  forecast: readonly [readonly [number, number], readonly [number, number]] | undefined;
+  labels: readonly string[];
+  label: string;
+  summary: string;
+  describe: (i: number) => ReactNode;
+  legend: ReactNode;
+  format: (n: number) => string;
+}) {
+  const known = (values: readonly (number | undefined)[]) => values.flatMap((v) => (v === undefined ? [] : [v]));
+  const axis = niceAxis(Math.max(1, ...known(scope), ...known(completed), ...(forecast === undefined ? [] : [forecast[1][1]])));
+  return (
+    <ChartFrame label={label} summary={summary} count={labels.length} describe={describe} legend={legend}>
+      {({ width, rtl, chosen }) => {
+        const s = slots(labels.length, width, rtl);
+        const y = yScale(axis.max, HEIGHT);
+        const points = (values: readonly (number | undefined)[]) => values.flatMap((v, i) => (v === undefined ? [] : [[s.centre(i), y(v)] as const]));
+        return (
+          <>
+            <Axes width={width} rtl={rtl} max={axis.max} ticks={axis.ticks} format={format} labels={labels} chosen={chosen} />
+            <g aria-hidden="true">
+              <path className={styles.line} d={linePath(points(scope))} stroke={SCOPE} strokeWidth={1.5} data-line="scope" />
+              {forecast !== undefined && <path className={styles.level} d={linePath(forecast.map(([i, v]) => [s.centre(i), y(v)]))} stroke={AVERAGE} data-line="forecast" />}
+              <path className={styles.line} d={linePath(points(completed))} stroke={COMPLETED} strokeWidth={3} data-line="completed" />
+              {points(completed).map(([cx, cy]) => (
+                <circle key={`${String(cx)}-${String(cy)}`} cx={cx} cy={cy} r={2.5} fill={COMPLETED} />
+              ))}
+            </g>
+          </>
+        );
+      }}
+    </ChartFrame>
+  );
+}
+
+/**
+ * A histogram: one bar per range, its height the count; `marked` bars (the
+ * ranges on target) are solid and the others hatched, so they differ
+ * without their colours.
+ */
+export function HistogramChart({
+  counts,
+  marked,
+  labels,
+  label,
+  summary,
+  describe,
+  legend,
+}: {
+  counts: readonly number[];
+  marked: readonly boolean[];
+  labels: readonly string[];
+  label: string;
+  summary: string;
+  describe: (i: number) => ReactNode;
+  legend: ReactNode;
+}) {
+  const { locale } = useLocale();
+  const number = new Intl.NumberFormat(locale);
+  const axis = niceAxis(Math.max(1, ...counts));
+  const hatch = useId();
+  return (
+    <ChartFrame label={label} summary={summary} count={counts.length} describe={describe} legend={legend}>
+      {({ width, rtl, chosen }) => {
+        const s = slots(counts.length, width, rtl);
+        const y = yScale(axis.max, HEIGHT);
+        const bar = Math.max(1, s.size * 0.7);
+        return (
+          <>
+            <defs>
+              <pattern id={hatch} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width={6} height={6} fill={AVERAGE} fillOpacity={0.25} />
+                <line x1={0} y1={0} x2={0} y2={6} stroke={AVERAGE} strokeWidth={3} />
+              </pattern>
+            </defs>
+            <Axes width={width} rtl={rtl} max={axis.max} ticks={axis.ticks} format={(n) => number.format(n)} labels={labels} chosen={chosen} />
+            <g aria-hidden="true">
+              {counts.map((n, i) => (
+                <rect key={labels[i] ?? i} x={s.centre(i) - bar / 2} y={y(n)} width={bar} height={y(0) - y(n)} fill={marked[i] === true ? COMPLETED : `url(#${hatch})`} data-bar={marked[i] === true ? "on-target" : "off-target"} />
+              ))}
+            </g>
+          </>
+        );
+      }}
+    </ChartFrame>
+  );
+}

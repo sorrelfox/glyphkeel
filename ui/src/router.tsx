@@ -110,7 +110,16 @@ const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/al
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
 /** The flow reports: created against closed, cumulative flow, cycle time. */
-const reportsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/reports", component: FlowReportsScreen });
+/** `report` is the tab to open; `project`, `version` and `sprint` what the planning reports start on. */
+const reportsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/reports",
+  validateSearch: (search: Record<string, unknown>): { report?: string; project?: string; version?: string; sprint?: string } => {
+    const text = (key: string) => (typeof search[key] === "string" && search[key] !== "" ? { [key]: search[key] } : {});
+    return { ...text("report"), ...text("project"), ...text("version"), ...text("sprint") };
+  },
+  component: FlowReportsScreen,
+});
 
 /** Dashboards; `dashboard` is the one shown, `project` the project they were opened from. Loaded on first use. */
 const dashboardsRoute = createRoute({

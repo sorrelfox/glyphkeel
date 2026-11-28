@@ -44,6 +44,9 @@ dashboard back, and the same goes for every change to its widgets.
 | Time logged | The time logged in the last days (7 unless set), grouped | project, days, group by |
 | Sprint burndown | The burndown of the project's running sprint | project |
 | Version progress | How far the project's open versions have come | project |
+| Burn-up | A version's scope and completed work day by day, or the running sprint's when no version is set, with the forecast | project, version, measure |
+| Sprint velocity | Committed against completed work of the project's completed sprints, with the average of the last three | project, measure |
+| Estimate accuracy | Closed tasks' logged time against their estimates, by type, over the last days (90 unless set) | query, project, days |
 | Recent activity | The latest changes, by everyone, people, agents or rules | project, who, days, rows |
 | Automation failures | Rules' runs that failed or were limited | project, rows |
 | Note | A note in Markdown | text |

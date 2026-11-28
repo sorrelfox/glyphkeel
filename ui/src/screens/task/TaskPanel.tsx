@@ -31,7 +31,8 @@ import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { useProject, useUpdateTask } from "../../data/board";
 import { HUES, PRIORITIES, type Hue, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
-import { errorToast, failureText, useCall, useCommand } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand, useOp } from "../../data/hooks";
+import { estimateHint, followEstimateHint, loadEstimateHint } from "../../data/planning";
 import { useTrashTasks } from "../../data/safety";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
@@ -423,6 +424,7 @@ function Loaded({
               readOnly={lockedOr("estimate")}
               onChange={(minutes) => { setOrClear("estimate", minutes === null ? null : `${String(minutes)}m`); }}
             />
+            <EstimateHint type={task.type.name} />
           </Prop>
           <Prop label={t("prop-spent")}>
             <span className={classes("num", styles.static)}>
@@ -521,6 +523,38 @@ function Whole({ text, className }: { text: string; className?: string | undefin
   return (
     <span className={classes("truncate", className)} title={text}>
       {text}
+    </span>
+  );
+}
+
+/** The days of closed tasks the estimate hint learns from, today included. */
+const HINT_DAYS = 180;
+
+/**
+ * How estimates of this type usually turn out, from the closed tasks of
+ * the last months, when the person has switched the hint on: text only, a
+ * guide for the estimate field.
+ */
+function EstimateHint({ type }: { type: string }) {
+  const t = useT();
+  const today = useToday();
+  const { locale } = useLocale();
+  const [on, setOn] = useState(loadEstimateHint);
+  useEffect(() => followEstimateHint(setOn), []);
+  const from = new Date(`${today}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - (HINT_DAYS - 1));
+  const report = useOp("report.estimates", { from: from.toISOString().slice(0, 10), to: today, group_by: "type" }, { enabled: on });
+  if (!on || !report.data) {
+    return null;
+  }
+  const hint = estimateHint(report.data.groups, type);
+  if (hint === null) {
+    return null;
+  }
+  const ratio = t("plan-ratio", { ratio: new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(hint.ratio) });
+  return (
+    <span className={styles.estimateHint} data-estimate-hint={hint.way}>
+      {t(hint.way === "over" ? "estimate-hint-over" : "estimate-hint-under", { type, ratio, count: hint.count })}
     </span>
   );
 }

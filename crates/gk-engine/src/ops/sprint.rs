@@ -358,7 +358,7 @@ fn output(tx: &Transaction<'_>, id: Id, r: &Record, with_tasks: bool) -> Result<
     })
 }
 
-fn reference(id: Id, r: &Record) -> SprintRef {
+pub(crate) fn reference(id: Id, r: &Record) -> SprintRef {
     SprintRef {
         name: r.name.clone(),
         state: r.state,
@@ -390,7 +390,7 @@ pub(crate) fn of_task(tx: &Transaction<'_>, task: Id) -> Result<Option<SprintRef
 }
 
 /// The sprints of `project`, in list order.
-fn of_project(tx: &Transaction<'_>, project: Id) -> Result<Vec<(Id, Record)>, Failure> {
+pub(crate) fn of_project(tx: &Transaction<'_>, project: Id) -> Result<Vec<(Id, Record)>, Failure> {
     let mut stmt = tx.prepare_cached(&format!(
         "SELECT {COLUMNS} FROM sprints WHERE project_id = ?1 ORDER BY {ORDER}"
     ))?;
@@ -429,7 +429,7 @@ fn not_found(text: &str, names: &[&str]) -> Failure {
 
 /// The sprint `text` names: its ID; `active` or its name among the sprints
 /// of `project`; or its name among all sprints without one.
-fn find(
+pub(crate) fn find(
     tx: &Transaction<'_>,
     text: &str,
     project: Option<&String>,

@@ -4,7 +4,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // The board with swimlanes, My work, the project settings' Fields, Rules
-// and Templates tabs, the CSV import dialog, the roadmap and the reports, on
+// and Templates tabs, the CSV import dialog, the roadmap, the reports (the
+// planning ones too) and the task panel's estimate hint, on
 // the sample data:
 //
 // - in the pseudo-locale, no English is left in their text, labels,
@@ -42,6 +43,19 @@ async function openProject(page: Page): Promise<void> {
 async function projectMenu(page: Page, item: number): Promise<void> {
   await page.locator("button[class*=projectButton]").first().click();
   await page.getByRole("menuitem").nth(item).click();
+}
+
+/** A tab of the reports by place. */
+function reportTab(tab: number): Screen["open"] {
+  return async (page) => {
+    await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+    await page.goto("/");
+    await page.locator("nav button").filter({ has: page.locator("svg.lucide-chart-area") }).click();
+    await page.getByRole("tab").nth(tab).click();
+    await expect(page.getByRole("tab").nth(tab)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("[data-chart]").first()).toBeVisible();
+    return page.locator("main");
+  };
 }
 
 /** A tab of the project settings by place. */
@@ -124,6 +138,28 @@ const SCREENS: Screen[] = [
     },
     // The axis shows dates, formatted by the locale.
     data: ["svg text"],
+  },
+  // The planning reports: the fourth to sixth of the report tabs.
+  { name: "velocity report", open: reportTab(3), data: ["svg text", "[data-plan-project]"] },
+  { name: "burn-up report", open: reportTab(4), data: ["svg text", "[data-plan-project]"] },
+  // The outliers' titles and types, and the groups' type names, are the sample data's own.
+  { name: "estimate accuracy report", open: reportTab(5), data: ["svg text", "[data-flow-table=outliers] td", "[data-group] th"] },
+  {
+    name: "estimate hint",
+    open: async (page) => {
+      // The hint is a personal choice, off at first: switched on here as the preferences keep it.
+      await page.addInitScript(() => {
+        localStorage.setItem("glyphkeel.task.estimateHint", "true");
+      });
+      await openProject(page);
+      // A bug of Task Manager: the sample's closed bugs ran over their estimates.
+      await page.locator('[data-card="TM-13"]').click();
+      await page.keyboard.press("Enter");
+      const hint = page.locator("[data-estimate-hint]");
+      await expect(hint).toBeVisible();
+      return hint.locator("xpath=ancestor::dl[1]");
+    },
+    data: [],
   },
 ];
 

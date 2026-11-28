@@ -5,7 +5,7 @@
 // widget, cached and refreshed by change events), and the arithmetic of
 // arranging widgets in the grid.
 
-import { type Dashboard, type FlowBucket, type TimeGroupBy, type Widget, type WidgetKind, type WidgetSetting } from "../generated/ops";
+import { type Dashboard, type FlowBucket, type PlanMeasure, type TimeGroupBy, type Widget, type WidgetKind, type WidgetSetting } from "../generated/ops";
 import { useOp } from "./hooks";
 
 /** The grid's columns; a widget spans one to all of them. */
@@ -24,6 +24,9 @@ export const WIDGET_KINDS = [
   "time_report",
   "burndown",
   "version_progress",
+  "burnup",
+  "velocity",
+  "estimate_accuracy",
   "activity",
   "automation_failures",
   "note",
@@ -39,6 +42,9 @@ export const KIND_SETTINGS: Readonly<Record<WidgetKind, readonly WidgetSetting[]
   time_report: ["project", "days", "group_by"],
   burndown: ["project"],
   version_progress: ["project"],
+  burnup: ["project", "version", "measure", "field"],
+  velocity: ["project", "measure", "field"],
+  estimate_accuracy: ["query", "project", "days"],
   tasks_by_field: ["field", "query", "project"],
   due_soon: ["query", "project", "days", "limit"],
   overdue: ["query", "project", "limit"],
@@ -48,7 +54,7 @@ export const KIND_SETTINGS: Readonly<Record<WidgetKind, readonly WidgetSetting[]
 };
 
 /** The kinds drawn as a chart, which also read as a table. */
-export const CHART_KINDS: readonly WidgetKind[] = ["created_closed", "cumulative_flow", "cycle_time", "burndown"];
+export const CHART_KINDS: readonly WidgetKind[] = ["created_closed", "cumulative_flow", "cycle_time", "burndown", "burnup", "velocity", "estimate_accuracy"];
 
 /** The kinds whose figure is a query's tasks, so that the list can open with it. */
 export const QUERY_KINDS: readonly WidgetKind[] = ["query_count", "query_list", "due_soon", "overdue", "tasks_by_field"];
@@ -60,7 +66,10 @@ export const BUCKETS = ["day", "week", "month"] as const satisfies readonly Flow
 export const TIME_GROUPS = ["project", "task", "person", "work_kind", "day", "week", "month"] as const satisfies readonly TimeGroupBy[];
 
 /** The kinds that need a project when the dashboard has none. */
-export const NEEDS_PROJECT: readonly WidgetKind[] = ["burndown", "version_progress"];
+export const NEEDS_PROJECT: readonly WidgetKind[] = ["burndown", "version_progress", "burnup", "velocity"];
+
+/** How velocity and burn-up widgets measure work. */
+export const MEASURES = ["tasks", "estimate", "field"] as const satisfies readonly PlanMeasure[];
 
 /** How wide a widget of `kind` starts: charts take two columns. */
 export function defaultWidth(kind: WidgetKind): number {

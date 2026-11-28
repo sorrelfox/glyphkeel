@@ -25,6 +25,7 @@ use gk_api::ops::dashboard::{
     WidgetKind, WidgetSetting, WidgetSettings, WidgetSpec, WidgetTask, WidgetValue,
 };
 use gk_api::ops::history::ActivityQuery;
+use gk_api::ops::planning::{BurnupInput, EstimateGroupBy, EstimatesInput, VelocityInput};
 use gk_api::ops::query::{ListGrouping, TaskSearchInput};
 use gk_api::ops::report::FlowReportInput;
 use gk_api::ops::sprint::SprintBurndownInput;
@@ -68,6 +69,8 @@ const LIMIT_DEFAULT: u32 = 10;
 const DAYS_MAX: u32 = 366;
 /// How many days a widget looks at unless told.
 const DAYS_DEFAULT: u32 = 7;
+/// The days an estimate accuracy widget looks back unless set.
+const ESTIMATE_DAYS_DEFAULT: u32 = 90;
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<DashboardListOp, _>(desc::<DashboardListOp>(), |q, input: DashboardListInput| {
@@ -485,10 +488,12 @@ fn is_set(setting: WidgetSetting, s: &WidgetSettings) -> bool {
         WidgetSetting::GroupBy => s.group_by.is_some(),
         WidgetSetting::ActorKind => s.actor_kind.is_some(),
         WidgetSetting::Text => s.text.is_some(),
+        WidgetSetting::Measure => s.measure.is_some(),
+        WidgetSetting::Version => s.version.is_some(),
     }
 }
 
-const ALL_SETTINGS: [WidgetSetting; 9] = [
+const ALL_SETTINGS: [WidgetSetting; 11] = [
     WidgetSetting::Query,
     WidgetSetting::Project,
     WidgetSetting::Field,
@@ -498,6 +503,8 @@ const ALL_SETTINGS: [WidgetSetting; 9] = [
     WidgetSetting::GroupBy,
     WidgetSetting::ActorKind,
     WidgetSetting::Text,
+    WidgetSetting::Measure,
+    WidgetSetting::Version,
 ];
 
 fn clear(setting: WidgetSetting, s: &mut WidgetSettings) {
@@ -511,6 +518,8 @@ fn clear(setting: WidgetSetting, s: &mut WidgetSettings) {
         WidgetSetting::GroupBy => s.group_by = None,
         WidgetSetting::ActorKind => s.actor_kind = None,
         WidgetSetting::Text => s.text = None,
+        WidgetSetting::Measure => s.measure = None,
+        WidgetSetting::Version => s.version = None,
     }
 }
 
@@ -526,6 +535,8 @@ fn merge(old: &WidgetSettings, new: &WidgetSettings) -> WidgetSettings {
         group_by: new.group_by.or(old.group_by),
         actor_kind: new.actor_kind.or(old.actor_kind),
         text: new.text.clone().or_else(|| old.text.clone()),
+        measure: new.measure.or(old.measure),
+        version: new.version.clone().or_else(|| old.version.clone()),
     }
 }
 
@@ -576,8 +587,13 @@ fn check_settings(
                 .to_string(),
         ),
     };
-    if matches!(kind, WidgetKind::Burndown | WidgetKind::VersionProgress)
-        && out.project.is_none()
+    if matches!(
+        kind,
+        WidgetKind::Burndown
+            | WidgetKind::VersionProgress
+            | WidgetKind::Burnup
+            | WidgetKind::Velocity
+    ) && out.project.is_none()
         && pinned.is_none()
     {
         return Err(messages::invalid(
@@ -585,6 +601,27 @@ fn check_settings(
             "dashboard-needs-project",
             &[("kind", kind.as_str().to_owned())],
         ));
+    }
+    if matches!(kind, WidgetKind::Burnup | WidgetKind::Velocity) {
+        let project: Option<Id> = out
+            .project
+            .as_deref()
+            .and_then(|p| p.parse().ok())
+            .or(pinned);
+        let measure = settings.measure.unwrap_or_default();
+        let field =
+            super::planning::number_field(w.tx(), project, measure, settings.field.as_deref())
+                .map_err(|f| at_path(f, &path(WidgetSetting::Field)))?;
+        out.field = field.map(|(_, name)| name);
+        out.version = match settings.version.as_deref().map(str::trim) {
+            Some("") | None => None,
+            Some(v) => {
+                let key = project.map(|p| p.to_string());
+                let (id, _, _) = super::version::find(w.tx(), v, key.as_ref())
+                    .map_err(|f| at_path(f, &path(WidgetSetting::Version)))?;
+                Some(id.to_string())
+            }
+        };
     }
     if kind == WidgetKind::TasksByField {
         let field = settings.field.as_deref().map(str::trim).unwrap_or_default();
@@ -670,7 +707,10 @@ const fn default_width(kind: WidgetKind) -> u8 {
         WidgetKind::CreatedClosed
         | WidgetKind::CumulativeFlow
         | WidgetKind::CycleTime
-        | WidgetKind::Burndown => 2,
+        | WidgetKind::Burndown
+        | WidgetKind::Burnup
+        | WidgetKind::Velocity
+        | WidgetKind::EstimateAccuracy => 2,
         _ => 1,
     }
 }
@@ -1081,6 +1121,9 @@ fn blank(widget: Widget) -> WidgetValue {
         cycle_time: None,
         time: None,
         burndown: None,
+        burnup: None,
+        velocity: None,
+        estimates: None,
         versions: None,
         activity: None,
         runs: None,
@@ -1375,6 +1418,57 @@ fn compute(
                     project: Some(project),
                 },
             )?);
+        }
+        WidgetKind::Burnup => {
+            let Some(project) = scope_key(q, record, stored)? else {
+                return Err(messages::invalid(
+                    "settings.project",
+                    "dashboard-needs-project",
+                    &[("kind", stored.kind.as_str().to_owned())],
+                ));
+            };
+            let input = BurnupInput {
+                sprint: s.version.is_none().then(|| "active".to_owned()),
+                version: s.version.clone(),
+                project: Some(project),
+                measure: s.measure,
+                field: s.field.clone(),
+                ..BurnupInput::default()
+            };
+            out.burnup = Some(super::planning::burnup_report(q, &input)?);
+        }
+        WidgetKind::Velocity => {
+            let Some(project) = scope_key(q, record, stored)? else {
+                return Err(messages::invalid(
+                    "settings.project",
+                    "dashboard-needs-project",
+                    &[("kind", stored.kind.as_str().to_owned())],
+                ));
+            };
+            let input = VelocityInput {
+                project,
+                measure: s.measure,
+                field: s.field.clone(),
+                ..VelocityInput::default()
+            };
+            out.velocity = Some(super::planning::velocity_report(q, &input)?);
+        }
+        WidgetKind::EstimateAccuracy => {
+            let back = i64::from(s.days.unwrap_or(ESTIMATE_DAYS_DEFAULT)) - 1;
+            let from = q
+                .env
+                .zone
+                .day_of(q.now)
+                .add_days(-back)
+                .map_err(|e| invalid("settings.days", e))?;
+            let input = EstimatesInput {
+                from: Some(from.to_string()),
+                project: scope_key(q, record, stored)?,
+                query: s.query.clone().filter(|q| !q.trim().is_empty()),
+                group_by: Some(EstimateGroupBy::Type),
+                ..EstimatesInput::default()
+            };
+            out.estimates = Some(super::planning::estimates_report(q, &input)?);
         }
         WidgetKind::VersionProgress => {
             let Some(project) = scope_key(q, record, stored)? else {

@@ -94,3 +94,45 @@ Each report takes a **Period length** (Days, Weeks or Months), a range such as
 **Last 30 days**, and filters: **Type**, **Label**, **Version**, a **Query** and
 **Done by** (Anyone, People or Agents). **Show as a table** shows the numbers,
 and **Export as CSV** saves them.
+
+## Planning reports
+
+Three more tabs of **Reports** help with planning:
+
+- **Velocity:** for each completed sprint of a project, the work it
+  **committed** to (what was in it, still open, when it started) against the
+  work it **completed** (what was in it at its end and closed during it), with
+  the average of the last three sprints. A task carried over to the next
+  sprint counts where it was completed. The sprints page links to it with
+  **Velocity**, and shows each planned sprint's work against the average as a
+  guide.
+- **Burn-up:** for a version or a sprint, the **scope** (all the work planned
+  for it, so added work shows as a step) and the **completed** work at the end
+  of each day, from the history. With three days or more of progress, a
+  dashed **forecast** line shows where the present pace leads, and the day it
+  meets the scope. The roadmap opens a version's burn-up, and the sprints page
+  a sprint's, next to its burndown.
+- **Estimate accuracy:** for tasks closed as done in a range of days that have
+  both an estimate and logged time, the ratio of time spent to time estimated:
+  the median, the share within 20 %, how many ran over or under by more, and
+  the tasks furthest off. Group them by type, label, project, kind of work or
+  the month they closed. Tasks without an estimate or without logged time are
+  left out and counted.
+
+Velocity and burn-up measure work in **Tasks**, **Estimated hours** or a
+whole-number or decimal **Number field** such as story points. Each report
+reads by keyboard, shows as a table and saves as CSV.
+
+**Show how estimates usually turn out** (Preferences, Time) adds a line under a
+task's estimate, such as "Your Bug estimates usually run 1.4× over", from the
+last six months of closed tasks of the same type, when there are at least five
+of them. It is your own choice and stays on this computer.
+
+```sh
+glyphkeel report velocity TM --measure field --field cf.points
+glyphkeel report burnup --version 1.0 --project TM
+glyphkeel report estimates --project TM --group-by type
+```
+
+Agents have the same through MCP: `get_velocity`, `get_burnup` and
+`get_estimate_accuracy`.

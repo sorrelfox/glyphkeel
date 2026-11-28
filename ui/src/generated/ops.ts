@@ -871,6 +871,72 @@ export type BurndownDay = {
   total_tasks: number;
 };
 
+/** One day of a burn-up, as it stood at the end of the day. */
+export type BurnupDay = {
+  /** The closed part of it. */
+  completed: number;
+  /** How many of them were closed. */
+  completed_tasks: number;
+  /** The day (`YYYY-MM-DD`). */
+  date: string;
+  /** All the work planned for it. */
+  scope: number;
+  /** How many tasks were planned for it. */
+  scope_tasks: number;
+};
+
+/** Where the completed line is heading at its present pace: the straight line that fits the days best, up to the day it meets the scope. */
+export type BurnupForecast = {
+  /** The day the line meets the scope of the last day. */
+  date: string;
+  /** How much work it adds a day. */
+  per_day: number;
+  /** The line's value on the first day. */
+  start: number;
+};
+
+/** Which version or sprint the burn-up covers. */
+export type BurnupInput = {
+  /** Also return the days as CSV text. */
+  csv?: boolean;
+  /** With `measure: field`: a whole-number or decimal custom field. */
+  field?: string | null;
+  /** Add the forecast; default true. */
+  forecast?: boolean | null;
+  /** `tasks` (default), `estimate` (hours) or `field`. */
+  measure?: PlanMeasure | null;
+  /** With a name or `active`: the project (key or ID). */
+  project?: string | null;
+  /** The sprint (active or closed): its ID, its name, or `active`. */
+  sprint?: string | null;
+  /** The version: its ID or name. Give this or `sprint`. */
+  version?: string | null;
+};
+
+/** Scope and completed work, day by day. */
+export type BurnupReport = {
+  /** The days as CSV text, when asked for. */
+  csv?: string;
+  /** The days, oldest first. */
+  days: BurnupDay[];
+  /** The planned last day: the version's due date or the sprint's end. */
+  end?: string;
+  /** With `measure: field`: the field's name. */
+  field?: string;
+  /** The forecast; left out with fewer than three days, when no work is being completed, or when all of it is. */
+  forecast?: BurnupForecast;
+  /** The first day. */
+  from: string;
+  /** How work is measured. */
+  measure: PlanMeasure;
+  /** With `sprint`: the sprint. */
+  sprint?: SprintRef;
+  /** The last day shown: the planned end, or today when that is earlier. */
+  to: string;
+  /** With `version`: the version. */
+  version?: VersionRef;
+};
+
 /** The caller of an operation as the engine sees it. */
 export type Caller = {
   /** The person or the agent. */
@@ -2295,6 +2361,91 @@ export type EntityChange = {
 /** What kind of failure an operation error is. Adapters decide on the code, never on the message. */
 export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "rate_limited" | "pending_approval" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
 
+/** The figures of one group of tasks. */
+export type EstimateGroup = {
+  /** How many tasks. */
+  count: number;
+  /** Their estimates, in minutes. */
+  estimate_minutes: number;
+  /** What its tasks share: a type, label, project key, kind of work or month (`YYYY-MM`); empty for every task, or for those without one. */
+  key: string;
+  /** The median ratio of spent to estimate (two decimals). */
+  median_ratio?: number;
+  /** The name to show; empty like `key`. */
+  name: string;
+  /** The ten furthest off, either way, the furthest first. */
+  outliers: EstimateTask[];
+  /** How many took more than 20 % longer. */
+  over: number;
+  /** The time logged on them, in minutes. */
+  spent_minutes: number;
+  /** How many took more than 20 % less. */
+  under: number;
+  /** The share of tasks within 20 % of their estimate (0 to 1, four decimals). */
+  within_share?: number;
+};
+
+/** How estimate accuracy is grouped. */
+export type EstimateGroupBy = "none" | "type" | "label" | "project" | "work_kind" | "month";
+
+/** One closed task: its estimate against the time logged on it. */
+export type EstimateTask = {
+  /** The day it was closed, in the personal time zone. */
+  closed_on: string;
+  /** Its estimate, in minutes. */
+  estimate_minutes: number;
+  /** The task's key. */
+  key: string;
+  /** Spent over estimate (two decimals): 1.5 took half as long again. */
+  ratio: number;
+  /** The time logged on it, in minutes. */
+  spent_minutes: number;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Which closed tasks to compare. */
+export type EstimatesInput = {
+  /** Also return the tasks as CSV text. */
+  csv?: boolean;
+  /** The first day tasks were closed on: `YYYY-MM-DD`, `today` or `yesterday`; default 89 days before `to`. */
+  from?: string | null;
+  /** `none` (default), `type`, `label`, `project`, `work_kind` or `month`. */
+  group_by?: EstimateGroupBy | null;
+  /** Only this project (key or ID) and its sub-projects. */
+  project?: string | null;
+  /** Only tasks that match this query, as they are now. */
+  query?: string | null;
+  /** Also list every task compared. */
+  tasks?: boolean;
+  /** The last day, included; default today. */
+  to?: string | null;
+};
+
+/** How closed tasks' logged time compared with their estimates. */
+export type EstimatesReport = {
+  /** One line per task as CSV text, when asked for. */
+  csv?: string;
+  /** The first day. */
+  from: string;
+  /** How the groups are made. */
+  group_by: EstimateGroupBy;
+  /** The groups: by count, the largest first (months in order); empty with `group_by: none`. */
+  groups: EstimateGroup[];
+  /** The tasks compared, by closing day, when asked for. */
+  tasks?: EstimateTask[];
+  /** The last day, included. */
+  to: string;
+  /** Every task compared. */
+  total: EstimateGroup;
+  /** Tasks closed in the range without an estimate, left out. */
+  without_estimate: number;
+  /** Tasks closed in the range with an estimate but no time logged, left out. */
+  without_time: number;
+};
+
 /** What to export. */
 export type ExportInput = {
   /** Encrypt the archive (a `.zip` file) with the workspace's passphrase, so that it opens only in Glyphkeel with that passphrase. Left out: on when the workspace is encrypted and the archive is a `.zip` file or goes into the `exports` folder. Only an encrypted workspace can encrypt an export. */
@@ -3189,6 +3340,9 @@ export type ParsedQuery = {
   /** Whether the query can run: it reads, fits the fields and names only what exists. */
   valid: boolean;
 };
+
+/** How work is measured. */
+export type PlanMeasure = "tasks" | "estimate" | "field";
 
 /** A task's priority. */
 export type Priority = "none" | "low" | "normal" | "high" | "urgent";
@@ -6071,6 +6225,68 @@ export type UnscheduledTask = {
   version: number;
 };
 
+/** Which project's sprints the velocity covers. */
+export type VelocityInput = {
+  /** Also return the report as CSV text (comma-separated, a header line, CRLF line ends). */
+  csv?: boolean;
+  /** With `measure: field`: a whole-number or decimal custom field (its name or `cf.<name>`). */
+  field?: string | null;
+  /** How many of the latest completed sprints to show, 1 to 50; default 10. */
+  last?: number | null;
+  /** `tasks` (default), `estimate` (hours) or `field`. */
+  measure?: PlanMeasure | null;
+  /** The project: a key or ID. */
+  project: string;
+};
+
+/** The velocity of a project's completed sprints, oldest first. */
+export type VelocityReport = {
+  /** The mean completed work of the last three completed sprints (fewer when there are fewer); left out without any. */
+  average?: number;
+  /** How many sprints `average` covers: 0 to 3. */
+  average_of: number;
+  /** The report as CSV text, when asked for. */
+  csv?: string;
+  /** With `measure: field`: the field's name. */
+  field?: string;
+  /** How work is measured. */
+  measure: PlanMeasure;
+  /** The project's key. */
+  project: string;
+  /** The latest completed sprints, in the order they were completed. */
+  sprints: VelocitySprint[];
+  /** The active and planned sprints, with the work in them now. */
+  upcoming: VelocityUpcoming[];
+};
+
+/** One completed sprint: what it took on and what it finished. */
+export type VelocitySprint = {
+  /** The mean of `completed` over this sprint and up to two before it. */
+  average: number;
+  /** The work in it when it started that was still open then. */
+  committed: number;
+  /** How many tasks it took on at its start. */
+  committed_tasks: number;
+  /** The work in it at its end that was closed during it. */
+  completed: number;
+  /** The day it was completed, in the personal time zone. */
+  completed_on: string;
+  /** How many tasks it completed. */
+  completed_tasks: number;
+  /** The sprint. */
+  sprint: SprintRef;
+};
+
+/** A sprint still to finish, with the work planned for it now. */
+export type VelocityUpcoming = {
+  /** The work in it now, open or closed. */
+  planned: number;
+  /** The sprint (active or planned). */
+  sprint: SprintRef;
+  /** How many tasks are in it now. */
+  tasks: number;
+};
+
 /** A version. */
 export type Version = {
   /** When it was created (RFC 3339, UTC). */
@@ -6386,10 +6602,10 @@ export type WidgetBar = {
 };
 
 /** What a widget shows. */
-export type WidgetKind = "query_count" | "query_list" | "created_closed" | "cumulative_flow" | "cycle_time" | "time_report" | "burndown" | "version_progress" | "tasks_by_field" | "due_soon" | "overdue" | "activity" | "automation_failures" | "note";
+export type WidgetKind = "query_count" | "query_list" | "created_closed" | "cumulative_flow" | "cycle_time" | "time_report" | "burndown" | "version_progress" | "burnup" | "velocity" | "estimate_accuracy" | "tasks_by_field" | "due_soon" | "overdue" | "activity" | "automation_failures" | "note";
 
 /** One setting of a widget. */
-export type WidgetSetting = "query" | "project" | "field" | "limit" | "days" | "bucket" | "group_by" | "actor_kind" | "text";
+export type WidgetSetting = "query" | "project" | "field" | "limit" | "days" | "bucket" | "group_by" | "actor_kind" | "text" | "measure" | "version";
 
 /** What a widget shows, beyond its kind. Each kind takes only some of them (see `kind`); the others are refused. The same type is read and written, so its optional fields are left out rather than `null`. */
 export type WidgetSettings = {
@@ -6397,20 +6613,24 @@ export type WidgetSettings = {
   actor_kind?: ActorKind;
   /** Flow reports: the length of a period: twelve of them are shown (30 days, 12 weeks or 12 months); default `week`. */
   bucket?: FlowBucket;
-  /** `due_soon`: due within this many days (default 7); `time_report`: the last this many days, today included (default 7); `activity`: only the changes of the last this many days. 1 to 366. */
+  /** `due_soon`: due within this many days (default 7); `time_report`: the last this many days, today included (default 7); `activity`: only the changes of the last this many days; `estimate_accuracy`: tasks closed in the last this many days (default 90). 1 to 366. */
   days?: number;
-  /** `tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom select or yes/no field (`cf.<name>`). */
+  /** `tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom select or yes/no field (`cf.<name>`); `velocity` and `burnup` with `measure: field`: the number field (`cf.<name>`). */
   field?: string;
   /** `time_report`: how to group the time; default `project`. */
   group_by?: TimeGroupBy;
   /** How many tasks, changes or runs to list, 1 to 50; default 10. */
   limit?: number;
+  /** `velocity` and `burnup`: `tasks` (default), `estimate` (hours) or `field`. */
+  measure?: PlanMeasure;
   /** Only this project and its sub-projects (key or ID); on a project's dashboard, the dashboard's project when left out. `burndown` and `version_progress` need one. */
   project?: string;
   /** A task query (`is:open label:bug`): the tasks counted or listed, or only these tasks in a report, in `tasks_by_field`, `due_soon` and `overdue`. Relative dates in it are evaluated each time. */
   query?: string;
   /** `note`: the note, in Markdown, up to 10,000 characters. */
   text?: string;
+  /** `burnup`: the version (name or ID); left out: the project's active sprint. */
+  version?: string;
 };
 
 /** A widget to add. */
@@ -6447,6 +6667,8 @@ export type WidgetValue = {
   bars?: WidgetBar[];
   /** `burndown`. */
   burndown?: SprintBurndown;
+  /** `burnup`. */
+  burnup?: BurnupReport;
   /** How many tasks match (`query_count`, `query_list`, `due_soon`, `overdue`, `tasks_by_field`). */
   count?: number;
   /** `created_closed`. */
@@ -6457,6 +6679,8 @@ export type WidgetValue = {
   cycle_time?: CycleTimeReport;
   /** Why it can't be shown. */
   error?: OpError;
+  /** `estimate_accuracy`, grouped by type. */
+  estimates?: EstimatesReport;
   /** The query the figure or list comes from, in its normal form, with the project it is limited to (`project:TM/*`): open it with `task list --query`. */
   query?: string;
   /** `automation_failures`: the latest runs that failed or were limited, newest first. */
@@ -6467,6 +6691,8 @@ export type WidgetValue = {
   text?: string;
   /** `time_report`. */
   time?: TimeReport;
+  /** `velocity`. */
+  velocity?: VelocityReport;
   /** `version_progress`: the project's open and locked versions. */
   versions?: Version[];
   /** The widget. */
@@ -7024,6 +7250,9 @@ export interface OpMap {
   "report.created_closed": { input: FlowReportInput; output: CreatedClosedReport; safety: "read"; kind: "query" };
   "report.cumulative_flow": { input: FlowReportInput; output: CumulativeFlowReport; safety: "read"; kind: "query" };
   "report.cycle_time": { input: FlowReportInput; output: CycleTimeReport; safety: "read"; kind: "query" };
+  "report.velocity": { input: VelocityInput; output: VelocityReport; safety: "read"; kind: "query" };
+  "report.burnup": { input: BurnupInput; output: BurnupReport; safety: "read"; kind: "query" };
+  "report.estimates": { input: EstimatesInput; output: EstimatesReport; safety: "read"; kind: "query" };
   "timer.get": { input: TimerGetInput; output: TimerStatus; safety: "read"; kind: "query" };
   "timer.start": { input: TimerStartInput; output: TimerChange; safety: "write"; kind: "command" };
   "timer.pause": { input: TimerPauseInput; output: TimerChange; safety: "write"; kind: "command" };
@@ -7223,6 +7452,9 @@ export const OP_SAFETY = {
   "report.created_closed": "read",
   "report.cumulative_flow": "read",
   "report.cycle_time": "read",
+  "report.velocity": "read",
+  "report.burnup": "read",
+  "report.estimates": "read",
   "timer.get": "read",
   "timer.start": "write",
   "timer.pause": "write",
@@ -7591,6 +7823,12 @@ export function makeOps(call: Call) {
       cumulativeFlow: (input: OpMap["report.cumulative_flow"]["input"] = {}) => call("report.cumulative_flow", input),
       /** Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV. (read) */
       cycleTime: (input: OpMap["report.cycle_time"]["input"] = {}) => call("report.cycle_time", input),
+      /** The velocity of a project's completed sprints: the work each took on at its start against the work it completed, in tasks, estimated hours or a number field, with the average of the last three and the work planned for the sprints to come. (read) */
+      velocity: (input: OpMap["report.velocity"]["input"]) => call("report.velocity", input),
+      /** A burn-up of a version or a sprint: the work planned for it and the part completed at the end of each day, from the history, with a forecast of when the two meet. (read) */
+      burnup: (input: OpMap["report.burnup"]["input"] = {}) => call("report.burnup", input),
+      /** Estimate accuracy: for tasks closed over a range of days with an estimate and logged time, the median ratio of spent to estimated time, the share within 20 %, and the outliers, overall and by type, label, project, kind of work or month. (read) */
+      estimates: (input: OpMap["report.estimates"]["input"] = {}) => call("report.estimates", input),
     },
     rules: {
       /** Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). (app) */

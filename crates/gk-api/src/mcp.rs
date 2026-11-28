@@ -1334,6 +1334,52 @@ Example: get_cycle_time {\"project\": \"TM\", \"bucket\": \"month\", \"tasks\": 
         idempotent: true,
     },
     McpTool {
+        name: "get_velocity",
+        toolset: Toolset::Time,
+        title: "Sprint velocity",
+        description: "For each completed sprint of a `project`, oldest first: the work `committed` \
+(in it, open, when it started; replayed from the history) and `completed` (in it at its end and \
+closed during it; a task carried over counts where it was completed), with the rolling `average` \
+of up to three sprints. `average` overall is the mean of the last three: use it to judge how much \
+to plan, against `upcoming` (the active and planned sprints with the work in them now). \
+`measure`: `tasks` (default), `estimate` (hours) or `field` with a number `field` (cf.points). \
+`last` limits the sprints shown (default 10); `csv: true` adds CSV text. \
+Example: get_velocity {\"project\": \"TM\", \"measure\": \"field\", \"field\": \"cf.points\"}",
+        main: "report.velocity",
+        covers: &["report.velocity"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_burnup",
+        toolset: Toolset::Time,
+        title: "Burn-up of a version or sprint",
+        description: "Day by day, replayed from the history: the `scope` (all work planned for a \
+`version` or a `sprint`, so added work shows as a step) and the `completed` part, from the \
+version's start date (or the day work was first planned for it) or the sprint's start, to today \
+or the end. `forecast` gives the day the completed line meets the scope at its present pace \
+(left out with fewer than three days or no progress). Give `version` or `sprint` (`active` with \
+`project`); `measure` as in get_velocity. \
+Example: get_burnup {\"version\": \"1.0\", \"project\": \"TM\"}",
+        main: "report.burnup",
+        covers: &["report.burnup"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_estimate_accuracy",
+        toolset: Toolset::Time,
+        title: "Estimate accuracy",
+        description: "Compares the estimate of each task closed as done in the range (default the \
+last 90 days) with the time logged on it: the count, total estimated and spent minutes, the \
+median ratio of spent to estimate (1.4 means 40 % over), the share within 20 %, how many ran \
+over or under, and the ten furthest off, overall (`total`) and per group (`group_by`: `type`, \
+`label`, `project`, `work_kind` or `month`). Tasks without an estimate or without logged time are \
+left out and counted. Narrow it with `project` or `query`; `tasks: true` lists every task. \
+Example: get_estimate_accuracy {\"project\": \"TM\", \"group_by\": \"type\"}",
+        main: "report.estimates",
+        covers: &["report.estimates"],
+        idempotent: true,
+    },
+    McpTool {
         name: "start_timer",
         toolset: Toolset::Time,
         title: "Start the timer",
@@ -1554,7 +1600,7 @@ Example: list_dashboards {\"all\": true}",
         title: "Get a dashboard",
         description: "Returns a dashboard, named by ID or by name with its `project`, with what each \
 widget shows now: `count` and `tasks` for queries, due soon and overdue; `bars` for tasks by \
-field; the report for flow, time and burndown widgets; `versions`, `activity`, failed automation \
+field; the report for flow, time, burndown, burn-up, velocity and estimate widgets; `versions`, `activity`, failed automation \
 `runs`, or a note's `text`. A widget that can't be computed has `error`, the others still show. \
 Example: get_dashboard {\"dashboard\": \"Team\"}",
         main: "dashboard.show",
@@ -1580,9 +1626,10 @@ its place in the grid (`1` is the first). Example: get_dashboard_widget {\"dashb
 `starter: true` for the starter widgets and/or `widgets`, each {`kind`, `title`, `width`, \
 `settings`}. Kinds: query_count, query_list, tasks_by_field (`field`: status, priority, type, \
 label or cf.<name>), due_soon, overdue, created_closed, cumulative_flow, cycle_time, time_report, \
-burndown, version_progress, activity, automation_failures, note (`text` in Markdown). Settings: \
-`query`, `project`, `field`, `limit`, `days`, `bucket`, `group_by`, `actor_kind`, `text`; each \
-kind takes only its own. Only make dashboards the person asked for. \
+burndown, version_progress, burnup (`version`, else the active sprint), velocity, \
+estimate_accuracy, activity, automation_failures, note (`text` in Markdown). Settings: \
+`query`, `project`, `field`, `limit`, `days`, `bucket`, `group_by`, `actor_kind`, `text`, \
+`measure`, `version`; each kind takes only its own. Only make dashboards the person asked for. \
 Example: create_dashboard {\"name\": \"Bugs\", \"project\": \"TM\", \"widgets\": [{\"kind\": \
 \"query_count\", \"title\": \"Open bugs\", \"settings\": {\"query\": \"is:open label:bug\"}}]}",
         main: "dashboard.create",
@@ -2166,6 +2213,9 @@ mod tests {
                 "get_created_closed_report",
                 "get_cumulative_flow",
                 "get_cycle_time",
+                "get_velocity",
+                "get_burnup",
+                "get_estimate_accuracy",
                 "get_reminders",
                 "get_today",
                 "get_board",

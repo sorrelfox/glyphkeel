@@ -118,8 +118,9 @@ import { FakeDigest } from "./digest";
 import { createFolder, deleteFolder, find as findFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
 import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { assignLanes } from "./swimlanes";
-import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
-import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
+import { addSprintTasks, completeSprint, createSprint, deleteSprint, find as findSprint, getSprint, listSprints, refOf, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
+import { createVersion, deleteVersion, find as findVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
+import { burnupReport, estimatesReport, velocityReport, type PlanningHost } from "./planning";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, renameInQuery, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
@@ -2990,12 +2991,41 @@ export class FakeWorkspace {
         throw error;
       }
     },
+    versionId: (ref, project) => findVersion(this.versionHost, ref, project).version.id,
     countableField: (name) => queryFields(this.state).some((field) => field.queryName === name && (field.kind === "select" || field.kind === "multi_select" || field.kind === "boolean")),
     actor: () => (this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }),
     now: () => this.today().toISOString(),
     today: () => localDay(this.today()),
     newId: () => nextUuid(),
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
+  /** What the planning reports need of this workspace. */
+  private readonly planningHost: PlanningHost = {
+    project: (ref) => this.project(ref),
+    subtree: (project) => [project, ...this.descendants(project)],
+    sprints: () => (this.state.sprints ??= []),
+    findSprint: (ref, project) => findSprint(this.sprintHost, ref, project),
+    findVersion: (ref, project) => findVersion(this.versionHost, ref, project).version,
+    sprintRef: (sprint) => refOf(sprint),
+    versionRef: (version) => {
+      const project = this.state.projects.find((candidate) => candidate.id === version.projectId);
+      return { id: version.id, name: version.name, project: project?.key ?? "", status: version.status, ...(version.dueDate === null ? {} : { due_date: version.dueDate }) };
+    },
+    tasks: () => this.state.tasks,
+    formerly: (sprint) => this.sprintHost.formerly(sprint),
+    done: (task) => this.statusIn(this.projectOf(task), task.statusId).category === "done",
+    keyOf: (task) => this.keyOf(task),
+    typeName: (task) => this.typeRef(task).name,
+    labelNames: (task) => this.labelRefs(task).map((label) => label.name),
+    projectOf: (task) => this.projectOf(task),
+    fields: (projectId) => fieldsFor(this.state, projectId),
+    timeEntries: () => this.state.timeEntries,
+    workKindName: (id) => this.workKindRef(id)?.name ?? "",
+    matching: (query) => new Set(this.runQuery(() => matchingKeys(this.listedTasks(), query, this.queryNames(), this.archivedKeys()))),
+    today: () => localDay(this.today()),
+    dayOf: (moment) => localDay(new Date(moment)),
+    fail: (code, message, path, messageId) => fail(code, message, { details: { path, ...(messageId === undefined ? {} : { message_id: messageId }) } }),
   };
 
   /** What the versions need of this workspace. */
@@ -5751,6 +5781,9 @@ export class FakeWorkspace {
       const { tasks, statuses, scoped, range } = this.flowScope(input);
       return cumulativeFlow(tasks, statuses, scoped, range, input.group_by ?? "status", this.state.settings.week_start, input.csv === true);
     },
+    "report.velocity": (input) => velocityReport(this.planningHost, input),
+    "report.burnup": (input) => burnupReport(this.planningHost, input),
+    "report.estimates": (input) => estimatesReport(this.planningHost, input),
     "report.cycle_time": (input) => {
       const { tasks, statuses, range } = this.flowScope(input);
       return cycleTime(tasks, statuses, range, this.state.settings.week_start, input.tasks === true, input.csv === true);

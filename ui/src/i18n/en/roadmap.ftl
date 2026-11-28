@@ -99,3 +99,7 @@ roadmap-deleted = Version { $name } deleted
 ## The Gantt chart's version markers
 
 gantt-version-marker = Version { $name }, due { $date }
+
+roadmap-burnup = Burn-up
+# $name is the version's name.
+roadmap-burnup-named = Burn-up of { $name }

@@ -591,6 +591,80 @@ async fn an_agent_reads_the_flow_reports_and_its_own_closes() {
 }
 
 #[tokio::test]
+async fn an_agent_reads_velocity_burnup_and_estimate_accuracy() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Plan Agent").await;
+    output(
+        &c.call("create_project", json!({ "name": "Plans", "key": "PL" }))
+            .await,
+    );
+    output(
+        &c.call("create_version", json!({ "project": "PL", "name": "1.0" }))
+            .await,
+    );
+    for title in ["One", "Two"] {
+        output(
+            &c.call(
+                "create_task",
+                json!({ "project": "PL", "title": title, "estimate": "1h", "fix_version": "1.0" }),
+            )
+            .await,
+        );
+    }
+    output(
+        &c.call(
+            "create_sprint",
+            json!({ "project": "PL", "name": "S1", "tasks": ["PL-1", "PL-2"] }),
+        )
+        .await,
+    );
+    output(
+        &c.call("start_sprint", json!({ "sprint": "S1", "project": "PL" }))
+            .await,
+    );
+    output(
+        &c.call("log_time", json!({ "key": "PL-1", "duration": "90m" }))
+            .await,
+    );
+    output(
+        &c.call("move_task", json!({ "key": "PL-1", "status": "Done" }))
+            .await,
+    );
+    output(
+        &c.call(
+            "complete_sprint",
+            json!({ "sprint": "active", "project": "PL" }),
+        )
+        .await,
+    );
+    let velocity = output(&c.call("get_velocity", json!({ "project": "PL" })).await);
+    assert_eq!(velocity["sprints"][0]["committed"], 2.0);
+    assert_eq!(velocity["sprints"][0]["completed"], 1.0);
+    assert_eq!(velocity["average"], 1.0);
+    let burnup = output(
+        &c.call("get_burnup", json!({ "version": "1.0", "project": "PL" }))
+            .await,
+    );
+    let today = &burnup["days"][0];
+    assert_eq!(
+        (today["scope"].clone(), today["completed"].clone()),
+        (json!(2.0), json!(1.0))
+    );
+    let accuracy = output(
+        &c.call(
+            "get_estimate_accuracy",
+            json!({ "project": "PL", "group_by": "type" }),
+        )
+        .await,
+    );
+    assert_eq!(accuracy["total"]["count"], 1);
+    assert_eq!(accuracy["total"]["median_ratio"], 1.5);
+    assert_eq!(accuracy["without_time"], 0);
+    c.close().await;
+}
+
+#[tokio::test]
 async fn an_agent_reads_and_sets_board_swimlanes_and_moves_a_card_between_lanes() {
     let (_dir, options) = workspace();
     let (_, mode, version, _) = lifecycles().remove(0);

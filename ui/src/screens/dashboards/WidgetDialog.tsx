@@ -7,9 +7,9 @@ import { Button } from "react-aria-components";
 import { Dialog } from "../../components/Dialog";
 import { Segmented } from "../../components/Segmented";
 import { Select } from "../../components/Select";
-import { BUCKETS, COUNT_FIELDS, defaultWidth, KIND_SETTINGS, NEEDS_PROJECT, TIME_GROUPS, WIDGET_KINDS } from "../../data/dashboards";
+import { BUCKETS, COUNT_FIELDS, defaultWidth, KIND_SETTINGS, MEASURES, NEEDS_PROJECT, TIME_GROUPS, WIDGET_KINDS } from "../../data/dashboards";
 import { useOp } from "../../data/hooks";
-import { type ActorKind, type Dashboard, type FlowBucket, type TimeGroupBy, type Widget, type WidgetKind, type WidgetSetting, type WidgetSettings } from "../../generated/ops";
+import { type ActorKind, type Dashboard, type FlowBucket, type PlanMeasure, type TimeGroupBy, type Widget, type WidgetKind, type WidgetSetting, type WidgetSettings } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { QueryInput } from "../list/QueryInput";
 import { widgetTitle } from "./WidgetBody";
@@ -70,12 +70,19 @@ export function WidgetDialog({ dashboard, widget, error, onSave, onEdit, onClose
   const firstProject = projects.data?.items[0]?.key;
   const projectChoice = settings.project ?? (needsOne ? (firstProject ?? NONE) : NONE);
   const takes = (setting: WidgetSetting) => KIND_SETTINGS[kind].includes(setting);
+  const versionProject = settings.project ?? dashboard.project ?? (projectChoice === NONE ? undefined : projectChoice);
+  const versions = useOp("version.list", { project: versionProject ?? "" }, { enabled: takes("version") && versionProject !== undefined });
   const save = () => {
     const kept: WidgetSettings = {};
     for (const setting of KIND_SETTINGS[kind]) {
       const value = settings[setting];
       if (value !== undefined && value !== "") {
         (kept as Record<string, unknown>)[setting] = value;
+      }
+    }
+    if (kept.measure !== "field") {
+      if (KIND_SETTINGS[kind].includes("measure")) {
+        delete kept.field;
       }
     }
     if (kind === "tasks_by_field" && kept.field === undefined) {
@@ -87,6 +94,7 @@ export function WidgetDialog({ dashboard, widget, error, onSave, onEdit, onClose
     const clear = widget === undefined ? [] : KIND_SETTINGS[kind].filter((setting) => widget.settings[setting] !== undefined && kept[setting] === undefined);
     onSave({ kind, title: title.trim(), width, settings: kept, clear });
   };
+  const numberFields = (fields.data?.fields ?? []).filter((field) => field.kind === "integer" || field.kind === "decimal");
   const countable = (fields.data?.fields ?? []).filter((field) => field.kind === "select" || field.kind === "multi_select" || field.kind === "boolean");
   const shownTitle = widget === undefined ? "" : widgetTitle(t, widget);
   return (
@@ -155,7 +163,48 @@ export function WidgetDialog({ dashboard, widget, error, onSave, onEdit, onClose
             segments={(["1", "2", "3"] as const).map((each) => ({ id: each, label: t("widget-width-value", { width: Number(each) }) }))}
           />
         </Row>
-        {takes("field") && (
+        {takes("measure") && (
+          <Row label={t("plan-measure")}>
+            <Segmented<PlanMeasure>
+              label={t("plan-measure")}
+              value={settings.measure ?? "tasks"}
+              onChange={(next) => {
+                set("measure", next);
+                if (next === "field") {
+                  set("field", settings.field ?? numberFields[0]?.query_name);
+                } else {
+                  set("field", undefined);
+                }
+              }}
+              segments={MEASURES.filter((each) => each !== "field" || numberFields.length > 0).map((each) => ({ id: each, label: t(`plan-measure-${each}`) }))}
+            />
+          </Row>
+        )}
+        {takes("measure") && settings.measure === "field" && (
+          <Row label={t("plan-field")}>
+            <Select
+              label={t("plan-field")}
+              value={settings.field ?? numberFields[0]?.query_name ?? ""}
+              onChange={(next) => {
+                set("field", next);
+              }}
+              options={numberFields.map((field) => ({ id: field.query_name, label: field.name }))}
+            />
+          </Row>
+        )}
+        {takes("version") && (
+          <Row label={t("widget-field-version")}>
+            <Select
+              label={t("widget-field-version")}
+              value={settings.version ?? NONE}
+              onChange={(next) => {
+                set("version", next === NONE ? undefined : next);
+              }}
+              options={[{ id: NONE, label: t("widget-version-active-sprint") }, ...(versions.data?.items ?? []).map((version) => ({ id: version.id, label: version.name }))]}
+            />
+          </Row>
+        )}
+        {takes("field") && !takes("measure") && (
           <Row label={t("widget-field-field")}>
             <Select
               label={t("widget-field-field")}

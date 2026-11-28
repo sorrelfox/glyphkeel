@@ -11,6 +11,7 @@ import { type Hue, type Widget, type WidgetValue } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { CreatedClosed, CumulativeFlow, CycleTime } from "../reports/FlowReports";
+import { Burnup, Estimates, Velocity } from "../reports/PlanningReports";
 import { describeChange } from "../safety/ActivityScreen";
 import { BurndownFigure } from "../sprints/Burndown";
 import { useMomentFormat } from "../task/Activity";
@@ -89,6 +90,12 @@ export function WidgetBody({ value, title, asTable, onOpenTask, onOpenQuery }: B
       return value.cycle_time ? <CycleTime report={value.cycle_time} asTable={asTable} metric="cycle" compact /> : null;
     case "burndown":
       return value.burndown ? <BurndownFigure sprint={value.burndown.sprint} data={value.burndown} asTable={asTable} heading={<span className="muted grow">{value.burndown.sprint.name}</span>} /> : null;
+    case "burnup":
+      return value.burnup ? <Burnup report={value.burnup} asTable={asTable} heading={<span className="muted">{value.burnup.version?.name ?? value.burnup.sprint?.name}</span>} /> : null;
+    case "velocity":
+      return value.velocity ? <Velocity report={value.velocity} asTable={asTable} /> : null;
+    case "estimate_accuracy":
+      return value.estimates ? <Estimates report={value.estimates} asTable={asTable} compact /> : null;
     case "time_report":
       return <Time value={value} />;
     case "version_progress":

@@ -59041,6 +59041,964 @@
       "summary": "Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV."
     },
     {
+      "cli": "report velocity <project>",
+      "exposure": "data",
+      "id": "report.velocity",
+      "input": {
+        "$defs": {
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which project's sprints the velocity covers.",
+        "properties": {
+          "csv": {
+            "default": false,
+            "description": "Also return the report as CSV text (comma-separated, a header line,\nCRLF line ends).",
+            "type": "boolean"
+          },
+          "field": {
+            "description": "With `measure: field`: a whole-number or decimal custom field (its\nname or `cf.<name>`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last": {
+            "description": "How many of the latest completed sprints to show, 1 to 50; default\n10.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PlanMeasure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`tasks` (default), `estimate` (hours) or `field`."
+          },
+          "project": {
+            "description": "The project: a key or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "VelocityInput",
+        "type": "object"
+      },
+      "input_name": "VelocityInput",
+      "kind": "query",
+      "mcp_tool": "get_velocity",
+      "output": {
+        "$defs": {
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "VelocitySprint": {
+            "additionalProperties": false,
+            "description": "One completed sprint: what it took on and what it finished.",
+            "properties": {
+              "average": {
+                "description": "The mean of `completed` over this sprint and up to two before it.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed": {
+                "description": "The work in it when it started that was still open then.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed_tasks": {
+                "description": "How many tasks it took on at its start.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "completed": {
+                "description": "The work in it at its end that was closed during it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_on": {
+                "description": "The day it was completed, in the personal time zone.",
+                "type": "string"
+              },
+              "completed_tasks": {
+                "description": "How many tasks it completed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint."
+              }
+            },
+            "required": [
+              "sprint",
+              "completed_on",
+              "committed",
+              "completed",
+              "committed_tasks",
+              "completed_tasks",
+              "average"
+            ],
+            "type": "object"
+          },
+          "VelocityUpcoming": {
+            "additionalProperties": false,
+            "description": "A sprint still to finish, with the work planned for it now.",
+            "properties": {
+              "planned": {
+                "description": "The work in it now, open or closed.",
+                "format": "double",
+                "type": "number"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint (active or planned)."
+              },
+              "tasks": {
+                "description": "How many tasks are in it now.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sprint",
+              "planned",
+              "tasks"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The velocity of a project's completed sprints, oldest first.",
+        "properties": {
+          "average": {
+            "description": "The mean completed work of the last three completed sprints (fewer\nwhen there are fewer); left out without any.",
+            "format": "double",
+            "type": "number"
+          },
+          "average_of": {
+            "description": "How many sprints `average` covers: 0 to 3.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "csv": {
+            "description": "The report as CSV text, when asked for.",
+            "type": "string"
+          },
+          "field": {
+            "description": "With `measure: field`: the field's name.",
+            "type": "string"
+          },
+          "measure": {
+            "$ref": "#/$defs/PlanMeasure",
+            "description": "How work is measured."
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          },
+          "sprints": {
+            "description": "The latest completed sprints, in the order they were completed.",
+            "items": {
+              "$ref": "#/$defs/VelocitySprint"
+            },
+            "type": "array"
+          },
+          "upcoming": {
+            "description": "The active and planned sprints, with the work in them now.",
+            "items": {
+              "$ref": "#/$defs/VelocityUpcoming"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "measure",
+          "sprints",
+          "average_of",
+          "upcoming"
+        ],
+        "title": "VelocityReport",
+        "type": "object"
+      },
+      "output_name": "VelocityReport",
+      "safety": "read",
+      "summary": "The velocity of a project's completed sprints: the work each took on at its start against the work it completed, in tasks, estimated hours or a number field, with the average of the last three and the work planned for the sprints to come."
+    },
+    {
+      "cli": "report burnup",
+      "exposure": "data",
+      "id": "report.burnup",
+      "input": {
+        "$defs": {
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which version or sprint the burn-up covers.",
+        "properties": {
+          "csv": {
+            "default": false,
+            "description": "Also return the days as CSV text.",
+            "type": "boolean"
+          },
+          "field": {
+            "description": "With `measure: field`: a whole-number or decimal custom field.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "forecast": {
+            "description": "Add the forecast; default true.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PlanMeasure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`tasks` (default), `estimate` (hours) or `field`."
+          },
+          "project": {
+            "description": "With a name or `active`: the project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint (active or closed): its ID, its name, or `active`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "The version: its ID or name. Give this or `sprint`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "BurnupInput",
+        "type": "object"
+      },
+      "input_name": "BurnupInput",
+      "kind": "query",
+      "mcp_tool": "get_burnup",
+      "output": {
+        "$defs": {
+          "BurnupDay": {
+            "additionalProperties": false,
+            "description": "One day of a burn-up, as it stood at the end of the day.",
+            "properties": {
+              "completed": {
+                "description": "The closed part of it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_tasks": {
+                "description": "How many of them were closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "date": {
+                "description": "The day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "scope": {
+                "description": "All the work planned for it.",
+                "format": "double",
+                "type": "number"
+              },
+              "scope_tasks": {
+                "description": "How many tasks were planned for it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "date",
+              "scope",
+              "completed",
+              "scope_tasks",
+              "completed_tasks"
+            ],
+            "type": "object"
+          },
+          "BurnupForecast": {
+            "additionalProperties": false,
+            "description": "Where the completed line is heading at its present pace: the straight\nline that fits the days best, up to the day it meets the scope.",
+            "properties": {
+              "date": {
+                "description": "The day the line meets the scope of the last day.",
+                "type": "string"
+              },
+              "per_day": {
+                "description": "How much work it adds a day.",
+                "format": "double",
+                "type": "number"
+              },
+              "start": {
+                "description": "The line's value on the first day.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "date",
+              "start",
+              "per_day"
+            ],
+            "type": "object"
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Scope and completed work, day by day.",
+        "properties": {
+          "csv": {
+            "description": "The days as CSV text, when asked for.",
+            "type": "string"
+          },
+          "days": {
+            "description": "The days, oldest first.",
+            "items": {
+              "$ref": "#/$defs/BurnupDay"
+            },
+            "type": "array"
+          },
+          "end": {
+            "description": "The planned last day: the version's due date or the sprint's end.",
+            "type": "string"
+          },
+          "field": {
+            "description": "With `measure: field`: the field's name.",
+            "type": "string"
+          },
+          "forecast": {
+            "$ref": "#/$defs/BurnupForecast",
+            "description": "The forecast; left out with fewer than three days, when no work is\nbeing completed, or when all of it is."
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "measure": {
+            "$ref": "#/$defs/PlanMeasure",
+            "description": "How work is measured."
+          },
+          "sprint": {
+            "$ref": "#/$defs/SprintRef",
+            "description": "With `sprint`: the sprint."
+          },
+          "to": {
+            "description": "The last day shown: the planned end, or today when that is earlier.",
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/$defs/VersionRef",
+            "description": "With `version`: the version."
+          }
+        },
+        "required": [
+          "measure",
+          "from",
+          "to",
+          "days"
+        ],
+        "title": "BurnupReport",
+        "type": "object"
+      },
+      "output_name": "BurnupReport",
+      "safety": "read",
+      "summary": "A burn-up of a version or a sprint: the work planned for it and the part completed at the end of each day, from the history, with a forecast of when the two meet."
+    },
+    {
+      "cli": "report estimates",
+      "exposure": "data",
+      "id": "report.estimates",
+      "input": {
+        "$defs": {
+          "EstimateGroupBy": {
+            "description": "How estimate accuracy is grouped.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "One group of every task.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "By task type.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By label; a task with several labels is in each of their groups.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By the kind of work most of its time was logged as.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the month it was closed, for the trend.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which closed tasks to compare.",
+        "properties": {
+          "csv": {
+            "default": false,
+            "description": "Also return the tasks as CSV text.",
+            "type": "boolean"
+          },
+          "from": {
+            "description": "The first day tasks were closed on: `YYYY-MM-DD`, `today` or\n`yesterday`; default 89 days before `to`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EstimateGroupBy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`none` (default), `type`, `label`, `project`, `work_kind` or\n`month`."
+          },
+          "project": {
+            "description": "Only this project (key or ID) and its sub-projects.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "Only tasks that match this query, as they are now.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tasks": {
+            "default": false,
+            "description": "Also list every task compared.",
+            "type": "boolean"
+          },
+          "to": {
+            "description": "The last day, included; default today.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "EstimatesInput",
+        "type": "object"
+      },
+      "input_name": "EstimatesInput",
+      "kind": "query",
+      "mcp_tool": "get_estimate_accuracy",
+      "output": {
+        "$defs": {
+          "EstimateGroup": {
+            "additionalProperties": false,
+            "description": "The figures of one group of tasks.",
+            "properties": {
+              "count": {
+                "description": "How many tasks.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "What its tasks share: a type, label, project key, kind of work or\nmonth (`YYYY-MM`); empty for every task, or for those without one.",
+                "type": "string"
+              },
+              "median_ratio": {
+                "description": "The median ratio of spent to estimate (two decimals).",
+                "format": "double",
+                "type": "number"
+              },
+              "name": {
+                "description": "The name to show; empty like `key`.",
+                "type": "string"
+              },
+              "outliers": {
+                "description": "The ten furthest off, either way, the furthest first.",
+                "items": {
+                  "$ref": "#/$defs/EstimateTask"
+                },
+                "type": "array"
+              },
+              "over": {
+                "description": "How many took more than 20 % longer.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "under": {
+                "description": "How many took more than 20 % less.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "within_share": {
+                "description": "The share of tasks within 20 % of their estimate (0 to 1, four\ndecimals).",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "count",
+              "estimate_minutes",
+              "spent_minutes",
+              "over",
+              "under",
+              "outliers"
+            ],
+            "type": "object"
+          },
+          "EstimateGroupBy": {
+            "description": "How estimate accuracy is grouped.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "One group of every task.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "By task type.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By label; a task with several labels is in each of their groups.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By the kind of work most of its time was logged as.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the month it was closed, for the trend.",
+                "type": "string"
+              }
+            ]
+          },
+          "EstimateTask": {
+            "additionalProperties": false,
+            "description": "One closed task: its estimate against the time logged on it.",
+            "properties": {
+              "closed_on": {
+                "description": "The day it was closed, in the personal time zone.",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "ratio": {
+                "description": "Spent over estimate (two decimals): 1.5 took half as long again.",
+                "format": "double",
+                "type": "number"
+              },
+              "spent_minutes": {
+                "description": "The time logged on it, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "type",
+              "closed_on",
+              "estimate_minutes",
+              "spent_minutes",
+              "ratio"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "How closed tasks' logged time compared with their estimates.",
+        "properties": {
+          "csv": {
+            "description": "One line per task as CSV text, when asked for.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "group_by": {
+            "$ref": "#/$defs/EstimateGroupBy",
+            "description": "How the groups are made."
+          },
+          "groups": {
+            "description": "The groups: by count, the largest first (months in order); empty\nwith `group_by: none`.",
+            "items": {
+              "$ref": "#/$defs/EstimateGroup"
+            },
+            "type": "array"
+          },
+          "tasks": {
+            "description": "The tasks compared, by closing day, when asked for.",
+            "items": {
+              "$ref": "#/$defs/EstimateTask"
+            },
+            "type": "array"
+          },
+          "to": {
+            "description": "The last day, included.",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/$defs/EstimateGroup",
+            "description": "Every task compared."
+          },
+          "without_estimate": {
+            "description": "Tasks closed in the range without an estimate, left out.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "without_time": {
+            "description": "Tasks closed in the range with an estimate but no time logged,\nleft out.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "group_by",
+          "total",
+          "groups",
+          "without_estimate",
+          "without_time"
+        ],
+        "title": "EstimatesReport",
+        "type": "object"
+      },
+      "output_name": "EstimatesReport",
+      "safety": "read",
+      "summary": "Estimate accuracy: for tasks closed over a range of days with an estimate and logged time, the median ratio of spent to estimated time, the share within 20 %, and the outliers, overall and by type, label, project, kind of work or month."
+    },
+    {
       "cli": "timer status",
       "exposure": "data",
       "id": "timer.get",
@@ -66981,6 +67939,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -67101,6 +68079,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -67145,13 +68138,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -67164,6 +68157,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -67174,6 +68171,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -67488,6 +68489,128 @@
               "total_tasks",
               "open_estimate_minutes",
               "total_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "BurnupDay": {
+            "additionalProperties": false,
+            "description": "One day of a burn-up, as it stood at the end of the day.",
+            "properties": {
+              "completed": {
+                "description": "The closed part of it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_tasks": {
+                "description": "How many of them were closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "date": {
+                "description": "The day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "scope": {
+                "description": "All the work planned for it.",
+                "format": "double",
+                "type": "number"
+              },
+              "scope_tasks": {
+                "description": "How many tasks were planned for it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "date",
+              "scope",
+              "completed",
+              "scope_tasks",
+              "completed_tasks"
+            ],
+            "type": "object"
+          },
+          "BurnupForecast": {
+            "additionalProperties": false,
+            "description": "Where the completed line is heading at its present pace: the straight\nline that fits the days best, up to the day it meets the scope.",
+            "properties": {
+              "date": {
+                "description": "The day the line meets the scope of the last day.",
+                "type": "string"
+              },
+              "per_day": {
+                "description": "How much work it adds a day.",
+                "format": "double",
+                "type": "number"
+              },
+              "start": {
+                "description": "The line's value on the first day.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "date",
+              "start",
+              "per_day"
+            ],
+            "type": "object"
+          },
+          "BurnupReport": {
+            "additionalProperties": false,
+            "description": "Scope and completed work, day by day.",
+            "properties": {
+              "csv": {
+                "description": "The days as CSV text, when asked for.",
+                "type": "string"
+              },
+              "days": {
+                "description": "The days, oldest first.",
+                "items": {
+                  "$ref": "#/$defs/BurnupDay"
+                },
+                "type": "array"
+              },
+              "end": {
+                "description": "The planned last day: the version's due date or the sprint's end.",
+                "type": "string"
+              },
+              "field": {
+                "description": "With `measure: field`: the field's name.",
+                "type": "string"
+              },
+              "forecast": {
+                "$ref": "#/$defs/BurnupForecast",
+                "description": "The forecast; left out with fewer than three days, when no work is\nbeing completed, or when all of it is."
+              },
+              "from": {
+                "description": "The first day.",
+                "type": "string"
+              },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "How work is measured."
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "With `sprint`: the sprint."
+              },
+              "to": {
+                "description": "The last day shown: the planned end, or today when that is earlier.",
+                "type": "string"
+              },
+              "version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "With `version`: the version."
+              }
+            },
+            "required": [
+              "measure",
+              "from",
+              "to",
+              "days"
             ],
             "type": "object"
           },
@@ -67949,6 +69072,220 @@
               }
             ]
           },
+          "EstimateGroup": {
+            "additionalProperties": false,
+            "description": "The figures of one group of tasks.",
+            "properties": {
+              "count": {
+                "description": "How many tasks.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "What its tasks share: a type, label, project key, kind of work or\nmonth (`YYYY-MM`); empty for every task, or for those without one.",
+                "type": "string"
+              },
+              "median_ratio": {
+                "description": "The median ratio of spent to estimate (two decimals).",
+                "format": "double",
+                "type": "number"
+              },
+              "name": {
+                "description": "The name to show; empty like `key`.",
+                "type": "string"
+              },
+              "outliers": {
+                "description": "The ten furthest off, either way, the furthest first.",
+                "items": {
+                  "$ref": "#/$defs/EstimateTask"
+                },
+                "type": "array"
+              },
+              "over": {
+                "description": "How many took more than 20 % longer.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "under": {
+                "description": "How many took more than 20 % less.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "within_share": {
+                "description": "The share of tasks within 20 % of their estimate (0 to 1, four\ndecimals).",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "count",
+              "estimate_minutes",
+              "spent_minutes",
+              "over",
+              "under",
+              "outliers"
+            ],
+            "type": "object"
+          },
+          "EstimateGroupBy": {
+            "description": "How estimate accuracy is grouped.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "One group of every task.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "By task type.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By label; a task with several labels is in each of their groups.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By the kind of work most of its time was logged as.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the month it was closed, for the trend.",
+                "type": "string"
+              }
+            ]
+          },
+          "EstimateTask": {
+            "additionalProperties": false,
+            "description": "One closed task: its estimate against the time logged on it.",
+            "properties": {
+              "closed_on": {
+                "description": "The day it was closed, in the personal time zone.",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "ratio": {
+                "description": "Spent over estimate (two decimals): 1.5 took half as long again.",
+                "format": "double",
+                "type": "number"
+              },
+              "spent_minutes": {
+                "description": "The time logged on it, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "type",
+              "closed_on",
+              "estimate_minutes",
+              "spent_minutes",
+              "ratio"
+            ],
+            "type": "object"
+          },
+          "EstimatesReport": {
+            "additionalProperties": false,
+            "description": "How closed tasks' logged time compared with their estimates.",
+            "properties": {
+              "csv": {
+                "description": "One line per task as CSV text, when asked for.",
+                "type": "string"
+              },
+              "from": {
+                "description": "The first day.",
+                "type": "string"
+              },
+              "group_by": {
+                "$ref": "#/$defs/EstimateGroupBy",
+                "description": "How the groups are made."
+              },
+              "groups": {
+                "description": "The groups: by count, the largest first (months in order); empty\nwith `group_by: none`.",
+                "items": {
+                  "$ref": "#/$defs/EstimateGroup"
+                },
+                "type": "array"
+              },
+              "tasks": {
+                "description": "The tasks compared, by closing day, when asked for.",
+                "items": {
+                  "$ref": "#/$defs/EstimateTask"
+                },
+                "type": "array"
+              },
+              "to": {
+                "description": "The last day, included.",
+                "type": "string"
+              },
+              "total": {
+                "$ref": "#/$defs/EstimateGroup",
+                "description": "Every task compared."
+              },
+              "without_estimate": {
+                "description": "Tasks closed in the range without an estimate, left out.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "without_time": {
+                "description": "Tasks closed in the range with an estimate but no time logged,\nleft out.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "group_by",
+              "total",
+              "groups",
+              "without_estimate",
+              "without_time"
+            ],
+            "type": "object"
+          },
           "FieldChange": {
             "additionalProperties": false,
             "description": "One field's change. A side is left out when the field had no value.",
@@ -68152,6 +69489,26 @@
               "message"
             ],
             "type": "object"
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
           },
           "Priority": {
             "description": "A task's priority.",
@@ -68566,6 +69923,139 @@
               }
             ]
           },
+          "VelocityReport": {
+            "additionalProperties": false,
+            "description": "The velocity of a project's completed sprints, oldest first.",
+            "properties": {
+              "average": {
+                "description": "The mean completed work of the last three completed sprints (fewer\nwhen there are fewer); left out without any.",
+                "format": "double",
+                "type": "number"
+              },
+              "average_of": {
+                "description": "How many sprints `average` covers: 0 to 3.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "csv": {
+                "description": "The report as CSV text, when asked for.",
+                "type": "string"
+              },
+              "field": {
+                "description": "With `measure: field`: the field's name.",
+                "type": "string"
+              },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "How work is measured."
+              },
+              "project": {
+                "description": "The project's key.",
+                "type": "string"
+              },
+              "sprints": {
+                "description": "The latest completed sprints, in the order they were completed.",
+                "items": {
+                  "$ref": "#/$defs/VelocitySprint"
+                },
+                "type": "array"
+              },
+              "upcoming": {
+                "description": "The active and planned sprints, with the work in them now.",
+                "items": {
+                  "$ref": "#/$defs/VelocityUpcoming"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "project",
+              "measure",
+              "sprints",
+              "average_of",
+              "upcoming"
+            ],
+            "type": "object"
+          },
+          "VelocitySprint": {
+            "additionalProperties": false,
+            "description": "One completed sprint: what it took on and what it finished.",
+            "properties": {
+              "average": {
+                "description": "The mean of `completed` over this sprint and up to two before it.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed": {
+                "description": "The work in it when it started that was still open then.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed_tasks": {
+                "description": "How many tasks it took on at its start.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "completed": {
+                "description": "The work in it at its end that was closed during it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_on": {
+                "description": "The day it was completed, in the personal time zone.",
+                "type": "string"
+              },
+              "completed_tasks": {
+                "description": "How many tasks it completed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint."
+              }
+            },
+            "required": [
+              "sprint",
+              "completed_on",
+              "committed",
+              "completed",
+              "committed_tasks",
+              "completed_tasks",
+              "average"
+            ],
+            "type": "object"
+          },
+          "VelocityUpcoming": {
+            "additionalProperties": false,
+            "description": "A sprint still to finish, with the work planned for it now.",
+            "properties": {
+              "planned": {
+                "description": "The work in it now, open or closed.",
+                "format": "double",
+                "type": "number"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint (active or planned)."
+              },
+              "tasks": {
+                "description": "How many tasks are in it now.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sprint",
+              "planned",
+              "tasks"
+            ],
+            "type": "object"
+          },
           "Version": {
             "additionalProperties": false,
             "description": "A version.",
@@ -68683,6 +70173,39 @@
               "percent",
               "estimate_minutes",
               "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
             ],
             "type": "object"
           },
@@ -68901,6 +70424,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -68945,13 +70483,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -68964,6 +70502,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -68974,6 +70516,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -69034,6 +70580,10 @@
                 "$ref": "#/$defs/SprintBurndown",
                 "description": "`burndown`."
               },
+              "burnup": {
+                "$ref": "#/$defs/BurnupReport",
+                "description": "`burnup`."
+              },
               "count": {
                 "description": "How many tasks match (`query_count`, `query_list`, `due_soon`,\n`overdue`, `tasks_by_field`).",
                 "format": "uint64",
@@ -69055,6 +70605,10 @@
               "error": {
                 "$ref": "#/$defs/OpError",
                 "description": "Why it can't be shown."
+              },
+              "estimates": {
+                "$ref": "#/$defs/EstimatesReport",
+                "description": "`estimate_accuracy`, grouped by type."
               },
               "query": {
                 "description": "The query the figure or list comes from, in its normal form, with\nthe project it is limited to (`project:TM/*`): open it with\n`task list --query`.",
@@ -69081,6 +70635,10 @@
               "time": {
                 "$ref": "#/$defs/TimeReport",
                 "description": "`time_report`."
+              },
+              "velocity": {
+                "$ref": "#/$defs/VelocityReport",
+                "description": "`velocity`."
               },
               "versions": {
                 "description": "`version_progress`: the project's open and locked versions.",
@@ -69433,6 +70991,128 @@
             ],
             "type": "object"
           },
+          "BurnupDay": {
+            "additionalProperties": false,
+            "description": "One day of a burn-up, as it stood at the end of the day.",
+            "properties": {
+              "completed": {
+                "description": "The closed part of it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_tasks": {
+                "description": "How many of them were closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "date": {
+                "description": "The day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "scope": {
+                "description": "All the work planned for it.",
+                "format": "double",
+                "type": "number"
+              },
+              "scope_tasks": {
+                "description": "How many tasks were planned for it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "date",
+              "scope",
+              "completed",
+              "scope_tasks",
+              "completed_tasks"
+            ],
+            "type": "object"
+          },
+          "BurnupForecast": {
+            "additionalProperties": false,
+            "description": "Where the completed line is heading at its present pace: the straight\nline that fits the days best, up to the day it meets the scope.",
+            "properties": {
+              "date": {
+                "description": "The day the line meets the scope of the last day.",
+                "type": "string"
+              },
+              "per_day": {
+                "description": "How much work it adds a day.",
+                "format": "double",
+                "type": "number"
+              },
+              "start": {
+                "description": "The line's value on the first day.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "date",
+              "start",
+              "per_day"
+            ],
+            "type": "object"
+          },
+          "BurnupReport": {
+            "additionalProperties": false,
+            "description": "Scope and completed work, day by day.",
+            "properties": {
+              "csv": {
+                "description": "The days as CSV text, when asked for.",
+                "type": "string"
+              },
+              "days": {
+                "description": "The days, oldest first.",
+                "items": {
+                  "$ref": "#/$defs/BurnupDay"
+                },
+                "type": "array"
+              },
+              "end": {
+                "description": "The planned last day: the version's due date or the sprint's end.",
+                "type": "string"
+              },
+              "field": {
+                "description": "With `measure: field`: the field's name.",
+                "type": "string"
+              },
+              "forecast": {
+                "$ref": "#/$defs/BurnupForecast",
+                "description": "The forecast; left out with fewer than three days, when no work is\nbeing completed, or when all of it is."
+              },
+              "from": {
+                "description": "The first day.",
+                "type": "string"
+              },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "How work is measured."
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "With `sprint`: the sprint."
+              },
+              "to": {
+                "description": "The last day shown: the planned end, or today when that is earlier.",
+                "type": "string"
+              },
+              "version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "With `version`: the version."
+              }
+            },
+            "required": [
+              "measure",
+              "from",
+              "to",
+              "days"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -69836,6 +71516,220 @@
               }
             ]
           },
+          "EstimateGroup": {
+            "additionalProperties": false,
+            "description": "The figures of one group of tasks.",
+            "properties": {
+              "count": {
+                "description": "How many tasks.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "What its tasks share: a type, label, project key, kind of work or\nmonth (`YYYY-MM`); empty for every task, or for those without one.",
+                "type": "string"
+              },
+              "median_ratio": {
+                "description": "The median ratio of spent to estimate (two decimals).",
+                "format": "double",
+                "type": "number"
+              },
+              "name": {
+                "description": "The name to show; empty like `key`.",
+                "type": "string"
+              },
+              "outliers": {
+                "description": "The ten furthest off, either way, the furthest first.",
+                "items": {
+                  "$ref": "#/$defs/EstimateTask"
+                },
+                "type": "array"
+              },
+              "over": {
+                "description": "How many took more than 20 % longer.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "under": {
+                "description": "How many took more than 20 % less.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "within_share": {
+                "description": "The share of tasks within 20 % of their estimate (0 to 1, four\ndecimals).",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "count",
+              "estimate_minutes",
+              "spent_minutes",
+              "over",
+              "under",
+              "outliers"
+            ],
+            "type": "object"
+          },
+          "EstimateGroupBy": {
+            "description": "How estimate accuracy is grouped.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "One group of every task.",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "By task type.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By label; a task with several labels is in each of their groups.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By the kind of work most of its time was logged as.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the month it was closed, for the trend.",
+                "type": "string"
+              }
+            ]
+          },
+          "EstimateTask": {
+            "additionalProperties": false,
+            "description": "One closed task: its estimate against the time logged on it.",
+            "properties": {
+              "closed_on": {
+                "description": "The day it was closed, in the personal time zone.",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "ratio": {
+                "description": "Spent over estimate (two decimals): 1.5 took half as long again.",
+                "format": "double",
+                "type": "number"
+              },
+              "spent_minutes": {
+                "description": "The time logged on it, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "type",
+              "closed_on",
+              "estimate_minutes",
+              "spent_minutes",
+              "ratio"
+            ],
+            "type": "object"
+          },
+          "EstimatesReport": {
+            "additionalProperties": false,
+            "description": "How closed tasks' logged time compared with their estimates.",
+            "properties": {
+              "csv": {
+                "description": "One line per task as CSV text, when asked for.",
+                "type": "string"
+              },
+              "from": {
+                "description": "The first day.",
+                "type": "string"
+              },
+              "group_by": {
+                "$ref": "#/$defs/EstimateGroupBy",
+                "description": "How the groups are made."
+              },
+              "groups": {
+                "description": "The groups: by count, the largest first (months in order); empty\nwith `group_by: none`.",
+                "items": {
+                  "$ref": "#/$defs/EstimateGroup"
+                },
+                "type": "array"
+              },
+              "tasks": {
+                "description": "The tasks compared, by closing day, when asked for.",
+                "items": {
+                  "$ref": "#/$defs/EstimateTask"
+                },
+                "type": "array"
+              },
+              "to": {
+                "description": "The last day, included.",
+                "type": "string"
+              },
+              "total": {
+                "$ref": "#/$defs/EstimateGroup",
+                "description": "Every task compared."
+              },
+              "without_estimate": {
+                "description": "Tasks closed in the range without an estimate, left out.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "without_time": {
+                "description": "Tasks closed in the range with an estimate but no time logged,\nleft out.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "group_by",
+              "total",
+              "groups",
+              "without_estimate",
+              "without_time"
+            ],
+            "type": "object"
+          },
           "FieldChange": {
             "additionalProperties": false,
             "description": "One field's change. A side is left out when the field had no value.",
@@ -70039,6 +71933,26 @@
               "message"
             ],
             "type": "object"
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
           },
           "Priority": {
             "description": "A task's priority.",
@@ -70453,6 +72367,139 @@
               }
             ]
           },
+          "VelocityReport": {
+            "additionalProperties": false,
+            "description": "The velocity of a project's completed sprints, oldest first.",
+            "properties": {
+              "average": {
+                "description": "The mean completed work of the last three completed sprints (fewer\nwhen there are fewer); left out without any.",
+                "format": "double",
+                "type": "number"
+              },
+              "average_of": {
+                "description": "How many sprints `average` covers: 0 to 3.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "csv": {
+                "description": "The report as CSV text, when asked for.",
+                "type": "string"
+              },
+              "field": {
+                "description": "With `measure: field`: the field's name.",
+                "type": "string"
+              },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "How work is measured."
+              },
+              "project": {
+                "description": "The project's key.",
+                "type": "string"
+              },
+              "sprints": {
+                "description": "The latest completed sprints, in the order they were completed.",
+                "items": {
+                  "$ref": "#/$defs/VelocitySprint"
+                },
+                "type": "array"
+              },
+              "upcoming": {
+                "description": "The active and planned sprints, with the work in them now.",
+                "items": {
+                  "$ref": "#/$defs/VelocityUpcoming"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "project",
+              "measure",
+              "sprints",
+              "average_of",
+              "upcoming"
+            ],
+            "type": "object"
+          },
+          "VelocitySprint": {
+            "additionalProperties": false,
+            "description": "One completed sprint: what it took on and what it finished.",
+            "properties": {
+              "average": {
+                "description": "The mean of `completed` over this sprint and up to two before it.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed": {
+                "description": "The work in it when it started that was still open then.",
+                "format": "double",
+                "type": "number"
+              },
+              "committed_tasks": {
+                "description": "How many tasks it took on at its start.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "completed": {
+                "description": "The work in it at its end that was closed during it.",
+                "format": "double",
+                "type": "number"
+              },
+              "completed_on": {
+                "description": "The day it was completed, in the personal time zone.",
+                "type": "string"
+              },
+              "completed_tasks": {
+                "description": "How many tasks it completed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint."
+              }
+            },
+            "required": [
+              "sprint",
+              "completed_on",
+              "committed",
+              "completed",
+              "committed_tasks",
+              "completed_tasks",
+              "average"
+            ],
+            "type": "object"
+          },
+          "VelocityUpcoming": {
+            "additionalProperties": false,
+            "description": "A sprint still to finish, with the work planned for it now.",
+            "properties": {
+              "planned": {
+                "description": "The work in it now, open or closed.",
+                "format": "double",
+                "type": "number"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint (active or planned)."
+              },
+              "tasks": {
+                "description": "How many tasks are in it now.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sprint",
+              "planned",
+              "tasks"
+            ],
+            "type": "object"
+          },
           "Version": {
             "additionalProperties": false,
             "description": "A version.",
@@ -70570,6 +72617,39 @@
               "percent",
               "estimate_minutes",
               "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
             ],
             "type": "object"
           },
@@ -70788,6 +72868,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -70832,13 +72927,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -70851,6 +72946,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -70861,6 +72960,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -70941,6 +73044,10 @@
             "$ref": "#/$defs/SprintBurndown",
             "description": "`burndown`."
           },
+          "burnup": {
+            "$ref": "#/$defs/BurnupReport",
+            "description": "`burnup`."
+          },
           "count": {
             "description": "How many tasks match (`query_count`, `query_list`, `due_soon`,\n`overdue`, `tasks_by_field`).",
             "format": "uint64",
@@ -70962,6 +73069,10 @@
           "error": {
             "$ref": "#/$defs/OpError",
             "description": "Why it can't be shown."
+          },
+          "estimates": {
+            "$ref": "#/$defs/EstimatesReport",
+            "description": "`estimate_accuracy`, grouped by type."
           },
           "query": {
             "description": "The query the figure or list comes from, in its normal form, with\nthe project it is limited to (`project:TM/*`): open it with\n`task list --query`.",
@@ -70988,6 +73099,10 @@
           "time": {
             "$ref": "#/$defs/TimeReport",
             "description": "`time_report`."
+          },
+          "velocity": {
+            "$ref": "#/$defs/VelocityReport",
+            "description": "`velocity`."
           },
           "versions": {
             "description": "`version_progress`: the project's open and locked versions.",
@@ -71053,6 +73168,26 @@
               {
                 "const": "month",
                 "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
                 "type": "string"
               }
             ]
@@ -71141,6 +73276,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -71185,13 +73335,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -71204,6 +73354,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -71214,6 +73368,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -71415,6 +73573,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -71535,6 +73713,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -71579,13 +73772,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -71598,6 +73791,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -71608,6 +73805,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -71836,6 +74037,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -71956,6 +74177,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -72000,13 +74236,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -72019,6 +74255,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -72029,6 +74269,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -72212,6 +74456,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -72332,6 +74596,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -72376,13 +74655,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -72395,6 +74674,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -72405,6 +74688,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -72484,6 +74771,26 @@
               {
                 "const": "month",
                 "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
                 "type": "string"
               }
             ]
@@ -72572,6 +74879,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -72616,13 +74938,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -72635,6 +74957,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -72645,6 +74971,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -72842,6 +75172,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -72962,6 +75312,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -73006,13 +75371,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -73025,6 +75390,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -73035,6 +75404,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -73114,6 +75487,26 @@
               {
                 "const": "month",
                 "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
                 "type": "string"
               }
             ]
@@ -73205,6 +75598,16 @@
                 "const": "text",
                 "description": "The note's text.",
                 "type": "string"
+              },
+              {
+                "const": "measure",
+                "description": "How work is measured.",
+                "type": "string"
+              },
+              {
+                "const": "version",
+                "description": "The version.",
+                "type": "string"
               }
             ]
           },
@@ -73221,13 +75624,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -73240,6 +75643,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -73250,6 +75657,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -73446,6 +75857,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -73566,6 +75997,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -73610,13 +76056,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -73629,6 +76075,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -73639,6 +76089,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },
@@ -73827,6 +76281,26 @@
               }
             ]
           },
+          "PlanMeasure": {
+            "description": "How work is measured.",
+            "oneOf": [
+              {
+                "const": "tasks",
+                "description": "Each task counts 1.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The task's estimate, in hours.",
+                "type": "string"
+              },
+              {
+                "const": "field",
+                "description": "A number custom field, named in `field`.",
+                "type": "string"
+              }
+            ]
+          },
           "TimeGroupBy": {
             "description": "How the time report groups the entries.",
             "oneOf": [
@@ -73947,6 +76421,21 @@
                 "type": "string"
               },
               {
+                "const": "burnup",
+                "description": "The burn-up of a version, or of a project's active sprint.",
+                "type": "string"
+              },
+              {
+                "const": "velocity",
+                "description": "The velocity of a project's completed sprints.",
+                "type": "string"
+              },
+              {
+                "const": "estimate_accuracy",
+                "description": "How closed tasks' logged time compared with their estimates.",
+                "type": "string"
+              },
+              {
                 "const": "tasks_by_field",
                 "description": "Open tasks counted by a field: status, priority, type, label or a\ncustom select or yes/no field.",
                 "type": "string"
@@ -73991,13 +76480,13 @@
                 "description": "Flow reports: the length of a period: twelve of them are shown\n(30 days, 12 weeks or 12 months); default `week`."
               },
               "days": {
-                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days. 1 to 366.",
+                "description": "`due_soon`: due within this many days (default 7); `time_report`:\nthe last this many days, today included (default 7); `activity`:\nonly the changes of the last this many days; `estimate_accuracy`:\ntasks closed in the last this many days (default 90). 1 to 366.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "field": {
-                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`).",
+                "description": "`tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom\nselect or yes/no field (`cf.<name>`); `velocity` and `burnup` with\n`measure: field`: the number field (`cf.<name>`).",
                 "type": "string"
               },
               "group_by": {
@@ -74010,6 +76499,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "measure": {
+                "$ref": "#/$defs/PlanMeasure",
+                "description": "`velocity` and `burnup`: `tasks` (default), `estimate` (hours) or\n`field`."
+              },
               "project": {
                 "description": "Only this project and its sub-projects (key or ID); on a project's\ndashboard, the dashboard's project when left out. `burndown` and\n`version_progress` need one.",
                 "type": "string"
@@ -74020,6 +76513,10 @@
               },
               "text": {
                 "description": "`note`: the note, in Markdown, up to 10,000 characters.",
+                "type": "string"
+              },
+              "version": {
+                "description": "`burnup`: the version (name or ID); left out: the project's active\nsprint.",
                 "type": "string"
               }
             },

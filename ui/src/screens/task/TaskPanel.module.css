@@ -765,3 +765,10 @@
   align-items: flex-end;
   gap: 8px;
 }
+
+.estimateHint {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}

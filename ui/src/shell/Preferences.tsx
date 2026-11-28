@@ -11,6 +11,7 @@ import { classes } from "../classes";
 import { Dialog } from "../components/Dialog";
 import { Segmented } from "../components/Segmented";
 import { Switch } from "../components/Switch";
+import { loadEstimateHint, setEstimateHint } from "../data/planning";
 import { failureText, useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
@@ -435,6 +436,7 @@ function TimePage() {
         </Row>
       </Group>
       <WorkKindsGroup />
+      <EstimateHintGroup />
       <Group title={t("preferences-timer")}>
         <Row label={t("preferences-timer-reminder")} about={t("preferences-timer-reminder-about")}>
           <NumberSetting
@@ -450,6 +452,26 @@ function TimePage() {
         </Row>
       </Group>
     </>
+  );
+}
+
+/** The estimate hint in the task panel: the person's own choice, kept on this computer, not in the workspace. */
+function EstimateHintGroup() {
+  const t = useT();
+  const [on, setOn] = useState(loadEstimateHint);
+  return (
+    <Group title={t("preferences-estimates")}>
+      <Row label={t("preferences-estimate-hint")} about={t("preferences-estimate-hint-about")}>
+        <Switch
+          aria-label={t("preferences-estimate-hint")}
+          isSelected={on}
+          onChange={(next) => {
+            setOn(next);
+            setEstimateHint(next);
+          }}
+        />
+      </Row>
+    </Group>
   );
 }
 

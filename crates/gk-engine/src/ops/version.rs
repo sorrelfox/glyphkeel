@@ -464,7 +464,7 @@ fn not_found(text: &str, names: &[&str]) -> Failure {
 
 /// The version `text` names: its ID, or its name among the versions
 /// `project` sees (its own first), or among all versions without one.
-fn find(
+pub(crate) fn find(
     tx: &Transaction<'_>,
     text: &str,
     project: Option<&String>,

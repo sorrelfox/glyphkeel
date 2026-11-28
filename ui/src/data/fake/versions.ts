@@ -158,7 +158,7 @@ export function versionForTask(host: VersionHost, project: FakeProject, ref: str
   return found.version;
 }
 
-function find(host: VersionHost, ref: string, projectRef: string | null | undefined): { version: FakeVersion; inherited: boolean } {
+export function find(host: VersionHost, ref: string, projectRef: string | null | undefined): { version: FakeVersion; inherited: boolean } {
   const byId = host.versions().find((candidate) => candidate.id === ref);
   if (byId) return { version: byId, inherited: false };
   const candidates = projectRef ? visibleVersions(host, host.project(projectRef)) : host.versions().map((version) => ({ version, inherited: false }));

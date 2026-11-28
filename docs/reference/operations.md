@@ -114,6 +114,9 @@ The safety class decides who may run an operation:
 | `report.created_closed` | read | app, command line, MCP | `get_created_closed_report` | `glyphkeel report created-closed` |
 | `report.cumulative_flow` | read | app, command line, MCP | `get_cumulative_flow` | `glyphkeel report flow` |
 | `report.cycle_time` | read | app, command line, MCP | `get_cycle_time` | `glyphkeel report cycle-time` |
+| `report.velocity` | read | app, command line, MCP | `get_velocity` | `glyphkeel report velocity <project>` |
+| `report.burnup` | read | app, command line, MCP | `get_burnup` | `glyphkeel report burnup` |
+| `report.estimates` | read | app, command line, MCP | `get_estimate_accuracy` | `glyphkeel report estimates` |
 | `timer.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel timer status` |
 | `timer.start` | write | app, command line, MCP | `start_timer` | `glyphkeel timer start <key>` |
 | `timer.pause` | write | app, command line, MCP | `pause_timer` | `glyphkeel timer pause` |
@@ -813,6 +816,24 @@ Input: `FlowReportInput`. Output: `CumulativeFlowReport`. Schemas: [catalog.sche
 Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV.
 
 Input: `FlowReportInput`. Output: `CycleTimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.velocity`
+
+The velocity of a project's completed sprints: the work each took on at its start against the work it completed, in tasks, estimated hours or a number field, with the average of the last three and the work planned for the sprints to come.
+
+Input: `VelocityInput`. Output: `VelocityReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.burnup`
+
+A burn-up of a version or a sprint: the work planned for it and the part completed at the end of each day, from the history, with a forecast of when the two meet.
+
+Input: `BurnupInput`. Output: `BurnupReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.estimates`
+
+Estimate accuracy: for tasks closed over a range of days with an estimate and logged time, the median ratio of spent to estimated time, the share within 20 %, and the outliers, overall and by type, label, project, kind of work or month.
+
+Input: `EstimatesInput`. Output: `EstimatesReport`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `timer.get`
 
