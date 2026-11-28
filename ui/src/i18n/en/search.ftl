@@ -37,6 +37,9 @@ search-results = Search results
 search-more = Show more
 search-where = { $project } · { $status }
 search-in-comment = Comment:
+# Before the words around a match inside an attached file.
+search-in-file = In file { $file } of { $task }:
+search-in-page-file = In file { $file }:
 
 ## A wiki page, read only
 

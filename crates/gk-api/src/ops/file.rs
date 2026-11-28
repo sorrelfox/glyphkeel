@@ -231,6 +231,45 @@ op!(
     Thumbnail
 );
 
+/// No input.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileIndexInput {}
+
+/// How far reading the text inside attached files has come, for search.
+/// Counted by file content: the same file attached twice counts once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileIndexStatus {
+    /// The files in use.
+    pub files: u64,
+    /// The files read so far, with or without text.
+    pub read: u64,
+    /// The files waiting to be read; the program holding the background
+    /// jobs reads them a few at a time.
+    pub waiting: u64,
+    /// The files whose text search finds.
+    pub with_text: u64,
+    /// The files of a kind that is read (text, PDF, Office) that gave no
+    /// text: scanned, encrypted, damaged, too large or refused as unsafe.
+    pub skipped: u64,
+}
+
+op!(
+    /// How far reading the text inside attached files has come.
+    FileIndexGet,
+    "file.index_status",
+    FileIndexInput,
+    FileIndexStatus
+);
+op!(
+    /// Reads the text inside every attached file again.
+    FileReindex,
+    "file.reindex",
+    FileIndexInput,
+    FileIndexStatus
+);
+
 pub(crate) const FILE_GET: OpDescriptor = OpDescriptor::of::<FileGet>(Meta {
     summary: "An attached file's name, type, size and owner.",
     kind: OpKind::Query,
@@ -291,4 +330,28 @@ pub(crate) const FILE_THUMBNAIL: OpDescriptor = OpDescriptor::of::<FileThumbnail
     cli: None,
     input_name: "FileRef",
     output_name: "Thumbnail",
+});
+
+pub(crate) const FILE_INDEX_STATUS: OpDescriptor = OpDescriptor::of::<FileIndexGet>(Meta {
+    summary: "How far reading the text inside attached files for search has come: files in use, read, waiting, with text and skipped.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::App {
+        reason: "Upkeep of the search index, shown in the app's preferences; agents search the text with search.query.",
+    },
+    cli: None,
+    input_name: "FileIndexInput",
+    output_name: "FileIndexStatus",
+});
+
+pub(crate) const FILE_REINDEX: OpDescriptor = OpDescriptor::of::<FileReindex>(Meta {
+    summary: "Read the text inside every attached file again, in the background, keeping the text found so far until each file is read.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::App {
+        reason: "Upkeep of the search index, started from the app's preferences; it changes no data of the workspace.",
+    },
+    cli: None,
+    input_name: "FileIndexInput",
+    output_name: "FileIndexStatus",
 });

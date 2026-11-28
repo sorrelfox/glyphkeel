@@ -969,7 +969,7 @@
                 },
                 {
                   "const": "file",
-                  "description": "A file attached to a task or comment, by its name.",
+                  "description": "A file attached to a task, comment or wiki page: by its name, or by\nthe text inside it (`matched_in` is then `text`, with a snippet).",
                   "type": "string"
                 }
               ]
@@ -1065,7 +1065,7 @@
                     },
                     {
                       "const": "file",
-                      "description": "A file attached to a task or comment, by its name.",
+                      "description": "A file attached to a task, comment or wiki page: by its name, or by\nthe text inside it (`matched_in` is then `text`, with a snippet).",
                       "type": "string"
                     }
                   ]
@@ -1085,7 +1085,7 @@
                     },
                     {
                       "const": "text",
-                      "description": "The text: a description, a page's text or a comment.",
+                      "description": "The text: a description, a page's text, a comment or the text\ninside a file.",
                       "type": "string"
                     },
                     {

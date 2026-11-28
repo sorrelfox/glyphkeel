@@ -198,3 +198,8 @@
 .path {
   overflow-wrap: anywhere;
 }
+
+.progress {
+  inline-size: 8rem;
+  max-inline-size: 100%;
+}

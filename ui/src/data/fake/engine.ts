@@ -48,6 +48,7 @@ import {
   type EntityChange,
   type TrashEntry,
   type FileChange,
+  type FileIndexStatus,
   type Hue,
   type Link,
   type LinkKind,
@@ -95,7 +96,7 @@ import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { BUILT_IN_PRESETS, planCsv } from "./csv";
-import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { decodeBase64, materialize, recordedFields, sniff, textInside } from "./details";
 import { type FakeField, applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, followField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, queryName, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
@@ -1567,6 +1568,14 @@ export class FakeWorkspace {
       const other = this.state.tasks.find((candidate) => candidate.id === (forward ? relation.to : relation.from));
       return other ? [{ id: relation.id, kind: forward ? relation.kind : backwards[relation.kind], task: this.taskRef(other), ...(relation.lagDays ? { lag_days: relation.lagDays } : {}) }] : [];
     });
+  }
+
+  /** `file.index_status`: every file is read as soon as it is attached here. */
+  private fileIndexStatus(): FileIndexStatus {
+    const live = this.state.files.filter((file) => file.deletedAt === null);
+    const read = (file: FakeFile) => file.mime.startsWith("text/") || file.mime === "application/pdf";
+    const withText = live.filter((file) => file.text !== undefined).length;
+    return { files: live.length, read: live.length, waiting: 0, with_text: withText, skipped: live.filter((file) => read(file) && file.text === undefined).length };
   }
 
   private attachment(file: FakeFile): Attachment {
@@ -4129,6 +4138,7 @@ export class FakeWorkspace {
         fail("limit", `A file has at most ${String(this.state.settings.file_max_mb)} MB.`, { details: { max: limit } });
       }
       const sniffed = sniff(bytes, name);
+      const inside = textInside(bytes, sniffed.mime);
       const file: FakeFile = {
         id: nextFileId(),
         taskId: task?.id ?? "",
@@ -4140,6 +4150,7 @@ export class FakeWorkspace {
         createdAt: this.today().toISOString(),
         deletedAt: null,
         ...sniffed,
+        ...(inside === undefined ? {} : { text: inside }),
       };
       this.state.files.push(file);
       if (task) {
@@ -4147,6 +4158,8 @@ export class FakeWorkspace {
       }
       return this.fileChange(file, ["created"]);
     },
+    "file.index_status": () => this.fileIndexStatus(),
+    "file.reindex": () => this.fileIndexStatus(),
     "file.delete": ({ attachment }) => {
       const file = this.liveFile(attachment);
       file.deletedAt = this.today().toISOString();
@@ -4254,7 +4267,7 @@ export class FakeWorkspace {
           }),
           files: this.state.files.flatMap((file) => {
             const task = listed.get(file.taskId);
-            return task && file.deletedAt === null && !archived.has(task.project) ? [{ id: file.id, task, name: file.name, createdAt: file.createdAt }] : [];
+            return task && file.deletedAt === null && !archived.has(task.project) ? [{ id: file.id, task, name: file.name, text: file.text ?? "", createdAt: file.createdAt }] : [];
           }),
           pages: (this.state.wiki ?? []).map((page) => ({ page, project: this.state.projects.find((project) => project.id === page.projectId)?.key ?? "" })).filter((entry) => !archived.has(entry.project)),
           projects: this.state.projects.map((project) => ({ id: project.id, key: project.key, name: project.name, active: project.state === "active" })),

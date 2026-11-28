@@ -107,6 +107,9 @@ See [Encryption and the app lock](encryption-and-lock.md).
   ([Backup and restore](../backup-and-restore.md)).
 - **Export and import:** archives and CSV files
   ([Export and import](export-import.md)).
+- **Search inside files:** how many attached files have been read for search,
+  how many are waiting and how many had no text to read, and **Read again**
+  ([Search](search.md#text-inside-attached-files)).
 
 ## Where preferences are kept
 

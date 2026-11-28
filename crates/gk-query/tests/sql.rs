@@ -181,6 +181,38 @@ fn text_and_relevance() {
 }
 
 #[test]
+fn words_inside_attached_files() {
+    insta::assert_snapshot!(golden(
+        &[
+            "invoice in:files",
+            "invoice -in:files description:draft",
+            "has:attachment-text -has:attachment-text",
+        ],
+        None,
+    ));
+}
+
+#[test]
+fn in_files_cannot_be_one_side_of_or() {
+    let cal = FixedCalendar {
+        today: "2026-11-23".parse().expect("day"),
+        offset_minutes: 60,
+        week_start: Weekday::Monday,
+    };
+    let env = CheckEnv {
+        calendar: &cal,
+        units: DurationUnits::default(),
+        custom: &[],
+    };
+    let err = compile("invoice OR in:files", env).expect_err("refused");
+    assert_eq!(err.id, "query-in-files-or");
+    assert_eq!(
+        compile("in:nowhere", env).expect_err("refused").id,
+        "query-bad-choice"
+    );
+}
+
+#[test]
 fn a_project_scope() {
     insta::assert_snapshot!(golden(
         &["is:open"],

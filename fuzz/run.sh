@@ -20,7 +20,7 @@ set -eu
 seconds=${1:-600}
 [ $# -gt 0 ] && shift
 cd "$(dirname "$0")"
-targets=${*:-"query_parse markdown_render csv_import archive_import wiki_import mcp_message"}
+targets=${*:-"query_parse markdown_render csv_import archive_import wiki_import mcp_message extract_pdf extract_office"}
 
 rustup toolchain install nightly --profile minimal >/dev/null
 # The newest cargo-fuzz: older ones pin crates that no longer build on nightly.

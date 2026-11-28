@@ -33,7 +33,7 @@ answer a mistake with its place in the query and a suggestion.
 | `key` | a task key such as `TM-41` |
 | `project` | a project key; `TM/*` adds its sub-projects |
 | `title` | words in the title; `=` the exact title |
-| `text`, `description`, `comment` | words in the title, description or comments; the words of text, Markdown and link custom fields count as the description's |
+| `text`, `description`, `comment` | words in the title, description, comments or attached files (`text`); the words of text, Markdown and link custom fields count as the description's |
 | `status` | status names |
 | `category` (`cat`) | `todo`, `in_progress`, `done`, `cancelled`; `open`, `closed` |
 | `type` | task type names |
@@ -52,7 +52,8 @@ answer a mistake with its place in the query and a suggestion.
 | `claimed` | an agent's name, or `any` |
 | `comments`, `files`, `subtasks` | a number |
 | `is` | `open`, `closed`, `overdue`, `due-soon`, `blocked`, `claimed`, `subtask`, `parent`, `unscheduled`, `milestone`, `over-estimate` |
-| `has` | `due`, `start`, `estimate`, `description`, `labels`, `version`, `sprint`, `files`, `comments`, `subtasks`, `parent`, `links`, `time`, `reminder` |
+| `has` | `due`, `start`, `estimate`, `description`, `labels`, `version`, `sprint`, `files`, `comments`, `subtasks`, `parent`, `links`, `time`, `reminder`, `attachment-text` (a file whose text search reads) |
+| `in` | `files`: `in:files` looks for the query's words only inside attached files, `-in:files` never there |
 | `was`, `changed`, `changed-by` | the history: see below |
 | `cf.<name>` | a custom field, with the operators of its kind |
 

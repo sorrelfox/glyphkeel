@@ -170,6 +170,8 @@ The safety class decides who may run an operation:
 | `file.attach` | write | app, command line, MCP | `attach_file` | `glyphkeel file attach` |
 | `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
 | `file.cover` | write | app, command line, MCP | `set_card_cover` | `glyphkeel file cover <task>` |
+| `file.index_status` | read | app | — | — |
+| `file.reindex` | write | app | — | — |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
@@ -226,7 +228,7 @@ Input: `SettingsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json]
 
 ## `search.query`
 
-Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task.
+Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task.
 
 Input: `SearchInput`. Output: `SearchResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -1165,6 +1167,22 @@ Input: `FileRef`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.s
 Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on.
 
 Input: `FileCoverInput`. Output: `FileCoverChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.index_status`
+
+How far reading the text inside attached files for search has come: files in use, read, waiting, with text and skipped.
+
+Input: `FileIndexInput`. Output: `FileIndexStatus`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: Upkeep of the search index, shown in the app's preferences; agents search the text with search.query.
+
+## `file.reindex`
+
+Read the text inside every attached file again, in the background, keeping the text found so far until each file is read.
+
+Input: `FileIndexInput`. Output: `FileIndexStatus`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: Upkeep of the search index, started from the app's preferences; it changes no data of the workspace.
 
 ## `agent.sessions`
 

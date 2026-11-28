@@ -268,6 +268,8 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::Was => format!("{name}:status:Review"),
             FieldType::Changed => format!("{name}:status"),
             FieldType::ChangedBy => format!("{name}:me"),
+            // Where the words are looked for: here, everywhere but files.
+            FieldType::In => format!("the -{name}:files"),
         };
         let found = run(&e, &query).len();
         assert!(

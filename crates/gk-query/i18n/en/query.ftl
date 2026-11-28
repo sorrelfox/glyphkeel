@@ -51,6 +51,7 @@ query-history-field = { $history }: doesn't look up "{ $field }". Use one of: { 
 query-history-field-suggest = { $history }: doesn't look up "{ $field }". Did you mean "{ $suggestion }"?
 query-during-none = during: needs dates. For tasks without dates, use is:unscheduled.
 query-empty-value = { $field } needs a value that is not empty.
+query-in-files-or = in:files says where all the query's words are looked for, so it can't be one side of OR.
 
 ## Sorting
 
@@ -83,7 +84,7 @@ query-unknown-task = There is no task { $value }.
 query-values-key = a task key such as { $example }
 query-values-project = a project key; { $example } adds its sub-projects
 query-values-title = words in the title; { $equals } the exact title
-query-values-text = words in the title, description or comments
+query-values-text = words in the title, description, comments or attached files
 query-values-description = words in the description
 query-values-comment = words in a comment
 query-values-status = status names
@@ -120,6 +121,7 @@ query-values-has = a part of the task
 query-values-was = a field and a value the task had at any time: { $example }
 query-values-changed = a field that changed; with dates, when: { $example }
 query-values-changed-by = { $me }, { $agent }, or an agent's name: who changed the task's fields
+query-values-in = where the words are looked for: { $only } only inside attached files, { $never } never there
 
 ## The values a custom field takes, by its kind
 

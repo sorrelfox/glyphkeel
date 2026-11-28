@@ -10,7 +10,8 @@
 //!
 //! The tables are `tasks t`, `projects p`, `statuses s` and `task_types y`.
 //! Text terms use the full-text index (`fts_words` over `search_docs`, plain
-//! text of titles, descriptions and comments).
+//! text of titles, descriptions, comments and the text inside attached
+//! files).
 
 use std::fmt::Write as _;
 
@@ -163,7 +164,12 @@ impl Compiled {
                     "), rel(task_id, score) AS (SELECT d.task_id, min(m.score) \
                      FROM m JOIN search_docs d ON d.docid = m.docid",
                 );
-                with.push(" WHERE d.kind IN ('task', 'comment') GROUP BY d.task_id) ");
+                let kinds = match terms.first().map(|(scope, _, _)| *scope) {
+                    Some(TextScope::Files) => "('file')",
+                    Some(TextScope::NoFiles) => "('task', 'comment')",
+                    _ => "('task', 'comment', 'file')",
+                };
+                let _ = write!(with.text, " WHERE d.kind IN {kinds} GROUP BY d.task_id) ");
             }
             from.push_str(" LEFT JOIN rel ON rel.task_id = t.id");
         }
@@ -877,6 +883,8 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             }
             sql.push(")");
         }
+        // Checking takes it out of the filter (`Checked`'s text scope).
+        Cond::InFiles(_) => sql.push("1"),
         Cond::ChangedBy(who) => {
             sql.push(HISTORY);
             sql.push(" AND (");
@@ -915,17 +923,32 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             phrase,
         } => match fts_expr(text, *phrase) {
             Some(expr) => {
-                let (column, kinds) = match scope {
-                    TextScope::All => ("", "('task', 'comment')"),
-                    TextScope::Description => ("body : ", "('task')"),
-                    TextScope::Comments => ("body : ", "('comment')"),
+                // A file document's title is the file's name; only the text
+                // read from inside it counts here.
+                let parts: &[(&str, &str)] = match scope {
+                    TextScope::All => &[("", "('task', 'comment')"), ("body : ", "('file')")],
+                    TextScope::NoFiles => &[("", "('task', 'comment')")],
+                    TextScope::Files => &[("body : ", "('file')")],
+                    TextScope::Description => &[("body : ", "('task')")],
+                    TextScope::Comments => &[("body : ", "('comment')")],
                 };
-                sql.push(
-                    "t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d \
-                     ON d.docid = fts_words.rowid WHERE fts_words MATCH ",
-                );
-                sql.str(&format!("{column}{expr}"));
-                let _ = write!(sql.text, " AND d.kind IN {kinds})");
+                if parts.len() > 1 {
+                    sql.push("(");
+                }
+                for (i, (column, kinds)) in parts.iter().enumerate() {
+                    if i > 0 {
+                        sql.push(" OR ");
+                    }
+                    sql.push(
+                        "t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d \
+                         ON d.docid = fts_words.rowid WHERE fts_words MATCH ",
+                    );
+                    sql.str(&format!("{column}{expr}"));
+                    let _ = write!(sql.text, " AND d.kind IN {kinds})");
+                }
+                if parts.len() > 1 {
+                    sql.push(")");
+                }
             }
             None => {
                 // Nothing the index can find (only punctuation): look in
@@ -1182,6 +1205,10 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
                              AND c.deleted_at IS NULL))))",
                         "comments" => "EXISTS (SELECT 1 FROM comments c WHERE c.task_id = t.id \
                              AND c.deleted_at IS NULL)",
+                        // The search documents of live files only: a
+                        // trashed file has none.
+                        "attachment-text" => "EXISTS (SELECT 1 FROM search_docs d \
+                             WHERE d.task_id = t.id AND d.kind = 'file' AND d.body <> '')",
                         "subtasks" => HAS_SUBTASKS,
                         "parent" => "t.parent_id IS NOT NULL",
                         "links" => "EXISTS (SELECT 1 FROM task_relations r JOIN tasks o \
@@ -1381,7 +1408,8 @@ fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
             | FieldType::Has
             | FieldType::Was
             | FieldType::Changed
-            | FieldType::ChangedBy => Vec::new(),
+            | FieldType::ChangedBy
+            | FieldType::In => Vec::new(),
         },
     })
 }

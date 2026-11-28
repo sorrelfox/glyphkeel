@@ -23,6 +23,7 @@ cargo-fuzz = true
 arbitrary = { version = "1.4.2", features = ["derive"] }
 gk-api = { path = "../crates/gk-api" }
 gk-engine = { path = "../crates/gk-engine" }
+gk-extract = { path = "../crates/gk-extract" }
 gk-markdown = { path = "../crates/gk-markdown" }
 gk-mcp = { path = "../crates/gk-mcp" }
 gk-query = { path = "../crates/gk-query" }
@@ -71,6 +72,20 @@ bench = false
 [[bin]]
 name = "mcp_message"
 path = "fuzz_targets/mcp_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extract_pdf"
+path = "fuzz_targets/extract_pdf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extract_office"
+path = "fuzz_targets/extract_office.rs"
 test = false
 doc = false
 bench = false

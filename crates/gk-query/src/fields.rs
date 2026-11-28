@@ -70,13 +70,21 @@ pub enum FieldType {
     Changed,
     /// Who changed the task: `me`, `agent` or an agent's name.
     ChangedBy,
+    /// Where the query's words are looked for: `in:files` only inside
+    /// attached files, `-in:files` never there.
+    In,
 }
 
 /// Which text a full-text field searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextScope {
-    /// Title, description and comments.
+    /// Title, description, comments and the text inside the files attached
+    /// to the task or its comments.
     All,
+    /// Only the text inside attached files (`in:files`).
+    Files,
+    /// Title, description and comments, not attached files (`-in:files`).
+    NoFiles,
     /// The description.
     Description,
     /// The comments.
@@ -204,7 +212,10 @@ pub const HAS_PARTS: &[&str] = &[
     "links",
     "time",
     "reminder",
+    "attachment-text",
 ];
+/// Where `in:` looks for the query's words.
+pub const IN_PLACES: &[&str] = &["files"];
 
 /// The fields `was:` looks up in the history.
 pub const WAS_FIELDS: &[&str] = &[
@@ -291,7 +302,7 @@ pub static FIELDS: &[Field] = &[
         TEXT_OPS,
         false,
         false,
-        "words in the title, description or comments",
+        "words in the title, description, comments or attached files",
     ),
     field(
         "description",
@@ -618,6 +629,18 @@ pub static FIELDS: &[Field] = &[
         ),
         CHANGED_FIELDS,
     ),
+    with_choices(
+        field(
+            "in",
+            &[],
+            FieldType::In,
+            ONE_OP,
+            false,
+            false,
+            "where the words are looked for: in:files only inside attached files, -in:files never there",
+        ),
+        IN_PLACES,
+    ),
     field(
         "changed-by",
         &[],
@@ -898,6 +921,7 @@ const VALUES_ARGS: &[(&str, &[(&str, &str)])] = &[
     ("has", &[]),
     ("was", &[("example", "was:status:Review")]),
     ("changed", &[("example", "changed:due>-7d")]),
+    ("in", &[("only", "in:files"), ("never", "-in:files")]),
     ("changed-by", &[("me", "me"), ("agent", "agent")]),
 ];
 

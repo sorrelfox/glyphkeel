@@ -99,7 +99,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel report flow` | `report.cumulative_flow` | How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV. |
 | `glyphkeel revert` | `history.revert` | Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed. |
 | `glyphkeel schedule` | `schedule.get` | The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. |
-| `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. |
+| `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task. |
 | `glyphkeel settings get` | `settings.get` | Read the workspace settings. |
 | `glyphkeel settings set` | `settings.update` | Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. |
 | `glyphkeel sprint add <sprint>` | `sprint.add_tasks` | Put tasks in a planned or active sprint of their project, moving them from any other sprint. |

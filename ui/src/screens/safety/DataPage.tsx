@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button } from "react-aria-components";
+import { Button, useLocale } from "react-aria-components";
 
 import { useActions } from "../../actions/ActionsProvider";
 import { classes } from "../../classes";
@@ -13,7 +13,7 @@ import { useBytes, useFailureToast, useRefreshBackups } from "../../data/safety"
 import { type Backup, type BackupCheck } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { chooseBackupFolder, chosenBackupFolder, choosesFiles, resetBackupFolder } from "../../ipc/transfer";
-import { opPrefix } from "../../data/queries";
+import { opKey, opPrefix } from "../../data/queries";
 import { Group, Row } from "../../shell/PreferenceRows";
 import { useMomentFormat } from "../task/Activity";
 import styles from "./Safety.module.css";
@@ -84,6 +84,7 @@ export function DataPage() {
         </Row>
       </Group>
       {backups.data && backups.data.items.length > 0 && <BackupTable items={backups.data.items} />}
+      <FileIndexGroup />
       <Group title={t("transfer-title")}>
         <Row label={t("action-export")} about={t("transfer-export-about")}>
           <Button className="btn" isDisabled={exportAction?.disabled ?? true} onPress={() => exportAction?.run()}>
@@ -102,6 +103,79 @@ export function DataPage() {
         </Row>
       </Group>
     </>
+  );
+}
+
+/** How often the counts are read again while files wait to be read. */
+const FILE_INDEX_POLL_MS = 2000;
+
+/**
+ * Search inside files: how many attached files the background job has read
+ * for search, how many wait, how many had text and how many gave none, and
+ * Read again, which makes every file wait again. The counts are read again
+ * every few seconds while files wait.
+ */
+function FileIndexGroup() {
+  const t = useT();
+  const call = useCall();
+  const toasts = useToasts();
+  const fail = useFailureToast();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const { locale } = useLocale();
+  const count = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const status = useQuery({
+    queryKey: opKey("file.index_status", {}),
+    queryFn: () => call("file.index_status", {}),
+    refetchInterval: (query) => ((query.state.data?.waiting ?? 0) > 0 ? FILE_INDEX_POLL_MS : false),
+  });
+  const again = () => {
+    setBusy(true);
+    call("file.reindex", {}).then(
+      (next) => {
+        setBusy(false);
+        queryClient.setQueryData(opKey("file.index_status", {}), next);
+        toasts.show({ tone: "info", text: t("file-index-again-started") });
+      },
+      (error: unknown) => {
+        setBusy(false);
+        fail(error);
+      },
+    );
+  };
+  const data = status.data;
+  return (
+    <Group title={t("file-index-title")} lead={<p className={classes("faint", styles.small)}>{t("file-index-about")}</p>}>
+      {status.isError && <p className="faint">{failureText(t, status.error)}</p>}
+      {data && (
+        <>
+          <Row label={t("file-index-progress")}>
+            <span className="num" data-testid="file-index-read">
+              {t("file-index-read", { read: data.read, files: data.files })}
+            </span>
+            <progress className={styles.progress} max={Math.max(data.files, 1)} value={data.files === 0 ? 1 : data.read} aria-label={t("file-index-progress")} />
+            <span className={classes("faint", styles.small)} role="status" data-testid="file-index-waiting">
+              {data.waiting > 0 ? t("file-index-waiting", { count: data.waiting }) : t("file-index-done")}
+            </span>
+          </Row>
+          <Row label={t("file-index-with-text")}>
+            <span className="num" data-testid="file-index-with-text">
+              {count(data.with_text)}
+            </span>
+          </Row>
+          <Row label={t("file-index-skipped")} about={t("file-index-skipped-about")}>
+            <span className="num" data-testid="file-index-skipped">
+              {count(data.skipped)}
+            </span>
+          </Row>
+        </>
+      )}
+      <Row label={t("file-index-again")} about={t("file-index-again-about")}>
+        <Button className="btn" isDisabled={busy} onPress={again}>
+          {t("file-index-again")}
+        </Button>
+      </Row>
+    </Group>
   );
 }
 

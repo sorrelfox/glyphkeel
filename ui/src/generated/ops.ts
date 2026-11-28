@@ -2413,6 +2413,23 @@ export type FileCoverInput = {
   task: string;
 };
 
+/** No input. */
+export type FileIndexInput = Record<string, never>;
+
+/** How far reading the text inside attached files has come, for search. Counted by file content: the same file attached twice counts once. */
+export type FileIndexStatus = {
+  /** The files in use. */
+  files: number;
+  /** The files read so far, with or without text. */
+  read: number;
+  /** The files of a kind that is read (text, PDF, Office) that gave no text: scanned, encrypted, damaged, too large or refused as unsafe. */
+  skipped: number;
+  /** The files waiting to be read; the program holding the background jobs reads them a few at a time. */
+  waiting: number;
+  /** The files whose text search finds. */
+  with_text: number;
+};
+
 /** What a file holds, which decides how it is shown. */
 export type FileKind = "image" | "text" | "executable" | "other";
 
@@ -7063,6 +7080,8 @@ export interface OpMap {
   "file.attach": { input: FileAttachInput; output: FileChange; safety: "write"; kind: "command" };
   "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
   "file.cover": { input: FileCoverInput; output: FileCoverChange; safety: "write"; kind: "command" };
+  "file.index_status": { input: FileIndexInput; output: FileIndexStatus; safety: "read"; kind: "query" };
+  "file.reindex": { input: FileIndexInput; output: FileIndexStatus; safety: "write"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
@@ -7260,6 +7279,8 @@ export const OP_SAFETY = {
   "file.attach": "write",
   "file.delete": "trash",
   "file.cover": "write",
+  "file.index_status": "read",
+  "file.reindex": "write",
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
@@ -7440,6 +7461,10 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
       /** Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. (write) */
       cover: (input: OpMap["file.cover"]["input"]) => call("file.cover", input),
+      /** How far reading the text inside attached files for search has come: files in use, read, waiting, with text and skipped. (read) */
+      indexStatus: (input: OpMap["file.index_status"]["input"] = {}) => call("file.index_status", input),
+      /** Read the text inside every attached file again, in the background, keeping the text found so far until each file is read. (write) */
+      reindex: (input: OpMap["file.reindex"]["input"] = {}) => call("file.reindex", input),
     },
     folder: {
       /** The project folders in sidebar order, each with its projects and their open tasks. (read) */
@@ -7578,7 +7603,7 @@ export function makeOps(call: Call) {
       previewMove: (input: OpMap["schedule.preview_move"]["input"]) => call("schedule.preview_move", input),
     },
     search: {
-      /** Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. (read) */
+      /** Search task titles and descriptions, comments, wiki pages, file names and the text inside attached files for words and fragments, ranked, with the matches marked; a task key finds that task. (read) */
       query: (input: OpMap["search.query"]["input"]) => call("search.query", input),
     },
     settings: {

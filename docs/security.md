@@ -83,6 +83,16 @@ content managed to run script there, it should not get further.
   save them and look at them first.
 - Images are checked for size before they are shown or turned into
   thumbnails, so a "decompression bomb" can't exhaust memory.
+- For search, the text inside attached files (text, PDF, Office and
+  OpenDocument files) is read in the app's own process, without other
+  programs or the network, within hard limits: at most 1 MB of text per
+  file, 10 seconds per file on a thread of its own, files up to 64 MB, and
+  for Office files at most 10,000 archive entries, 256 MB unpacked in all,
+  64 MB per entry and a bounded compression ratio, checked before anything
+  is unpacked and again while it is. The XML reader never reads a document
+  type definition or expands entities other than the five predefined ones
+  and character references. A file that breaks a limit is found by its name
+  only.
 
 ## Imports
 
@@ -317,7 +327,8 @@ against programs running as you.
 - Tests keep each kind of window to its own commands, and check that every
   operation input that could name a file is refused from the page.
 - The Markdown renderer, the query language, the CSV, archive and wiki
-  imports and the MCP server's message handling are fuzzed.
+  imports, the MCP server's message handling and the reading of PDF and
+  Office files for search are fuzzed.
 - The Rust crates are checked with `cargo-deny` for known vulnerabilities,
   licences and sources, and the interface's shipped npm packages with
   `pnpm audit`.

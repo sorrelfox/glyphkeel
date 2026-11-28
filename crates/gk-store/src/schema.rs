@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 24;
+pub const SCHEMA_VERSION: i64 = 25;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -126,6 +126,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 24,
         sql: include_str!("../migrations/0024_agent_proposals.sql"),
+    },
+    Migration {
+        version: 25,
+        sql: include_str!("../migrations/0025_attachment_text.sql"),
     },
 ];
 
