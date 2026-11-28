@@ -91,6 +91,11 @@ macro_rules! snapshot {
             filters => vec![
                 (r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "[id]"),
                 (r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z", "[time]"),
+                // A time as people read it: `Nov 28, 2026, 5:13 PM`.
+                (r"[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d\d\s?[AP]M", "[time]"),
+                // Which makes a table's columns as wide as that run's
+                // times: the gaps between cells, not their widths.
+                (r"(\S) {2,}", "$1  "),
                 (r#"("?program_version"?: )"?[0-9][^"\n]*"?"#, "$1[version]"),
             ],
         }, {

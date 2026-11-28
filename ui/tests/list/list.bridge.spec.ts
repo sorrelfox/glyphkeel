@@ -274,3 +274,39 @@ test("the list on the engine: groups, a second sort key, columns dragged and res
   expect(exported.items.map((item) => item.title).sort()).toEqual(["Dig beds", "Plant beans", "Water roses"]);
   expect(exported.items.find((item) => item.title === "Dig beds")?.priority).toBe("urgent");
 });
+
+test("the query field in the pseudo-locale: every field's values in the language, the query's own words as they are", async ({ page, browser }) => {
+  // A project to list, made in English.
+  await page.goto(PAGE);
+  await expect(page.getByTestId("status-workspace")).toHaveText("Personal");
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New project" }).click();
+  const dialog = page.getByRole("dialog", { name: "New project" });
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Porch");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+
+  // The same workspace in the pseudo-locale, found by structure and by the
+  // project's name, which is not translated.
+  const context = await browser.newContext({ locale: "en-XA", viewport: { width: 1400, height: 860 } });
+  const pseudo = await context.newPage();
+  await pseudo.goto(PAGE);
+  await pseudo.getByRole("row", { name: /Porch/ }).first().click();
+  await pseudo.locator(".seg[role=group] button").nth(1).click();
+  const field = pseudo.locator(".cm-content[role=textbox]").first();
+  await field.click();
+  await pseudo.keyboard.press("Control+Space");
+  const details = pseudo.locator(".cm-tooltip-autocomplete .cm-completionDetail");
+  await expect(details.first()).toBeVisible();
+  const texts = (await details.allInnerTexts()).map(plain);
+  expect(texts.length).toBeGreaterThan(30);
+  // Each one a message; all but those made only of the query's words
+  // (the categories, the priorities) with words in the language.
+  for (const text of texts) {
+    expect(text).toMatch(/^\[.*\]$/u);
+  }
+  const translated = texts.filter((text) => /[áéíóúýƀçđĝĥĵķĺñþŕšţṽŵẋž]/u.test(text));
+  expect(texts.length - translated.length).toBeLessThanOrEqual(2);
+  // The query's own words stay as they are typed.
+  expect(texts.some((text) => text.includes("+7d") && text.includes("this-week"))).toBe(true);
+  await context.close();
+});

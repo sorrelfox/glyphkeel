@@ -816,11 +816,209 @@ pub fn strip_custom_prefix(written: &str) -> Option<&str> {
         .and_then(|_| written.get(CUSTOM_PREFIX.len()..))
 }
 
+/// The arguments of the message with each field's values in words
+/// (`query-values-<name>`): the query's own words and examples, which stay
+/// as they are in every language.
+const VALUES_ARGS: &[(&str, &[(&str, &str)])] = &[
+    ("key", &[("example", "TM-41")]),
+    ("project", &[("example", "TM/*")]),
+    ("title", &[("equals", "=")]),
+    ("text", &[]),
+    ("description", &[]),
+    ("comment", &[]),
+    ("status", &[]),
+    (
+        "category",
+        &[
+            ("categories", "todo, in_progress, done, cancelled"),
+            ("groups", "open, closed"),
+        ],
+    ),
+    ("type", &[]),
+    (
+        "priority",
+        &[("order", "none < low < normal < high < urgent")],
+    ),
+    ("label", &[("none", "none")]),
+    ("version", &[("none", "none")]),
+    ("sprint", &[("active", "active"), ("none", "none")]),
+    ("parent", &[("none", "none")]),
+    ("under", &[]),
+    ("blocks", &[("any", "any")]),
+    ("blocked-by", &[("any", "any")]),
+    ("relates", &[("any", "any")]),
+    ("duplicates", &[("any", "any")]),
+    (
+        "start",
+        &[
+            ("today", "today"),
+            ("ahead", "+7d"),
+            ("week", "this-week"),
+            ("none", "none"),
+        ],
+    ),
+    (
+        "due",
+        &[
+            ("today", "today"),
+            ("ahead", "+7d"),
+            ("week", "this-week"),
+            ("none", "none"),
+        ],
+    ),
+    (
+        "during",
+        &[
+            ("week", "this-week"),
+            ("range", "2026-11-01..2026-11-30"),
+            ("start", "start"),
+            ("due", "due"),
+        ],
+    ),
+    (
+        "created",
+        &[("today", "today"), ("back", "-7d"), ("month", "this-month")],
+    ),
+    ("edited", &[]),
+    ("updated", &[]),
+    ("closed", &[("none", "none")]),
+    (
+        "estimate",
+        &[("examples", "90m, 1.5h, 1h30m, 2d"), ("none", "none")],
+    ),
+    ("spent", &[]),
+    ("remaining", &[]),
+    ("progress", &[("plain", "50"), ("percent", "50%")]),
+    ("author", &[("me", "me"), ("agent", "agent")]),
+    ("claimed", &[("any", "any")]),
+    ("comments", &[]),
+    ("files", &[]),
+    ("subtasks", &[]),
+    ("is", &[]),
+    ("has", &[]),
+    ("was", &[("example", "was:status:Review")]),
+    ("changed", &[("example", "changed:due>-7d")]),
+    ("changed-by", &[("me", "me"), ("agent", "agent")]),
+];
+
+/// The same for custom fields, by kind (`query-values-custom-<kind>`).
+const CUSTOM_VALUES_ARGS: &[(&str, &[(&str, &str)])] = &[
+    ("text", &[("equals", "="), ("none", "none")]),
+    ("url", &[("equals", "="), ("none", "none")]),
+    ("integer", &[("range", "1..5"), ("none", "none")]),
+    ("decimal", &[("example", "2.5"), ("none", "none")]),
+    (
+        "date",
+        &[
+            ("today", "today"),
+            ("ahead", "+7d"),
+            ("week", "this-week"),
+            ("none", "none"),
+        ],
+    ),
+    ("boolean", &[("yes", "yes"), ("no", "no")]),
+    ("select", &[("none", "none")]),
+];
+
+/// A message ID with its arguments, for the app to show in the person's
+/// language.
+pub type Message = (String, Vec<(&'static str, String)>);
+
+fn args_of(
+    table: &[(&str, &'static [(&'static str, &'static str)])],
+    key: &str,
+) -> Vec<(&'static str, String)> {
+    table
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, args)| args.iter().map(|(n, v)| (*n, (*v).to_owned())).collect())
+        .unwrap_or_default()
+}
+
+impl Field {
+    /// The message with [`Field::values`] in words: its ID and arguments.
+    #[must_use]
+    pub fn values_message(&self) -> Message {
+        (
+            format!("query-values-{}", self.name),
+            args_of(VALUES_ARGS, self.name),
+        )
+    }
+}
+
+impl CustomField {
+    /// The message with [`CustomField::values`] in words: its ID and
+    /// arguments.
+    #[must_use]
+    pub fn values_message(&self) -> Message {
+        let kind = match self.kind {
+            FieldKind::Text | FieldKind::Markdown => "text",
+            FieldKind::Url => "url",
+            FieldKind::Integer => "integer",
+            FieldKind::Decimal => "decimal",
+            FieldKind::Date => "date",
+            FieldKind::Boolean => "boolean",
+            FieldKind::Select | FieldKind::MultiSelect => "select",
+        };
+        (
+            format!("query-values-custom-{kind}"),
+            args_of(CUSTOM_VALUES_ARGS, kind),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::*;
+
+    #[test]
+    fn every_fields_values_have_a_message_with_the_same_english() {
+        let check = |values: &str, (id, args): Message| {
+            assert!(crate::error::pattern(&id).is_some(), "no message {id}");
+            assert_eq!(crate::error::render(&id, &args), values, "{id}");
+        };
+        for f in FIELDS {
+            check(f.values, f.values_message());
+        }
+        for kind in [
+            FieldKind::Text,
+            FieldKind::Markdown,
+            FieldKind::Url,
+            FieldKind::Integer,
+            FieldKind::Decimal,
+            FieldKind::Date,
+            FieldKind::Boolean,
+            FieldKind::Select,
+            FieldKind::MultiSelect,
+        ] {
+            let f = CustomField {
+                name: "Area".to_owned(),
+                query_name: "area".to_owned(),
+                kind,
+                options: Vec::new(),
+            };
+            check(f.values(), f.values_message());
+        }
+        // Every message of the kind belongs to a field.
+        let ids: Vec<String> = FIELDS
+            .iter()
+            .map(|f| f.values_message().0)
+            .chain(
+                CUSTOM_VALUES_ARGS
+                    .iter()
+                    .map(|(k, _)| format!("query-values-custom-{k}")),
+            )
+            .collect();
+        for line in crate::error::MESSAGES_FTL.lines() {
+            if let Some((id, _)) = line.split_once(" = ")
+                && id.starts_with("query-values-")
+            {
+                assert!(ids.iter().any(|i| i == id), "{id} belongs to no field");
+            }
+        }
+    }
 
     #[test]
     fn names_are_unique_and_readable_by_the_parser() {

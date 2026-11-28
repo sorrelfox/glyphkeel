@@ -153,7 +153,10 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
     for f in fields {
         let mut arg = Arg::new(f.name.clone());
         if let Some(help) = &f.help {
-            let help = messages::field_help(op.id, &f.name, help);
+            let mut help = messages::field_help(op.id, &f.name, help);
+            if f.many {
+                help = messages::text("cli-help-many", &[("help", help)]);
+            }
             arg = match &f.kind {
                 // The values are machine words, listed after the help in
                 // the chosen language.
@@ -166,15 +169,24 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
         if !f.positional {
             arg = arg.long(f.long());
         }
+        // A list takes repeated options and values separated by commas,
+        // each parsed as one value.
+        fn parser<P>(many: bool, p: P) -> clap::builder::ValueParser
+        where
+            P: TypedValueParser<Value = Value>,
+        {
+            if many { Split(p).into() } else { p.into() }
+        }
         arg = match &f.kind {
             Kind::Flag => arg.action(ArgAction::SetTrue),
-            Kind::Choice(words) => {
-                arg.value_parser(PossibleValuesParser::new(words.clone()).map(Value::String))
-            }
-            Kind::Bool => arg.value_parser(parse_bool),
-            Kind::Integer => arg.value_parser(parse_integer),
-            Kind::Number => arg.value_parser(parse_number),
-            Kind::Text => arg.value_parser(parse_text),
+            Kind::Choice(words) => arg.value_parser(parser(
+                f.many,
+                PossibleValuesParser::new(words.clone()).map(Value::String),
+            )),
+            Kind::Bool => arg.value_parser(parser(f.many, parse_bool)),
+            Kind::Integer => arg.value_parser(parser(f.many, parse_integer)),
+            Kind::Number => arg.value_parser(parser(f.many, parse_number)),
+            Kind::Text => arg.value_parser(parser(f.many, parse_text)),
             Kind::Json => arg.value_parser(parse_json).value_name("JSON"),
         };
         if f.kind != Kind::Flag {
@@ -237,8 +249,8 @@ pub(crate) fn collect(fields: &[Field], m: &ArgMatches) -> Result<Value, OpError
         let value = match (&f.kind, f.many) {
             (Kind::Flag, _) => Value::Bool(m.get_flag(&f.name)),
             (_, true) => Value::Array(
-                m.get_many::<Value>(&f.name)
-                    .map(|v| v.cloned().collect())
+                m.get_many::<Vec<Value>>(&f.name)
+                    .map(|v| v.flatten().cloned().collect())
                     .unwrap_or_default(),
             ),
             (_, false) => match m.get_one::<Value>(&f.name) {
@@ -249,6 +261,68 @@ pub(crate) fn collect(fields: &[Field], m: &ArgMatches) -> Result<Value, OpError
         input.insert(f.name.clone(), value);
     }
     Ok(Value::Object(input))
+}
+
+/// The values of one option of a list: separated by commas (`--labels
+/// bug,ui`), with `\,` for a comma inside a value. Spaces around the
+/// values are dropped, and so are empty ones (`bug,`); a value without a
+/// comma is taken as it is.
+pub(crate) fn split_values(text: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut current = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if chars.peek() == Some(&',') => {
+                chars.next();
+                current.push(',');
+            }
+            ',' => values.push(std::mem::take(&mut current)),
+            c => current.push(c),
+        }
+    }
+    if values.is_empty() {
+        return vec![current];
+    }
+    values.push(current);
+    values
+        .into_iter()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
+/// The value parser of a list's option: [`split_values`], then `P` for
+/// each value.
+#[derive(Clone)]
+struct Split<P>(P);
+
+impl<P> TypedValueParser for Split<P>
+where
+    P: TypedValueParser<Value = Value>,
+{
+    type Value = Vec<Value>;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let Some(text) = value.to_str() else {
+            return Ok(vec![self.0.parse_ref(cmd, arg, value)?]);
+        };
+        split_values(text)
+            .iter()
+            .map(|v| self.0.parse_ref(cmd, arg, std::ffi::OsStr::new(v)))
+            .collect()
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        self.0.possible_values()
+    }
 }
 
 fn read_input(text: &str) -> Result<Map<String, Value>, OpError> {
@@ -330,6 +404,16 @@ mod tests {
         assert_eq!(kind("sessions"), Kind::Flag);
         assert_eq!(kind("limit"), Kind::Integer);
         assert_eq!(kind("actor"), Kind::Text);
+    }
+
+    #[test]
+    fn list_values_split_at_commas() {
+        assert_eq!(split_values("bug,ui"), ["bug", "ui"]);
+        assert_eq!(split_values("bug, ui ,"), ["bug", "ui"]);
+        assert_eq!(split_values(r"a\,b,c"), ["a,b", "c"]);
+        assert_eq!(split_values(" one "), [" one "]);
+        assert_eq!(split_values(r"a\b"), [r"a\b"]);
+        assert_eq!(split_values(""), [""]);
     }
 
     #[test]

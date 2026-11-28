@@ -346,17 +346,23 @@ fn problem(e: &QueryError, src: &str) -> QueryProblem {
 fn registry(tx: &Transaction<'_>) -> Result<Vec<QueryField>, Failure> {
     let mut out: Vec<QueryField> = gk_query::fields::FIELDS
         .iter()
-        .map(|f| QueryField {
-            name: f.name.to_owned(),
-            aliases: f.aliases.iter().map(|a| (*a).to_owned()).collect(),
-            operators: f.ops.iter().map(|o| o.as_str().to_owned()).collect(),
-            ranges: f.ranges,
-            sortable: f.sortable,
-            values: f.values.to_owned(),
-            choices: f.choices.iter().map(|c| (*c).to_owned()).collect(),
+        .map(|f| {
+            let (values_id, values_args) = f.values_message();
+            QueryField {
+                name: f.name.to_owned(),
+                aliases: f.aliases.iter().map(|a| (*a).to_owned()).collect(),
+                operators: f.ops.iter().map(|o| o.as_str().to_owned()).collect(),
+                ranges: f.ranges,
+                sortable: f.sortable,
+                values: f.values.to_owned(),
+                values_id,
+                values_args: message_args(values_args),
+                choices: f.choices.iter().map(|c| (*c).to_owned()).collect(),
+            }
         })
         .collect();
     for f in super::custom_field::query_fields(tx)? {
+        let (values_id, values_args) = f.values_message();
         out.push(QueryField {
             name: f.written(),
             aliases: Vec::new(),
@@ -364,6 +370,8 @@ fn registry(tx: &Transaction<'_>) -> Result<Vec<QueryField>, Failure> {
             ranges: f.ranges(),
             sortable: true,
             values: f.values().to_owned(),
+            values_id,
+            values_args: message_args(values_args),
             choices: match f.kind {
                 gk_core::FieldKind::Boolean => vec!["yes".to_owned(), "no".to_owned()],
                 _ => f.options.clone(),
@@ -371,6 +379,10 @@ fn registry(tx: &Transaction<'_>) -> Result<Vec<QueryField>, Failure> {
         });
     }
     Ok(out)
+}
+
+fn message_args(args: Vec<(&str, String)>) -> std::collections::BTreeMap<String, String> {
+    args.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
 }
 
 fn parse_for_field(q: &QueryCtx<'_>, input: &QueryParseInput) -> Result<ParsedQuery, Failure> {

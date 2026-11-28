@@ -39,6 +39,8 @@ export interface CompletionEnvironment {
   names: () => QueryNames;
   /** What a field is for, with an example, in the person's language; shown beside the field in the list. */
   help?: (field: string) => string | undefined;
+  /** The values a field takes, in words, in the person's language; its English `values` without it. */
+  hint?: (field: QueryField) => string | undefined;
 }
 
 /** Hands the field a new reading; it applies only if the text still is what was read. */
@@ -162,7 +164,7 @@ function helpFor(environment: CompletionEnvironment, name: string): Pick<Complet
 }
 
 /** The field registry's `sort:`, which isn't a field but completes like one. */
-const SORT_FIELD: QueryField = { name: "sort", operators: [":"], ranges: false, sortable: false, values: "" };
+const SORT_FIELD: QueryField = { name: "sort", operators: [":"], ranges: false, sortable: false, values: "", values_id: "" };
 
 /**
  * Completion at the cursor: field names at the start of a word (`sta` →
@@ -201,7 +203,7 @@ export function queryCompletions(environment: CompletionEnvironment) {
       }
       const options: Completion[] = [...fields, SORT_FIELD].map((field) => ({
         label: `${field.name}:`,
-        detail: field.values,
+        detail: environment.hint?.(field) ?? field.values,
         ...helpFor(environment, field.name),
         type: "property",
         boost: field.name === "sort" ? -1 : 0,

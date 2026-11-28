@@ -69188,7 +69188,18 @@
                 "type": "boolean"
               },
               "values": {
-                "description": "The values it takes, in words.",
+                "description": "The values it takes, in words (English).",
+                "type": "string"
+              },
+              "values_args": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The arguments of that message: the query's own words and examples.",
+                "type": "object"
+              },
+              "values_id": {
+                "description": "The ID of the message with `values` in words, for showing it in\nanother language.",
                 "type": "string"
               }
             },
@@ -69197,7 +69208,8 @@
               "operators",
               "ranges",
               "sortable",
-              "values"
+              "values",
+              "values_id"
             ],
             "type": "object"
           },

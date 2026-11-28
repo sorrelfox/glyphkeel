@@ -243,6 +243,61 @@ pub fn format_date(text: &str) -> String {
     }
 }
 
+/// Whether `text` is a timestamp as the engine writes them (RFC 3339 with a
+/// time, `2026-11-27T15:08:04Z`).
+#[must_use]
+pub fn is_timestamp(text: &str) -> bool {
+    let b = text.as_bytes();
+    b.len() >= 20
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b[10] == b'T'
+        && b[13] == b':'
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && text.parse::<jiff::Timestamp>().is_ok()
+}
+
+/// A timestamp (`2026-11-27T15:08:04Z`) written as a date and a time in
+/// the current language's medium format, in time zone `zone` (an IANA
+/// name), else in the system's zone: `Nov 27, 2026, 4:08 PM` in English
+/// for `Europe/Berlin`. `text` itself when it isn't a timestamp.
+#[must_use]
+pub fn format_timestamp(text: &str, zone: Option<&str>) -> String {
+    let Ok(ts) = text.parse::<jiff::Timestamp>() else {
+        return text.to_owned();
+    };
+    let tz = zone
+        .and_then(|z| jiff::tz::TimeZone::get(z).ok())
+        .unwrap_or_else(jiff::tz::TimeZone::system);
+    let local = ts.to_zoned_datetime(tz).datetime();
+    let date = icu_calendar::Date::try_new_gregorian(
+        i32::from(local.year()),
+        u8::try_from(local.month()).unwrap_or(1),
+        u8::try_from(local.day()).unwrap_or(1),
+    );
+    let time = icu_datetime::input::Time::try_new(
+        u8::try_from(local.hour()).unwrap_or(0),
+        u8::try_from(local.minute()).unwrap_or(0),
+        u8::try_from(local.second()).unwrap_or(0),
+        0,
+    );
+    let (Ok(date), Ok(time)) = (date, time) else {
+        return text.to_owned();
+    };
+    let formatter =
+        icu_datetime::FixedCalendarDateTimeFormatter::<icu_calendar::Gregorian, _>::try_new(
+            (&format_locale()).into(),
+            icu_datetime::fieldsets::YMDT::medium()
+                .with_time_precision(icu_datetime::options::TimePrecision::Minute),
+        );
+    match formatter {
+        Ok(f) => f
+            .format(&icu_datetime::input::DateTime { date, time })
+            .to_string(),
+        Err(_) => text.to_owned(),
+    }
+}
+
 /// The plural category of the number `text` in the current language
 /// (`one`, `few`, `other`…), for choosing a message's variant; `None` when
 /// it isn't a number.
@@ -364,6 +419,28 @@ mod tests {
         assert_eq!(ui_language_from(br#"{"ui": {"language": "system"}}"#), None);
         assert_eq!(ui_language_from(br#"{"notifications": true}"#), None);
         assert_eq!(ui_language_from(b"not json"), None);
+    }
+
+    #[test]
+    fn timestamps_follow_the_language_and_the_zone() {
+        let at = "2026-11-27T15:08:04.120Z";
+        assert!(is_timestamp(at));
+        assert!(is_timestamp("2026-11-27T15:08:04+01:00"));
+        assert!(!is_timestamp("2026-11-27"));
+        assert!(!is_timestamp("2026-11-27T25:08:04Z"));
+        with_language("de", || {
+            assert_eq!(
+                format_timestamp(at, Some("Europe/Berlin")),
+                "27.11.2026, 16:08"
+            );
+        });
+        with_language("en", || {
+            assert_eq!(
+                format_timestamp(at, Some("UTC")),
+                "Nov 27, 2026, 3:08\u{202f}PM"
+            );
+            assert_eq!(format_timestamp("later", Some("UTC")), "later");
+        });
     }
 
     #[test]

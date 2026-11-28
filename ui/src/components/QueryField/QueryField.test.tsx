@@ -9,8 +9,11 @@ import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type QueryField as FieldInfo } from "../../generated/ops";
+import { ReactLocalization } from "@fluent/react";
+
 import { I18n } from "../../i18n/I18n";
-import { QueryField, type QueryFieldHandle } from "./QueryField";
+import { createBundle } from "../../i18n/i18n";
+import { QueryField, type QueryFieldHandle, valuesHint } from "./QueryField";
 import { decorationsOf, queryCompletions, queryFieldExtensions, quoteValue, type QueryNames } from "./queryField";
 
 afterEach(cleanup);
@@ -20,15 +23,15 @@ function English({ children }: { children: React.ReactNode }) {
 }
 
 const FIELDS: FieldInfo[] = [
-  { name: "status", operators: [":", "!="], ranges: false, sortable: true, values: "status names" },
-  { name: "priority", aliases: ["prio"], choices: ["none", "low", "normal", "high", "urgent"], operators: [":", "<", ">"], ranges: false, sortable: true, values: "none < low" },
-  { name: "due", operators: [":", "<", ">"], ranges: true, sortable: true, values: "a date" },
-  { name: "label", aliases: ["labels"], operators: [":", "!="], ranges: false, sortable: false, values: "label names, or none" },
-  { name: "was", choices: ["status", "priority", "label"], operators: [":"], ranges: false, sortable: false, values: "a field and a value" },
-  { name: "changed", choices: ["status", "due"], operators: [":"], ranges: false, sortable: false, values: "a field" },
-  { name: "changed-by", operators: [":", "!="], ranges: false, sortable: false, values: "me, agent" },
-  { name: "version", aliases: ["fix-version"], operators: [":", "!="], ranges: false, sortable: false, values: "version names, or none" },
-  { name: "cf.stage", choices: ["Alpha", "Beta stage"], operators: [":", "!="], ranges: false, sortable: false, values: "one of the options" },
+  { name: "status", operators: [":", "!="], ranges: false, sortable: true, values: "status names", values_id: "query-values-status" },
+  { name: "priority", aliases: ["prio"], choices: ["none", "low", "normal", "high", "urgent"], operators: [":", "<", ">"], ranges: false, sortable: true, values: "none < low", values_id: "query-values-priority", values_args: { order: "none < low < normal < high < urgent" } },
+  { name: "due", operators: [":", "<", ">"], ranges: true, sortable: true, values: "a date", values_id: "query-values-due", values_args: { today: "today", ahead: "+7d", week: "this-week", none: "none" } },
+  { name: "label", aliases: ["labels"], operators: [":", "!="], ranges: false, sortable: false, values: "label names, or none", values_id: "query-values-label", values_args: { none: "none" } },
+  { name: "was", choices: ["status", "priority", "label"], operators: [":"], ranges: false, sortable: false, values: "a field and a value", values_id: "query-values-was", values_args: { example: "was:status:Review" } },
+  { name: "changed", choices: ["status", "due"], operators: [":"], ranges: false, sortable: false, values: "a field", values_id: "query-values-changed", values_args: { example: "changed:due>-7d" } },
+  { name: "changed-by", operators: [":", "!="], ranges: false, sortable: false, values: "me, agent", values_id: "query-values-changed-by", values_args: { me: "me", agent: "agent" } },
+  { name: "version", aliases: ["fix-version"], operators: [":", "!="], ranges: false, sortable: false, values: "version names, or none", values_id: "query-values-version", values_args: { none: "none" } },
+  { name: "cf.stage", choices: ["Alpha", "Beta stage"], operators: [":", "!="], ranges: false, sortable: false, values: "one of the options", values_id: "query-values-custom-select", values_args: { none: "none" } },
 ];
 const NAMES: QueryNames = { statuses: ["To do", "In progress", "Done"], types: ["Task"], labels: ["bug"], projects: ["TM"], versions: ["1.0", "Spring release"] };
 
@@ -174,5 +177,40 @@ describe("help", () => {
     const status = result?.options.find((option) => option.label === "status:");
     expect(status?.info).toBe("The status by name.");
     expect(result?.options.find((option) => option.label === "due:")?.info).toBeUndefined();
+  });
+});
+
+describe("value hints", () => {
+  const hints = (language: string) => {
+    const l10n = new ReactLocalization([createBundle(language)]);
+    const state = EditorState.create({ doc: "" });
+    const result = queryCompletions({ fields: () => FIELDS, names: () => NAMES, hint: (field) => valuesHint(l10n, field) })(new CompletionContext(state, 0, true));
+    // Placeables come isolated for right-to-left text; the words are what counts here.
+    return new Map(result?.options.map((option) => [option.label, option.detail?.replace(/[\u2068\u2069]/g, "")]));
+  };
+
+  it("shows the values a field takes in the person's language, the query's words as they are", () => {
+    const english = hints("en");
+    expect(english.get("due:")).toBe("a date, today, +7d, this-week, or none");
+    expect(english.get("cf.stage:")).toBe("option names, or none");
+    const pseudo = hints("en-XA");
+    for (const field of FIELDS) {
+      const detail = pseudo.get(`${field.name}:`) ?? "";
+      expect(detail, field.name).toMatch(/^\[.*\]$/);
+      // What is left of plain English is the query's own words.
+      const words = Object.values(field.values_args ?? {}).join(" ");
+      const plain = detail.split(/[^A-Za-z]+/).filter((word) => word !== "" && !words.includes(word));
+      expect(plain, `${field.name}: ${detail}`).toEqual([]);
+    }
+    expect(pseudo.get("due:")).toContain("+7d");
+    expect(pseudo.get("due:")).toContain("this-week");
+  });
+
+  it("falls back to the engine's English without a message or its arguments", () => {
+    const l10n = new ReactLocalization([createBundle("en")]);
+    const unknown: FieldInfo = { name: "x", operators: [":"], ranges: false, sortable: false, values: "x values", values_id: "query-values-nothing" };
+    expect(valuesHint(l10n, unknown)).toBeUndefined();
+    const missing: FieldInfo = { ...unknown, values_id: "query-values-due" };
+    expect(valuesHint(l10n, missing)).toBeUndefined();
   });
 });

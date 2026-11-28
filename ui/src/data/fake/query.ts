@@ -172,7 +172,46 @@ export function fieldRegistry(names?: QueryNames): QueryField[] {
     ranges: field.type === "span",
     sortable: field.sortable,
     values: field.values,
+    values_id: field.custom ? `query-values-custom-${customKind(field.custom.kind)}` : `query-values-${field.name}`,
+    ...(field.custom ? { values_args: CUSTOM_VALUES_ARGS[customKind(field.custom.kind)] ?? {} } : VALUES_ARGS[field.name] ? { values_args: VALUES_ARGS[field.name] } : {}),
   }));
+}
+
+/** The message arguments of the fields' values in words, as the engine gives them. */
+const DATE_ARGS = { today: "today", ahead: "+7d", week: "this-week", none: "none" };
+const VALUES_ARGS: Readonly<Record<string, Record<string, string>>> = {
+  key: { example: "TM-41" },
+  project: { example: "TM/*" },
+  title: { equals: "=" },
+  category: { categories: "todo, in_progress, done, cancelled", groups: "open, closed" },
+  priority: { order: "none < low < normal < high < urgent" },
+  label: { none: "none" },
+  version: { none: "none" },
+  sprint: { active: "active", none: "none" },
+  parent: { none: "none" },
+  start: DATE_ARGS,
+  due: DATE_ARGS,
+  during: { week: "this-week", range: "2026-11-01..2026-11-30", start: "start", due: "due" },
+  created: { today: "today", back: "-7d", month: "this-month" },
+  estimate: { examples: "90m, 1.5h, 1h30m, 2d", none: "none" },
+  progress: { plain: "50", percent: "50%" },
+  was: { example: "was:status:Review" },
+  changed: { example: "changed:due>-7d" },
+  "changed-by": { me: "me", agent: "agent" },
+};
+const CUSTOM_VALUES_ARGS: Readonly<Record<string, Record<string, string>>> = {
+  text: { equals: "=", none: "none" },
+  url: { equals: "=", none: "none" },
+  integer: { range: "1..5", none: "none" },
+  decimal: { example: "2.5", none: "none" },
+  date: DATE_ARGS,
+  boolean: { yes: "yes", no: "no" },
+  select: { none: "none" },
+};
+
+/** A custom field's kind as the engine's messages name it. */
+function customKind(kind: string): string {
+  return kind === "markdown" ? "text" : kind === "multi_select" ? "select" : kind;
 }
 
 // ---------- reading ----------
