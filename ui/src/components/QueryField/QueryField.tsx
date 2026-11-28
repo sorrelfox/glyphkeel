@@ -4,7 +4,7 @@
 import { startCompletion } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { useLocalization } from "@fluent/react";
+import { type ReactLocalization, useLocalization } from "@fluent/react";
 import { Filter } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useRef, type Ref } from "react";
 
@@ -60,9 +60,10 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
     const id = `query-help-${name}`;
     return l10n.getBundle(id) ? l10n.getString(id) : undefined;
   };
-  const latest = useRef({ onChange, onSubmit, onEscape, fields, names, help });
+  const hint = (field: FieldInfo) => valuesHint(l10n, field);
+  const latest = useRef({ onChange, onSubmit, onEscape, fields, names, help, hint });
   useEffect(() => {
-    latest.current = { onChange, onSubmit, onEscape, fields, names, help };
+    latest.current = { onChange, onSubmit, onEscape, fields, names, help, hint };
   });
 
   useEffect(() => {
@@ -76,7 +77,12 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
         extensions: queryFieldExtensions({
           label,
           placeholder,
-          environment: { fields: () => latest.current.fields, names: () => latest.current.names, help: (name) => latest.current.help(name) },
+          environment: {
+            fields: () => latest.current.fields,
+            names: () => latest.current.names,
+            help: (name) => latest.current.help(name),
+            hint: (field) => latest.current.hint(field),
+          },
           onSubmit: () => latest.current.onSubmit?.(),
           onEscape: () => {
             const handler = latest.current.onEscape;
@@ -179,4 +185,23 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
 /** Whether two readings colour the text the same: the parts come from the engine's answer, which keeps them while they don't change. */
 function sameReading(a: Reading, b: Reading): boolean {
   return a.text === b.text && a.tokens === b.tokens && a.error === b.error;
+}
+
+/**
+ * The values a field takes, in words, from the engine's message for it in
+ * the person's language; the engine's English text when the message is
+ * missing or can't be filled in.
+ */
+export function valuesHint(l10n: ReactLocalization, field: FieldInfo): string | undefined {
+  if (field.values_id === "") {
+    return undefined;
+  }
+  const bundle = l10n.getBundle(field.values_id);
+  const message = bundle?.getMessage(field.values_id);
+  if (!bundle || !message?.value) {
+    return undefined;
+  }
+  const errors: Error[] = [];
+  const text = bundle.formatPattern(message.value, field.values_args ?? {}, errors);
+  return errors.length === 0 ? text : undefined;
 }

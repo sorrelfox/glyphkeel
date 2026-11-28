@@ -255,11 +255,29 @@ fn order(keys: &mut [String]) {
     });
 }
 
-/// One value on one line: numbers and days in the language's formats.
+/// The time zone that timestamps are shown in (an IANA name); the system's
+/// zone when none is set.
+static TIME_ZONE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// Shows timestamps in zone `zone` from now on: the one `--tz` or the
+/// personal settings name.
+pub(crate) fn set_time_zone(zone: Option<String>) {
+    let _ = TIME_ZONE.set(zone);
+}
+
+/// A timestamp in the language's date and time format, in the chosen zone.
+pub(crate) fn timestamp(text: &str) -> String {
+    let zone = TIME_ZONE.get().and_then(Option::as_deref);
+    gk_engine::language::format_timestamp(text, zone)
+}
+
+/// One value on one line: numbers, days and timestamps in the language's
+/// formats.
 fn cell(v: &Value) -> String {
     match v {
         Value::Null => String::new(),
         Value::String(s) if messages::is_day(s) => gk_engine::language::format_date(s),
+        Value::String(s) if gk_engine::language::is_timestamp(s) => timestamp(s),
         Value::String(s) => s.replace('\n', " "),
         Value::Bool(b) => text(if *b { "cli-true" } else { "cli-false" }, &[]),
         Value::Number(n) => gk_engine::language::format_number(&n.to_string()),

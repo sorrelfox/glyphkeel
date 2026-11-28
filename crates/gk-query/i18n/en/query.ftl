@@ -76,3 +76,57 @@ query-unknown-version-none = No version "{ $value }": the workspace has no versi
 query-unknown-sprint-none = No sprint "{ $value }": the workspace has no sprints yet.
 query-unknown-project-none = No project "{ $value }": the workspace has no projects yet.
 query-unknown-task = There is no task { $value }.
+
+## The values a field takes, as the query field's completion shows them
+# Placeables hold the query's own words and examples, which stay as they are.
+
+query-values-key = a task key such as { $example }
+query-values-project = a project key; { $example } adds its sub-projects
+query-values-title = words in the title; { $equals } the exact title
+query-values-text = words in the title, description or comments
+query-values-description = words in the description
+query-values-comment = words in a comment
+query-values-status = status names
+query-values-category = { $categories }; { $groups }
+query-values-type = task type names
+query-values-priority = { $order }
+query-values-label = label names, or { $none }
+query-values-version = version names, or { $none }
+query-values-sprint = sprint names, { $active }, or { $none }
+query-values-parent = a task key, or { $none }
+query-values-under = a task key: its subtasks at any depth
+query-values-blocks = a task key, or { $any }
+query-values-blocked-by = a task key, or { $any }
+query-values-relates = a task key, or { $any }
+query-values-duplicates = a task key, or { $any }
+query-values-start = a date, { $today }, { $ahead }, { $week }, or { $none }
+query-values-due = a date, { $today }, { $ahead }, { $week }, or { $none }
+query-values-during = a date, { $week }, or a range such as { $range }: { $start } to { $due } overlaps it
+query-values-created = a date, { $today }, { $back }, { $month }
+query-values-edited = a date: the task's own fields changed
+query-values-updated = a date: anything about the task changed
+query-values-closed = a date, or { $none }
+query-values-estimate = a duration such as { $examples }, or { $none }
+query-values-spent = a duration
+query-values-remaining = a duration: estimate minus logged time
+query-values-progress = a percentage, { $plain } or { $percent }
+query-values-author = { $me }, { $agent }, or an agent's name
+query-values-claimed = an agent's name, or { $any }
+query-values-comments = a number
+query-values-files = a number
+query-values-subtasks = a number
+query-values-is = a flag
+query-values-has = a part of the task
+query-values-was = a field and a value the task had at any time: { $example }
+query-values-changed = a field that changed; with dates, when: { $example }
+query-values-changed-by = { $me }, { $agent }, or an agent's name: who changed the task's fields
+
+## The values a custom field takes, by its kind
+
+query-values-custom-text = words in the text; { $equals } the exact text; { $none }
+query-values-custom-url = part of the link; { $equals } the exact link; { $none }
+query-values-custom-integer = a whole number, a range such as { $range }, or { $none }
+query-values-custom-decimal = a number such as { $example }, a range, or { $none }
+query-values-custom-date = a date, { $today }, { $ahead }, { $week }, or { $none }
+query-values-custom-boolean = { $yes } or { $no }
+query-values-custom-select = option names, or { $none }

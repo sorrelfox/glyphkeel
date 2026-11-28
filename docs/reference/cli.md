@@ -175,6 +175,10 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel work-kind list` | `work_kind.list` | The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |
 
+## Options with several values
+
+An option that takes a list (`--labels`, `--options`, `--include`…) takes its values either repeated or separated by commas: `--labels bug --labels ui` and `--labels bug,ui` are the same. Spaces around the values are dropped. Write `\,` for a comma inside a value (`--labels 'needs\, maybe'`), or give the input as JSON with `--input`, which is always taken exactly. The same goes for arguments that take several values (`glyphkeel task show TM-1,TM-2`).
+
 ## Workspaces
 
 A command works in the workspace `--workspace` names (a name in the data folder, or a folder path), else the one `GLYPHKEEL_WORKSPACE` names, else the one last opened in the app or with `glyphkeel workspace open`, else `Personal`. `glyphkeel mcp` chooses the same way. These commands work on the workspaces of the data folder rather than inside one:
@@ -190,7 +194,7 @@ A command works in the workspace `--workspace` names (a name in the data folder,
 
 ## Language
 
-Help, output for people and error messages are in the language `--lang` names (a language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; on Windows the display language), else English. A message not yet translated shows in English. Numbers and dates in the output for people follow the language. `en-XA` is a pseudo-language for testing translations. Machine text stays English: `--json` output (an error's `message`, with its `message_id` and `args` for translating it), command and option names, and everything `glyphkeel mcp` serves to agents.
+Help, output for people and error messages are in the language `--lang` names (a language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; on Windows the display language), else English. A message not yet translated shows in English. Numbers, dates and times in the output for people follow the language; times are shown in the time zone `--tz` names, else the personal setting, else the system's. `en-XA` is a pseudo-language for testing translations. Machine text stays English: `--json` output (an error's `message`, with its `message_id` and `args` for translating it), command and option names, and everything `glyphkeel mcp` serves to agents.
 
 ## Exit codes
 

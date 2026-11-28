@@ -19,6 +19,8 @@ cli-no-color-help = No colours in help and messages (also with NO_COLOR set)
 cli-tz-help = The time zone of "today" and local times for this command: "system" or an IANA name such as Europe/Berlin [default: the personal setting]
 cli-open-about = Start the desktop app, optionally at tasks or other links
 cli-open-links-help = A task key (`TM-41`) or a `glyphkeel://` link
+# The placeholder for the links in the usage line, in capitals.
+cli-open-links-value = LINK
 cli-mcp-about = Serve the workspace to an AI agent over MCP (standard input and output, or local HTTP with --http)
 cli-mcp-long-about = Serve the workspace to an AI agent over MCP, on standard input and output, or with --http on 127.0.0.1 for clients that connect to an address. The arguments are those of the MCP server; `glyphkeel mcp --help` lists them.
 cli-completions-about = Print the shell completion script
@@ -30,13 +32,23 @@ cli-lang-help = The language of help, messages and output for people, as a tag s
 cli-completions-shell-help = The shell to write the script for
 cli-help-about = Print the help of the program or of the given command
 cli-help-commands-help = The command's words, such as `task show`
+# The placeholder for those words in the usage line, in capitals.
+cli-help-commands-value = COMMAND
 # An option's help followed by the words it takes.
 cli-help-with-values = { $help } [possible values: { $values }]
-# The help's headings and the help of the options every command has.
+# The help's headings, with their punctuation, and the help of the options
+# every command has.
 cli-help-usage = Usage:
-cli-help-commands = Commands
-cli-help-arguments = Arguments
-cli-help-options = Options
+cli-help-commands = Commands:
+cli-help-arguments = Arguments:
+cli-help-options = Options:
+# The words standing for options and for a command in usage lines
+# (`glyphkeel task [OPTIONS] <COMMAND>`); keep the brackets.
+cli-usage-options = [OPTIONS]
+cli-usage-command = <COMMAND>
+cli-usage-command-optional = [COMMAND]
+# Added to the help of an option that takes several values.
+cli-help-many = { $help } (repeat the option or separate values with commas; write \, for a comma inside a value)
 cli-help-help = Print help (more with --help)
 cli-version-help = Print the version
 
@@ -59,6 +71,17 @@ cli-usage-no-value = '{ $arg }' needs a value
 cli-usage-invalid-value = invalid value '{ $value }' for '{ $arg }'
 cli-usage-invalid-value-why = invalid value '{ $value }' for '{ $arg }': { $reason }
 cli-usage-invalid-value-choices = invalid value '{ $value }' for '{ $arg }'; possible values: { $values }
+cli-usage-no-equals = '{ $arg }' needs its value after an equals sign ('{ $arg }=…')
+cli-usage-value-count = '{ $arg }' takes { $count ->
+    [one] one value
+   *[other] { $count } values
+  }, not { $given }
+cli-usage-wrong-values = '{ $arg }' got the wrong number of values
+cli-usage-invalid-utf8 = an argument isn't valid UTF-8 text
+cli-usage-output-failed = the help couldn't be written: { $error }
+cli-usage-output-failed-plain = the help couldn't be written
+# Any other mistake on the command line.
+cli-usage-other = the command line isn't valid
 # A correction clap suggests: a command, an option or a value.
 cli-usage-did-you-mean = did you mean '{ $suggestion }'?
 cli-usage-line = Usage: { $usage }

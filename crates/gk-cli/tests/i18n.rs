@@ -201,4 +201,17 @@ fn numbers_and_days_follow_the_language() {
     assert!(german.contains("27.11.2026"), "{german}");
     let json = ws.json(&["--lang", "de", "task", "show", "ZZ-1"]);
     assert_eq!(json["items"][0]["due_date"], "2026-11-27", "{json}");
+    // Timestamps: the language's date and time, in the chosen zone (UTC
+    // here); RFC 3339 as JSON.
+    let created = json["items"][0]["created_at"].as_str().unwrap();
+    assert!(created.ends_with('Z'), "{created}");
+    let shown = format!(
+        "{}.{}.{}, {}",
+        &created[8..10],
+        &created[5..7],
+        &created[..4],
+        &created[11..16]
+    );
+    assert!(german.contains(&shown), "{shown} not in {german}");
+    assert!(!german.contains(created), "{german}");
 }
